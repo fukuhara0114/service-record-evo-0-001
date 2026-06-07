@@ -1,17 +1,19 @@
 <?php
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable; // 必須
+use Illuminate\Notifications\Notifiable;
 
-class User extends Model
+class User extends Authenticatable
 {
-    // 紐付けるテーブル名を指定
-    protected $table = 'users';
+    use Notifiable;
 
-    // 主キーを 'userID' に変更 (デフォルトは id)
+    // 既存のテーブル名が 'users' ではない場合は明記する（例: 'm_users' など）
+    protected $table = 'users'; 
+
+    // 主キーが 'id' ではない場合は明記する
     protected $primaryKey = 'userID';
 
-    // タイムスタンプカラムがテーブルに無い場合は false にする
     public $timestamps = false;
 
     // Vueなどから一括登録（保存）を許可するカラムを指定
@@ -22,5 +24,10 @@ class User extends Model
         'password',
         'permission',
         'laborID'
+    ];
+
+    // パスワードなど、Vue側にうっかり返したくない秘密の情報はここに隠しておきます
+    protected $hidden = [
+        'password',
     ];
 }
