@@ -28,6 +28,6 @@
     @yield('content')
 
     {{-- @yield('footer') --}}
-     @livewireScripts 
+
 </body>
 </html>
