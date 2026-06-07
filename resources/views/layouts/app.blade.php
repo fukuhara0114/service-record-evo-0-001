@@ -16,7 +16,7 @@
     </script>
     {{--　☆☆☆☆☆☆　javascriptに共通のルートディレクトリを教える為のスクリプト ↑終了 ☆☆☆☆☆☆  --}}
 
-    @livewireStyles
+
     {{-- ✅ Tailwind（Vite経由）--}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
