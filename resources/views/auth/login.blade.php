@@ -46,7 +46,7 @@
 
             <!-- ログインボタン -->
             <button type="submit" 
-                class="w-full bg-white text-blue-600 hover:bg-blue-50 font-bold py-2 px-4 rounded-lg shadow transition duration-200 text-sm mt-2">
+                class="w-full bg-white text-blue-600 hover:bg-orange-500 hover:text-white font-bold py-2 px-4 rounded-lg shadow transition duration-200 text-sm mt-2">
                 ログイン
             </button>
         </form>

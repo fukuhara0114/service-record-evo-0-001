@@ -8,15 +8,22 @@ class User extends Authenticatable
 {
     use Notifiable;
 
-    // 既存のテーブル名が 'users' ではない場合は明記する（例: 'm_users' など）
-    protected $table = 'users'; 
+    // テーブル名
+    protected $table = 'users';
 
-    // 主キーが 'id' ではない場合は明記する
+    // 主キー（重要）
     protected $primaryKey = 'userID';
 
+    // オートインクリメント
+    public $incrementing = true;
+
+    // 主キーの型
+    protected $keyType = 'int';
+
+    // timestamps無効（created_at, updated_at無し）
     public $timestamps = false;
 
-    // Vueなどから一括登録（保存）を許可するカラムを指定
+    // 代入可能カラム
     protected $fillable = [
         'name',
         'kanji_name',
@@ -26,8 +33,13 @@ class User extends Authenticatable
         'laborID'
     ];
 
-    // パスワードなど、Vue側にうっかり返したくない秘密の情報はここに隠しておきます
+    // JSONなどに出さない（セキュリティ）
     protected $hidden = [
         'password',
     ];
+
+    public function serviceRecords()
+    {
+        return $this->hasMany(ServiceRecord::class, 'user', 'userID');
+    }
 }

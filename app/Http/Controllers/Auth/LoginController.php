@@ -29,8 +29,7 @@ class LoginController extends Controller
             // セッションの再生成（セッション固定攻撃対策）
             $request->session()->regenerate();
 
-            // 意図したページ（今回はルート /）へリダイレクト
-            return redirect()->intended('/');
+            return redirect()->route('home');
         }
 
         // 認証失敗時

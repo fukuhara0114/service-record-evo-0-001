@@ -1,4 +1,11 @@
 //
+import axios from 'axios'
+
+// ✅ ここに書く
+axios.defaults.headers.common['X-CSRF-TOKEN'] =
+  document.querySelector('meta[name="csrf-token"]').content
+
+
 import './bootstrap'; // 最初からある場合はそのまま残す
 import { createApp } from 'vue';
 
@@ -10,6 +17,8 @@ const app = createApp({});
 
 // 3. コンポーネントを登録する（Blade側で <example-component> として使えるようになります）
 app.component('example-component', ExampleComponent);
+app.component('service-record-form', ServiceRecordForm);
+
 
 // 4. Blade側にある <div id="app"> にマウント（適用）する
 app.mount('#app');

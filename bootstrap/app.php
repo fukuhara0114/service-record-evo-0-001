@@ -14,11 +14,20 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectTo(
             guests: '/login', // 未ログイン時のリダイレクト先
-            users: '/'        // ログイン済みなのにログインページを開こうとしたとき
+            users: '/home'        // ログイン済みなのにログインページを開こうとしたとき
         );
+
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
+
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
     })->create();
+
+
+
+
