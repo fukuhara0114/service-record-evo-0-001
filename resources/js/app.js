@@ -6,7 +6,12 @@ createInertiaApp({
   // pagesフォルダ内のVueファイルを自動で探して読み込む設定です
   resolve: name => {
     const pages = import.meta.glob('./pages/**/*.vue', { eager: true });
-    return pages[`./pages/${name}.vue`].default;
+    const path = `./pages/${name.replace(/\./g, '/')}.vue`;
+    const page = pages[path];
+    if (!page) {
+      throw new Error(`Page not found: ${path}`);
+    }
+    return page.default;
   },
   setup({ el, App, props, plugin }) {
     createApp({ render: () => h(App, props) })

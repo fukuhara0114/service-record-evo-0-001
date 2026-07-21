@@ -2,7 +2,8 @@ import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import tailwindcss from '@tailwindcss/vite';
-import vue from '@vitejs/plugin-vue'; // 1. 追加
+import vue from '@vitejs/plugin-vue';
+import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
     plugins: [
@@ -22,6 +23,7 @@ export default defineConfig({
     resolve: {
         alias: {
             'vue': 'vue/dist/vue.esm-bundler.js',
+            '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
         },
     },
     // 👇 ここから追記：IISで「.vite」隠しフォルダがブロックされる問題を回避する

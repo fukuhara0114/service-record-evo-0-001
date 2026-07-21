@@ -28,8 +28,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/servicerecord',[ServiceRecordController::class, 'index'])->name('servicerecord.index');
     Route::get('/servicerecord/administrator',[ServiceRecordController::class, 'administrator'])->name('servicerecord.administrator');
-    Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])
-     ->name('servicerecords.detail');
+    Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])->name('servicerecords.detail');
 
     
     Route::get('/servicerecord_q',[ServiceRecordController::class, 'index_q'])->name('servicerecord.index_q');

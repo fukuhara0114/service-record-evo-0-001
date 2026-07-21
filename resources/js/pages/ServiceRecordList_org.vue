@@ -1,16 +1,16 @@
 <template>
     <div class="list-page-container">
-        <!-- 第1階層: 検索窓 -->
+        <!-- 🏆 【第1階層】一覧リストの検索窓（固定） -->
         <div class="fixed-header-zone">
             <div style="flex: 1;"></div>
             <div class="search-area">
                 <label for="customSearchInput">Quick Filer:</label>
-                <input
-                    type="text"
-                    id="customSearchInput"
-                    v-model="searchQuery"
-                    placeholder="複数キーワードはスペース区切り（例: sony 修理）"
-                >
+                    <input
+                        type="text"
+                        id="customSearchInput"
+                        v-model="searchQuery"
+                        placeholder="複数キーワードはスペース区切り（例: sony 修理）"
+                    >
                 <button type="button" @click="clearSearch">Clear</button>
             </div>
             <div class="home-link-area">
@@ -18,7 +18,7 @@
             </div>
         </div>
 
-        <!-- 第1階層: テーブル -->
+        <!-- 🏆 【第1階層】テーブルエリア（body だけスクロール） -->
         <div class="scrollable-table-zone">
             <table id="myLargeTable">
                 <thead>
@@ -60,81 +60,36 @@
                 </tbody>
             </table>
         </div>
-
-        <!-- 第2階層: 詳細 A/B/C -->
-        <DetailShell
-            v-if="isDetailOpen"
-            :record="activeRecord"
-            :layout="detailLayout"
-            @close="closeDetail"
-            @switch-layout="switchDetailLayout"
-            @open-dialog="openDialog"
-        />
-
-        <!-- 第3階層: 入力・確認ダイアログ -->
-        <InputDialogA
-            v-if="activeDialog === 'A'"
-            :record="activeRecord"
-            :payload="dialogPayload"
-            @close="closeDialog"
-            @saved="onDialogSaved"
-        />
-        <InputDialogB
-            v-if="activeDialog === 'B'"
-            :record="activeRecord"
-            :payload="dialogPayload"
-            @close="closeDialog"
-            @saved="onDialogSaved"
-        />
-        <InputDialogC
-            v-if="activeDialog === 'C'"
-            :record="activeRecord"
-            :payload="dialogPayload"
-            @close="closeDialog"
-            @saved="onDialogSaved"
-        />
-        <ConfirmDialogD
-            v-if="activeDialog === 'D'"
-            :record="activeRecord"
-            :payload="dialogPayload"
-            @close="closeDialog"
-            @saved="onDialogSaved"
-        />
     </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
-import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
-import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
-import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
-import InputDialogC from '@/components/ServiceRecord/Layer3/InputDialogC.vue'
-import ConfirmDialogD from '@/components/ServiceRecord/Layer3/ConfirmDialogD.vue'
 
 const props = defineProps({
     initialRecords: Array,
     statuses: Array,
     returnCodes: Array,
     labors: Array,
-    mode: String,
+    mode: String
 })
 
-// --- 第1階層 ---
 const searchQuery = ref('')
 const selectedOrderId = ref(null)
+const isDetailOpen = ref(false)
+const activeRecord = ref(null)
 
 const filteredRecords = computed(() => {
     if (!searchQuery.value) return props.initialRecords
-
+    // 空白で分割して空文字を除去
     const queries = searchQuery.value
         .toLowerCase()
         .trim()
         .split(/\s+/)
         .filter(q => q.length > 0)
-
     if (queries.length === 0) return props.initialRecords
-
     return props.initialRecords.filter(r => {
+        // 1行分の文字列をまとめる
         const rowText = [
             r.orderID?.toString(),
             r.receivedDate,
@@ -145,13 +100,11 @@ const filteredRecords = computed(() => {
             r.return_code_master?.description,
             r.labor_master?.laborName,
             r.dealer,
-            r.dealer_depart,
-            r.contactPerson,
         ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
-
+        // すべてのキーワードが含まれている行だけ残す
         return queries.every(q => rowText.includes(q))
     })
 })
@@ -161,48 +114,10 @@ function clearSearch() {
     document.getElementById('customSearchInput')?.focus()
 }
 
-// --- 第2階層 ---
-const isDetailOpen = ref(false)
-const activeRecord = ref(null)
-const detailLayout = ref('A')
-
 function openSecondLayer(record) {
     activeRecord.value = record
-    detailLayout.value = 'A'
     isDetailOpen.value = true
-    closeDialog()
-}
-
-function switchDetailLayout(layout) {
-    detailLayout.value = layout
-}
-
-function closeDetail() {
-    isDetailOpen.value = false
-    activeRecord.value = null
-    closeDialog()
-}
-
-// --- 第3階層 ---
-const activeDialog = ref(null)
-const dialogPayload = ref(null)
-
-function openDialog(type, payload = null) {
-    activeDialog.value = type
-    dialogPayload.value = payload
-}
-
-function closeDialog() {
-    activeDialog.value = null
-    dialogPayload.value = null
-}
-
-function onDialogSaved(result) {
-    // 保存後の処理（例: activeRecord を更新）
-    if (result && activeRecord.value) {
-        Object.assign(activeRecord.value, result)
-    }
-    closeDialog()
+    console.log("第2階層（詳細ダイアログ）を開きます。対象データ:", record)
 }
 </script>
 
@@ -212,8 +127,7 @@ function onDialogSaved(result) {
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
-    background: #e2e8f0;
-    position: relative;
+    background: #e2e8f0; /* 白 → 少し暗いグレー */
 }
 
 .fixed-header-zone {
@@ -223,7 +137,7 @@ function onDialogSaved(result) {
     justify-content: space-between;
     padding: 14px 20px;
     box-sizing: border-box;
-    background: #dbdbdb;
+    background: #dbdbdb; /* ヘッダーは白のまま */
     border-bottom: 2px solid #3b82f6;
     z-index: 20;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -246,12 +160,14 @@ function onDialogSaved(result) {
 .search-area input {
     width: 400px;
     padding: 6px 12px;
-    border: 1px solid #94a3b8;
+    border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
-    background-color: #ffffff;
+   background-color: #ffffff;
     color: #111827;
+    border: 1px solid #94a3b8;
 }
+
 
 .search-area button {
     padding: 6px 16px;
@@ -268,6 +184,7 @@ function onDialogSaved(result) {
     flex: 1;
     display: flex;
     justify-content: flex-end;
+    
 }
 
 .home-link-area a {
@@ -281,10 +198,10 @@ function onDialogSaved(result) {
 .scrollable-table-zone {
     flex: 1;
     min-height: 0;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 10px; /* 背景が見える余白 */
+    padding-right: 10px; /* 背景が見える余白 */
     overflow: auto;
-    background: #e2e8f0;
+    background: #e2e8f0; /* スクロールエリアも同じ背景色 */
 }
 
 #myLargeTable {
@@ -315,6 +232,13 @@ function onDialogSaved(result) {
 .table-row {
     cursor: pointer;
 }
+
+/* .table-row:hover td {
+    color: white !important;
+    background-color: #1751c4 !important;
+    white-space: normal !important;
+    word-break: break-all !important;
+} */
 
 .active-row td {
     color: rgb(255, 255, 255) !important;

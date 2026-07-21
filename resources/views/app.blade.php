@@ -10,6 +10,6 @@
 </head>
 <body>
     <!-- Vueのコードがマウントされる場所（例: <div id="app">） -->
-    <@inertia
+    @inertia
 </body>
 </html>
