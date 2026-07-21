@@ -1,24 +1,16 @@
-//
-import axios from 'axios'
-
-// ✅ ここに書く
-axios.defaults.headers.common['X-CSRF-TOKEN'] =
-  document.querySelector('meta[name="csrf-token"]').content
-
-
-import './bootstrap'; // 最初からある場合はそのまま残す
-import { createApp } from 'vue';
-
-// 1. 作成したVueコンポーネントをインポートする
-import ExampleComponent from './components/ExampleComponent.vue';
-
-// 2. Vueアプリケーションを作成する
-const app = createApp({});
-
-// 3. コンポーネントを登録する（Blade側で <example-component> として使えるようになります）
-app.component('example-component', ExampleComponent);
-app.component('service-record-form', ServiceRecordForm);
-
-
-// 4. Blade側にある <div id="app"> にマウント（適用）する
-app.mount('#app');
+import './bootstrap';
+import { createApp, h } from 'vue';
+import { createInertiaApp } from '@inertiajs/vue3'; 
+createInertiaApp({
+  // コントローラーで指定された文字列（'ServiceRecordList'など）から
+  // pagesフォルダ内のVueファイルを自動で探して読み込む設定です
+  resolve: name => {
+    const pages = import.meta.glob('./pages/**/*.vue', { eager: true });
+    return pages[`./pages/${name}.vue`].default;
+  },
+  setup({ el, App, props, plugin }) {
+    createApp({ render: () => h(App, props) })
+      .use(plugin)
+      .mount(el);
+  },
+});

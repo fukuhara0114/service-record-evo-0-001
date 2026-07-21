@@ -61,6 +61,7 @@
         {{-- <a href="{{ url('/servicerecord') }}" class="btn">Vueアプリケーションを開く</a>
         <a href="{{ url('/servicerecord/administrator') }}" class="btn">Vueアプリケーションを開く</a> --}}
         <a href="{{ url('/servicerecord_q') }}" class="btn">ServiceRecord 一覧</a>
+        <a href="{{ url('/servicerecord/administrator') }}" class="btn">Admin</a>
         {{-- <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a>
         <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a>
         <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a> --}}

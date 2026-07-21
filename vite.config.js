@@ -29,6 +29,7 @@ export default defineConfig({
         manifest: 'manifest.json',
     },
     server: {
+        cors: true, 
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },
