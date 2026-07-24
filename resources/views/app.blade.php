@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>マイアプリ</title>
-    <!-- ViteでCSSとJS（Vue）を読み込む -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="app-base-url" content="{{ url('/') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>

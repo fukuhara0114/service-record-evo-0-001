@@ -35,9 +35,15 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $root = rtrim($request->getSchemeAndHttpHost() . $request->getBaseUrl(), '/');
+
         return [
             ...parent::share($request),
-            //
+            'appBaseUrl' => $root,
+            'attachmentUrlTemplate' => $root . '/servicerecord/attachments/{orderID}',
+            'authUser' => $request->user() ? [
+                'kanji_name' => $request->user()->kanji_name,
+            ] : null,
         ];
     }
 }

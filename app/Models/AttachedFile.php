@@ -1,21 +1,33 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttachedFile extends Model
 {
-    // 💡 【重要】実際のテーブル名「attachedfiles」をすべて小文字で正確に指定します
     protected $table = 'attachedfiles';
 
-    // テーブルの主キーが「id」であることを明示
     protected $primaryKey = 'id';
 
-    // もしテーブルに「created_at」「updated_at」カラムがない場合は以下を必須で追加
+    public $incrementing = true;
+
+    protected $keyType = 'int';
+
     public $timestamps = false;
 
-    public function serviceRecords()
+    protected $fillable = [
+        'associatedID',
+        'content',
+        'documentType',
+        'documentName',
+        'fileType',
+        'sortNum',
+    ];
+
+    public function serviceRecord(): BelongsTo
     {
-        return $this->hasMany(ServiceRecord::class, 'orderID', 'associatedID');
+        return $this->belongsTo(ServiceRecord::class, 'associatedID', 'orderID');
     }
 }

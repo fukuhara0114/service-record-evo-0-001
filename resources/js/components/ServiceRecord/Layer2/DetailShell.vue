@@ -24,16 +24,31 @@
                 <DetailFormA
                     v-if="layout === 'A'"
                     :record="record"
+                    :notes="notes"
+                    :files="files"
+                    :parts="parts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                 />
                 <DetailFormB
                     v-else-if="layout === 'B'"
                     :record="record"
+                    :notes="notes"
+                    :files="files"
+                    :parts="parts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                 />
                 <DetailFormC
                     v-else-if="layout === 'C'"
                     :record="record"
+                    :notes="notes"
+                    :files="files"
+                    :parts="parts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                 />
             </div>
@@ -48,6 +63,26 @@ import DetailFormC from './DetailFormC.vue'
 
 defineProps({
     record: Object,
+    notes: {
+        type: Array,
+        default: () => [],
+    },
+    files: {
+        type: Array,
+        default: () => [],
+    },
+    parts: {
+        type: Array,
+        default: () => [],
+    },
+    attachmentsLoading: {
+        type: Boolean,
+        default: false,
+    },
+    attachmentsError: {
+        type: String,
+        default: '',
+    },
     layout: {
         type: String,
         default: 'A',

@@ -51,6 +51,8 @@ class ServiceRecordController extends Controller
                     'dealer',
                     'dealer_depart',
                     'contactPerson',
+                    'email',
+                    'phone',
                     'endUser', 
                     'endUser_depart', 
                     'endUser_contactPerson', 
@@ -79,7 +81,15 @@ class ServiceRecordController extends Controller
 
 
     // admin用表示　→　view: servicerecord
-    public function administrator(){
+    public function administrator(Request $request){
+        // 添付データだけ欲しい Inertia 部分リロード（一覧2000件は再取得しない）
+        if ($request->header('X-Inertia') && $request->header('X-Inertia-Partial-Data') === 'attachmentData') {
+            return Inertia::render('ServiceRecordList', [
+                'attachmentData' => $request->filled('loadOrderID')
+                    ? $this->fetchAttachmentData($request->input('loadOrderID'))
+                    : null,
+            ]);
+        }
 
         $records = ServiceRecord::select([
                     'orderID',
@@ -93,6 +103,8 @@ class ServiceRecordController extends Controller
                     'dealer',
                     'dealer_depart',
                     'contactPerson',
+                    'email',
+                    'phone',
                     'endUser', 
                     'endUser_depart', 
                     'endUser_contactPerson', 
@@ -111,13 +123,19 @@ class ServiceRecordController extends Controller
         $statuses = \App\Models\Status::all(); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
+
+        $attachmentData = null;
+        if ($request->filled('loadOrderID')) {
+            $attachmentData = $this->fetchAttachmentData($request->input('loadOrderID'));
+        }
         
         return Inertia::render('ServiceRecordList', [
-                    'initialRecords' => $records,     // 💡 Vue側へ渡すデータの箱（プロパティ）を定義
+                    'initialRecords' => $records,
                     'statuses'       => $statuses,
                     'returnCodes'    => $returnCodes,
                     'labors'         => $labors,
-                    'mode'           => 'admin'
+                    'mode'           => 'admin',
+                    'attachmentData' => $attachmentData,
                 ]);
     }
 
@@ -127,7 +145,7 @@ class ServiceRecordController extends Controller
                     ->where('orderID', $orderID)
                     ->first(); // 1件だけ取得
 
-        $loaner_case = ServiceRecord::where('parentID', $orderID)->first();
+        $loaner_case = ServiceRecord::where('parent_id', $orderID)->first();
 
         $notes = AttachedNote::where('associatedID', $orderID)->get();
         $files = AttachedFile::where('associatedID', $orderID)->get();
@@ -154,6 +172,231 @@ class ServiceRecordController extends Controller
                 ]);
     }
 
+    public function attachments($orderID)
+    {
+        $data = $this->fetchAttachmentData($orderID);
+
+        if ($data === null) {
+            return response()->json(['message' => '指定された案件は存在しません。'], 404);
+        }
+
+        if (isset($data['error'])) {
+            return response()->json([
+                'message' => '添付データの取得中にサーバーエラーが発生しました。',
+                'detail' => config('app.debug') ? $data['error'] : null,
+            ], 500);
+        }
+
+        return response()->json($data);
+    }
+
+    public function fileContent($fileId)
+    {
+        $file = AttachedFile::findOrFail($fileId);
+
+        $raw = $file->content ?? '';
+        if ($raw === '') {
+            abort(404, 'ファイル内容がありません。');
+        }
+
+        if (str_starts_with($raw, 'data:')) {
+            $parts = explode(',', $raw, 2);
+            $raw = $parts[1] ?? $raw;
+        }
+
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            $binary = $raw;
+        }
+
+        $mimeType = $file->fileType ?: 'application/octet-stream';
+        $filename = $file->documentName ?: ('file-' . $file->id);
+
+        return response($binary, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    private function fetchAttachmentData($orderID): ?array
+    {
+        if (!ServiceRecord::where('orderID', $orderID)->exists()) {
+            return null;
+        }
+
+        try {
+            return [
+                'notes' => AttachedNote::where('associatedID', $orderID)->get(),
+                'files' => AttachedFile::where('associatedID', $orderID)
+                    ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
+                    ->orderBy('sortNum')
+                    ->orderBy('id')
+                    ->get(),
+                'parts' => AttachedPart::where('associatedID', $orderID)->get(),
+                'loaner' => ServiceRecord::where('parent_id', $orderID)->first(),
+            ];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [
+                'notes' => [],
+                'files' => [],
+                'parts' => [],
+                'loaner' => null,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    public function storeNote(Request $request)
+    {
+        $validated = $request->validate([
+            'associatedID' => 'required|integer',
+            'note' => 'required|string',
+            'important' => 'nullable|boolean',
+        ]);
+
+        if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
+            return response()->json(['message' => '案件が見つかりません。'], 404);
+        }
+
+        $user = $request->user();
+        $whoWrote = $user?->kanji_name ?: 'unknown';
+
+        $note = AttachedNote::create([
+            'associatedID' => $validated['associatedID'],
+            'note' => $validated['note'],
+            'whoWrote' => $whoWrote,
+            'whenWrote' => now(),
+            'important' => $request->boolean('important'),
+        ]);
+
+        return response()->json([
+            'message' => 'Note を登録しました。',
+            'note' => $note,
+        ], 201);
+    }
+
+    public function updateNote(Request $request, $id)
+    {
+        $note = AttachedNote::findOrFail($id);
+
+        if ($response = $this->assertNoteOwner($request, $note)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'note' => 'required|string',
+            'important' => 'nullable|boolean',
+        ]);
+
+        $note->update([
+            'note' => $validated['note'],
+            'important' => $request->boolean('important'),
+        ]);
+
+        return response()->json([
+            'message' => 'Note を更新しました。',
+            'note' => $note->fresh(),
+        ]);
+    }
+
+    public function destroyNote(Request $request, $id)
+    {
+        $note = AttachedNote::findOrFail($id);
+
+        if ($response = $this->assertNoteOwner($request, $note)) {
+            return $response;
+        }
+
+        $note->delete();
+
+        return response()->json([
+            'message' => 'Note を削除しました。',
+        ]);
+    }
+
+    private function assertNoteOwner(Request $request, AttachedNote $note)
+    {
+        $user = $request->user();
+
+        if (!$user || $note->whoWrote !== $user->kanji_name) {
+            return response()->json([
+                'message' => '自分が書いた Note のみ編集・削除できます。',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    public function storeFile(Request $request)
+    {
+        $validated = $request->validate([
+            'associatedID' => 'required|integer',
+            'file' => 'required|file|max:10240',
+            'documentType' => 'required|string|max:255',
+            'documentName' => 'nullable|string|max:255',
+            'sortNum' => 'nullable|integer',
+        ]);
+
+        if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
+            return response()->json(['message' => '案件が見つかりません。'], 404);
+        }
+
+        $uploaded = $request->file('file');
+
+        if (!$uploaded->isValid()) {
+            return response()->json([
+                'message' => 'ファイルのアップロードに失敗しました。',
+            ], 422);
+        }
+
+        $content = base64_encode($uploaded->get());
+        $fileType = $uploaded->getMimeType() ?: 'application/octet-stream';
+        $documentName = $validated['documentName'] ?? $uploaded->getClientOriginalName();
+
+        $file = AttachedFile::create([
+            'associatedID' => $validated['associatedID'],
+            'content' => $content,
+            'documentType' => $validated['documentType'],
+            'documentName' => $documentName,
+            'fileType' => $fileType,
+            'sortNum' => $validated['sortNum'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'ファイルを登録しました。',
+            'file' => $file->only(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum']),
+        ], 201);
+    }
+
+    public function destroyFile(Request $request, $id)
+    {
+        $file = AttachedFile::findOrFail($id);
+        $mode = $request->input('mode', 'delete');
+
+        if ($mode === 'unlink') {
+            $orderID = $request->input('orderID');
+            if (!$orderID || (int) $file->associatedID !== (int) $orderID) {
+                return response()->json([
+                    'message' => 'この案件に関連付けられたファイルではありません。',
+                ], 422);
+            }
+
+            $file->update(['associatedID' => -1]);
+
+            return response()->json([
+                'message' => 'ファイルの関連付けを削除しました。',
+            ]);
+        }
+
+        $file->delete();
+
+        return response()->json([
+            'message' => 'ファイルをデータベースから削除しました。',
+        ]);
+    }
 
     // 2. 新規登録画面
     public function create()

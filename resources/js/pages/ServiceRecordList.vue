@@ -34,6 +34,8 @@
                         <th>販売店</th>
                         <th>部署</th>
                         <th>担当者</th>
+                        <th>Email</th>
+                        <th>Phone</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -56,15 +58,24 @@
                         <td>{{ r.dealer }}</td>
                         <td>{{ r.dealer_depart }}</td>
                         <td>{{ r.contactPerson }}</td>
+                        <td>{{ r.email }}</td>
+                        <td>{{ r.phone }}</td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
         <!-- 第2階層: 詳細 A/B/C -->
+        <p v-if="attachmentsLoading" class="global-loading">添付データを読み込み中...</p>
+
         <DetailShell
             v-if="isDetailOpen"
             :record="activeRecord"
+            :notes="activeNotes"
+            :files="activeFiles"
+            :parts="activeParts"
+            :attachments-loading="attachmentsLoading"
+            :attachments-error="attachmentsError"
             :layout="detailLayout"
             @close="closeDetail"
             @switch-layout="switchDetailLayout"
@@ -100,16 +111,33 @@
             @close="closeDialog"
             @saved="onDialogSaved"
         />
+        <NoteEditDialog
+            v-if="activeDialog === 'NOTE'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
+        <FileUploadDialog
+            v-if="activeDialog === 'FILE'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
     </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { router } from '@inertiajs/vue3'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
 import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
 import InputDialogC from '@/components/ServiceRecord/Layer3/InputDialogC.vue'
 import ConfirmDialogD from '@/components/ServiceRecord/Layer3/ConfirmDialogD.vue'
+import NoteEditDialog from '@/components/ServiceRecord/Layer3/NoteEditDialog.vue'
+import FileUploadDialog from '@/components/ServiceRecord/Layer3/FileUploadDialog.vue'
 
 const props = defineProps({
     initialRecords: Array,
@@ -147,6 +175,8 @@ const filteredRecords = computed(() => {
             r.dealer,
             r.dealer_depart,
             r.contactPerson,
+            r.email,
+            r.phone,
         ]
             .filter(Boolean)
             .join(' ')
@@ -165,12 +195,79 @@ function clearSearch() {
 const isDetailOpen = ref(false)
 const activeRecord = ref(null)
 const detailLayout = ref('A')
+const activeNotes = ref([])
+const activeFiles = ref([])
+const activeParts = ref([])
+const attachmentsLoading = ref(false)
+const attachmentsError = ref('')
 
-function openSecondLayer(record) {
+function applyAttachmentData(data) {
+    if (!data) {
+        attachmentsError.value = '添付データが見つかりません。'
+        activeNotes.value = []
+        activeFiles.value = []
+        activeParts.value = []
+        return
+    }
+
+    if (data.error) {
+        attachmentsError.value = data.error
+        activeNotes.value = []
+        activeFiles.value = []
+        activeParts.value = []
+        return
+    }
+
+    attachmentsError.value = ''
+    activeNotes.value = data.notes ?? []
+    activeFiles.value = data.files ?? []
+    activeParts.value = data.parts ?? []
+}
+
+function loadAttachments(orderID) {
+    return new Promise((resolve) => {
+        attachmentsLoading.value = true
+        attachmentsError.value = ''
+        activeNotes.value = []
+        activeFiles.value = []
+        activeParts.value = []
+
+        router.get(
+            window.location.pathname,
+            { loadOrderID: orderID },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['attachmentData'],
+                onSuccess: (page) => {
+                    applyAttachmentData(page.props.attachmentData)
+                    resolve()
+                },
+                onError: () => {
+                    attachmentsError.value = '添付データの取得に失敗しました。'
+                    resolve()
+                },
+                onFinish: () => {
+                    attachmentsLoading.value = false
+                },
+            },
+        )
+    })
+}
+
+async function openSecondLayer(record) {
+    if (!record?.orderID) {
+        console.error('orderID が取得できません', record)
+        return
+    }
+
     activeRecord.value = record
     detailLayout.value = 'A'
-    isDetailOpen.value = true
     closeDialog()
+
+    await loadAttachments(record.orderID)
+    isDetailOpen.value = true
 }
 
 function switchDetailLayout(layout) {
@@ -180,6 +277,11 @@ function switchDetailLayout(layout) {
 function closeDetail() {
     isDetailOpen.value = false
     activeRecord.value = null
+    activeNotes.value = []
+    activeFiles.value = []
+    activeParts.value = []
+    attachmentsLoading.value = false
+    attachmentsError.value = ''
     closeDialog()
 }
 
@@ -197,11 +299,15 @@ function closeDialog() {
     dialogPayload.value = null
 }
 
-function onDialogSaved(result) {
-    // 保存後の処理（例: activeRecord を更新）
+async function onDialogSaved(result) {
     if (result && activeRecord.value) {
         Object.assign(activeRecord.value, result)
     }
+
+    if (activeRecord.value?.orderID) {
+        await loadAttachments(activeRecord.value.orderID)
+    }
+
     closeDialog()
 }
 </script>
@@ -319,5 +425,18 @@ function onDialogSaved(result) {
 .active-row td {
     color: rgb(255, 255, 255) !important;
     background-color: #7e25eb !important;
+}
+
+.global-loading {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.35);
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 90;
 }
 </style>
