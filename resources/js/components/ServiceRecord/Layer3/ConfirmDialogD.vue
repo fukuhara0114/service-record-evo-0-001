@@ -69,6 +69,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import BaseDialog from './BaseDialog.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     record: Object,
@@ -150,17 +151,18 @@ async function deleteNote() {
     const url = `${window.location.origin}${basePath}/notes/${noteId}`
 
     try {
-        const response = await fetch(url, {
+        const result = await apiFetch(url, {
             method: 'DELETE',
             headers: {
-                'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
         })
 
-        const data = await response.json().catch(() => ({}))
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
 
         if (!response.ok) {
             throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)
@@ -193,17 +195,18 @@ async function deleteFile(mode = 'delete') {
     const url = `${window.location.origin}${basePath}/files/${fileId}?${params.toString()}`
 
     try {
-        const response = await fetch(url, {
+        const result = await apiFetch(url, {
             method: 'DELETE',
             headers: {
-                'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
         })
 
-        const data = await response.json().catch(() => ({}))
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
 
         if (!response.ok) {
             throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)

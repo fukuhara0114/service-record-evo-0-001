@@ -1,6 +1,13 @@
 import './bootstrap';
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3'; 
+import { createInertiaApp } from '@inertiajs/vue3';
+import { handleUnauthorizedStatus } from './utils/auth';
+
+document.addEventListener('inertia:error', (event) => {
+    const status = event.detail?.response?.status;
+    handleUnauthorizedStatus(status);
+});
+
 createInertiaApp({
   // コントローラーで指定された文字列（'ServiceRecordList'など）から
   // pagesフォルダ内のVueファイルを自動で探して読み込む設定です

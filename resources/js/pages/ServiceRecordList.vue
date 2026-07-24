@@ -129,8 +129,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { ref, computed, onMounted } from 'vue'
+import { router, usePage } from '@inertiajs/vue3'
+import { redirectToLogin } from '@/utils/auth'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
 import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
@@ -145,6 +146,14 @@ const props = defineProps({
     returnCodes: Array,
     labors: Array,
     mode: String,
+})
+
+const page = usePage()
+
+onMounted(() => {
+    if (!page.props.authUser) {
+        redirectToLogin()
+    }
 })
 
 // --- 第1階層 ---

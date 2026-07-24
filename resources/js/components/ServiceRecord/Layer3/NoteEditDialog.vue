@@ -28,6 +28,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import BaseDialog from './BaseDialog.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     record: Object,
@@ -90,19 +91,20 @@ async function save() {
         }
 
     try {
-        const response = await fetch(url, {
+        const result = await apiFetch(url, {
             method: isEdit.value ? 'PUT' : 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
             body: JSON.stringify(body),
         })
 
-        const data = await response.json().catch(() => ({}))
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
 
         if (!response.ok) {
             throw new Error(data.message || `保存に失敗しました。（HTTP ${response.status}）`)

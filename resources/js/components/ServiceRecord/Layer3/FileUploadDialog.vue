@@ -44,6 +44,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import BaseDialog from './BaseDialog.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     record: Object,
@@ -123,18 +124,19 @@ async function save() {
     const url = `${window.location.origin}${basePath}/files`
 
     try {
-        const response = await fetch(url, {
+        const result = await apiFetch(url, {
             method: 'POST',
             headers: {
-                'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
             },
-            credentials: 'same-origin',
             body: formData,
         })
 
-        const data = await response.json().catch(() => ({}))
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
 
         if (!response.ok) {
             const validationMessage = data.errors

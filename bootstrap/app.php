@@ -24,7 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*')
+            fn (Request $request) => !$request->header('X-Inertia') && (
+                $request->is('api/*')
                 || $request->is('servicerecord/attachments/*')
                 || $request->is('servicerecord/notes')
                 || $request->is('servicerecord/notes/*')
@@ -32,7 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 || $request->is('servicerecord/files/*')
                 || $request->is('servicerecords/*/attachments')
                 || $request->expectsJson()
-                || $request->ajax(),
+                || $request->ajax()
+            ),
         );
     })->create();
 
