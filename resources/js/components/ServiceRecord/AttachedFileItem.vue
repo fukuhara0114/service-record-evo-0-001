@@ -134,22 +134,26 @@ const fileUrl = computed(() => {
 }
 
 .file-preview {
+    width: 100%;
+    aspect-ratio: 210 / 297;
+    max-height: 90vh;
     margin-top: 8px;
 }
 
 .pdf-frame {
     width: 100%;
-    height: 480px;
+    height: 100%;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     background: white;
 }
 
 .image-preview {
-    max-width: 100%;
-    max-height: 480px;
+    width: 100%;
+    height: 100%;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
+    object-fit: contain;
 }
 
 .other-file {

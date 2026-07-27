@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\ServiceMaster;
 use App\Models\ReturnCode;
 use App\Models\Dealer;
 use App\Models\Status;
@@ -29,6 +30,7 @@ class ServiceRecord extends Model
         'receiptNumber',
         'receivedDate',
         'RMA',
+        'serviceID',
         'productName',
         'productType',
         'SN',
@@ -88,10 +90,11 @@ class ServiceRecord extends Model
         'remand',
         'shippingOut_requiredDate',
         'loaner_no_charge',
-        'parent_id',
+        'parentID',
         'order_type',
         'lastEditPerson',
         'lastEditDate',
+        'entityID'
     ];
 
 
@@ -99,6 +102,21 @@ class ServiceRecord extends Model
     //   リレーションの設定
     // **********************************************************************************************************************
     
+    public function serviceMaster()
+    {
+        return $this->belongsTo(ServiceMaster::class, 'serviceID', 'serviceID');
+    }
+
+    /**
+     * 【本命】現在の受注日（orderDate）に合致する「価格バージョン」のマスタを1件だけ取得するメソッド
+     */
+    public function getServiceAtOrderedDate()
+    {
+        return ServiceMaster::where('serviceID', $this->serviceID)
+            ->where('validDateMin', '<=', $this->orderDate)
+            ->where('validDateMax', '>=', $this->orderDate)
+            ->first(); // 確実に1件だけを取得
+    }
     // returnCode
     public function returnCodeMaster()
     {

@@ -77,6 +77,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/servicerecord',[ServiceRecordController::class, 'index'])->name('servicerecord.index');
     Route::get('/servicerecord/administrator',[ServiceRecordController::class, 'administrator'])->name('servicerecord.administrator');
+    Route::get('/servicerecord/record/{orderID}', [ServiceRecordController::class, 'record'])->name('servicerecord.record');
     Route::get('/servicerecord/attachments/{orderID}', [ServiceRecordController::class, 'attachments'])->name('servicerecord.attachments');
     Route::get('/servicerecord/files/{fileId}', [ServiceRecordController::class, 'fileContent'])->name('servicerecord.file-content');
     Route::post('/servicerecord/notes', [ServiceRecordController::class, 'storeNote'])->name('servicerecord.notes.store');
@@ -84,6 +85,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/servicerecord/notes/{id}', [ServiceRecordController::class, 'destroyNote'])->name('servicerecord.notes.destroy');
     Route::post('/servicerecord/files', [ServiceRecordController::class, 'storeFile'])->name('servicerecord.files.store');
     Route::delete('/servicerecord/files/{id}', [ServiceRecordController::class, 'destroyFile'])->name('servicerecord.files.destroy');
+    Route::post('/servicerecord/parts', [ServiceRecordController::class, 'storePart'])->name('servicerecord.parts.store');
+    Route::delete('/servicerecord/parts/{id}', [ServiceRecordController::class, 'destroyPart'])->name('servicerecord.parts.destroy');
+    Route::put('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update');
+    Route::post('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update.post');
     Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])->name('servicerecords.detail');
 
     Route::get('/servicerecord_q',[ServiceRecordController::class, 'index_q'])->name('servicerecord.index_q');

@@ -21,6 +21,12 @@ class PartMaster extends Model
         'partID',
         'partName',
         'description',
+        'price_market',
+        'price_discounted',
+        'price_discounted_1',
+        'associatedInstruments',
+        'type',
+        'note',
     ];
 
     public function attachedParts(): HasMany

@@ -16,6 +16,10 @@
                 </div>
                 <div class="detail-meta">
                     <span>OrderID: {{ record?.orderID }}</span>
+                    <p v-if="saveError" class="save-error">{{ saveError }}</p>
+                    <button type="button" class="save-btn" :disabled="savingRecord" @click="$emit('save')">
+                        {{ savingRecord ? '保存中...' : '保存' }}
+                    </button>
                     <button type="button" class="close-btn" @click="$emit('close')">× 閉じる</button>
                 </div>
             </div>
@@ -24,6 +28,7 @@
                 <DetailFormA
                     v-if="layout === 'A'"
                     :record="record"
+                    :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
                     :parts="parts"
@@ -34,6 +39,7 @@
                 <DetailFormB
                     v-else-if="layout === 'B'"
                     :record="record"
+                    :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
                     :parts="parts"
@@ -63,6 +69,7 @@ import DetailFormC from './DetailFormC.vue'
 
 defineProps({
     record: Object,
+    draftRecord: Object,
     notes: {
         type: Array,
         default: () => [],
@@ -83,13 +90,21 @@ defineProps({
         type: String,
         default: '',
     },
+    savingRecord: {
+        type: Boolean,
+        default: false,
+    },
+    saveError: {
+        type: String,
+        default: '',
+    },
     layout: {
         type: String,
         default: 'A',
     },
 })
 
-defineEmits(['close', 'switch-layout', 'open-dialog'])
+defineEmits(['close', 'switch-layout', 'open-dialog', 'save'])
 </script>
 
 <style scoped>
@@ -144,6 +159,26 @@ defineEmits(['close', 'switch-layout', 'open-dialog'])
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+.save-error {
+    margin: 0;
+    color: #fca5a5;
+    font-size: 12px;
+}
+
+.save-btn {
+    padding: 6px 12px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .close-btn {

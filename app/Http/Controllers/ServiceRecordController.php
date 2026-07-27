@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ServiceRecord;
+use App\Models\ServiceMaster;
+use App\Models\Dealer;
+use App\Models\PartMaster;
 use App\Models\AttachedNote;
 use App\Models\AttachedFile;
 use App\Models\AttachedPart;
@@ -23,7 +26,7 @@ class ServiceRecordController extends Controller
                 ->orderBy('receivedDate', 'asc')->paginate(2000);
 
         // return view('servicerecord', compact('records'));
-        $statuses = \App\Models\Status::all(); 
+        $statuses = \App\Models\Status::orderBy('processID')->get(); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
                 
@@ -91,38 +94,55 @@ class ServiceRecordController extends Controller
             ]);
         }
 
-        $records = ServiceRecord::select([
-                    'orderID',
-                    'status',
-                    'RMA',
-                    'receivedDate', 
-                    'productName', 
-                    'SN', 
-                    'returnCode',
-                    'laborID',
-                    'dealer',
-                    'dealer_depart',
-                    'contactPerson',
-                    'email',
-                    'phone',
-                    'endUser', 
-                    'endUser_depart', 
-                    'endUser_contactPerson', 
-                    'endUser_address1', 
-                    'endUser_address2', 
-                    'endUser_email', 
-                    'endUser_phone',
-                ])
-                ->
-        with(['returnCodeMaster', 'laborMaster','statusMaster'])
-        ->where('status', '<', 399)
-        ->where('status', '>', -1)
-        ->orderBy('receivedDate', 'asc')
-        ->get();
+        // $records = ServiceRecord::
+        //     select([
+        //         'orderID',
+        //         'serviceID',
+        //         'status',
+        //         'RMA',
+        //         'receivedDate',
+        //         'productName',
+        //         'SN',
+        //         'returnCode',
+        //         'laborID',
+        //         'dealer',
+        //         'dealer_depart',
+        //         'contactPerson',
+        //         'email',
+        //         'phone',
+        //         'endUser',
+        //         'endUser_depart',
+        //         'endUser_contactPerson',
+        //         'endUser_address1',
+        //         'endUser_address2',
+        //         'endUser_email',
+        //         'endUser_phone',
+        //     ])
+        //     ->with(['returnCodeMaster', 'laborMaster','statusMaster'])
+        //     ->where('status', '<', 399)
+        //     ->where('status', '>', -1)
+        //     ->orderBy('receivedDate', 'asc')
+        //     ->get();
+        $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster'])
+            ->where('status', '<', 399)
+            ->where('status', '>', -1)
+            ->orderBy('receivedDate', 'asc')
+            ->get();
 
-        $statuses = \App\Models\Status::all(); 
+
+        $statuses = \App\Models\Status::orderBy('processID')->get(); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
+        $dealers = Dealer::orderBy('dealerName')->get();
+        $services = ServiceMaster::query()
+            ->select(['serviceID', 'productName', 'entityID'])
+            ->where('productName', 'NOT LIKE', '*%') // *から始まらない条件を追加
+            ->orderBy('productName')
+            ->get();
+        $partsMaster = PartMaster::query()
+            ->select(['partID', 'partName', 'description', 'price_discounted', 'type'])
+            ->orderBy('partName')
+            ->get();
 
         $attachmentData = null;
         if ($request->filled('loadOrderID')) {
@@ -134,6 +154,9 @@ class ServiceRecordController extends Controller
                     'statuses'       => $statuses,
                     'returnCodes'    => $returnCodes,
                     'labors'         => $labors,
+                    'dealersMaster'  => $dealers,
+                    'servicesMaster' => $services,
+                    'partsMaster'    => $partsMaster,
                     'mode'           => 'admin',
                     'attachmentData' => $attachmentData,
                 ]);
@@ -149,16 +172,29 @@ class ServiceRecordController extends Controller
 
         $notes = AttachedNote::where('associatedID', $orderID)->get();
         $files = AttachedFile::where('associatedID', $orderID)->get();
-        $parts = AttachedPart::where('associatedID', $orderID)->get();            
+        $parts = AttachedPart::where('associatedID', $orderID)->get();  
+        $currentMaster = $record->getServiceAtOrderedDate();
+
+    // return Inertia::render('ServiceRecords/Show', [
+    //     'serviceRecord' => $serviceRecord, // 案件の基本情報
+    //     'currentMaster' => $currentMaster, // 当時の価格が含まれたマスタ情報
+        
+    //     // 2. 詳細画面でマスタ自体を変更（プルダウン等で選択）できるようにマスタ一覧を渡す
+    //     // ※ 重複を防ぐため、最新のユニークなマスタ（またはグループ化されたもの）を取得
+    //     'masterOptions' => ServiceMaster::groupBy('serviceID')->get(['serviceID', 'serviceName']),
+    // ]);       
 
         // 2. 万が一、不正なIDが直接URLに打ち込まれてデータが見つからなかった場合は404エラー画面を出す
         if (!$record) {
             abort(404, '指定された作業内容は存在しません。');
         }
 
-        $statuses = \App\Models\Status::all(); 
+        $statuses = \App\Models\Status::orderBy('processID')->get(); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
+        $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
+        $parts = \App\Models\PartMaster::all(); 
+        $services = \App\Models\ServiceMaster::all();
 
         return Inertia::render('ServiceRecords.detail', [
                     'initialRecord' => $record,
@@ -168,8 +204,24 @@ class ServiceRecordController extends Controller
                     'notes'         => $notes,
                     'files'         => $files,
                     'parts'         => $parts,
+                    'servicesMaster' => $services,    
+                    'dealersMaster' => $dealers,
+                    'partsMaster' => $parts,
                     'mode'           => 'admin'
                 ]);
+    }   
+
+    public function record($orderID)
+    {
+        $record = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster'])
+            ->where('orderID', $orderID)
+            ->first();
+
+        if (!$record) {
+            return response()->json(['message' => '指定された案件は存在しません。'], 404);
+        }
+
+        return response()->json($record);
     }
 
     public function attachments($orderID)
@@ -233,7 +285,10 @@ class ServiceRecordController extends Controller
                     ->orderBy('sortNum')
                     ->orderBy('id')
                     ->get(),
-                'parts' => AttachedPart::where('associatedID', $orderID)->get(),
+                'parts' => AttachedPart::where('associatedID', $orderID)
+                    ->with('partMaster')
+                    ->orderBy('id')
+                    ->get(),
                 'loaner' => ServiceRecord::where('parent_id', $orderID)->first(),
             ];
         } catch (\Throwable $e) {
@@ -398,6 +453,50 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function storePart(Request $request)
+    {
+        $validated = $request->validate([
+            'associatedID' => 'required|integer',
+            'partID' => 'required|integer',
+        ]);
+
+        if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
+            return response()->json(['message' => '案件が見つかりません。'], 404);
+        }
+
+        if (!PartMaster::where('partID', $validated['partID'])->exists()) {
+            return response()->json(['message' => '指定された部品が見つかりません。'], 404);
+        }
+
+        if (AttachedPart::where('associatedID', $validated['associatedID'])
+            ->where('partID', $validated['partID'])
+            ->exists()) {
+            return response()->json(['message' => 'この部品は既に追加されています。'], 422);
+        }
+
+        $part = AttachedPart::create([
+            'associatedID' => $validated['associatedID'],
+            'partID' => $validated['partID'],
+        ]);
+
+        $part->load('partMaster');
+
+        return response()->json([
+            'message' => '部品を追加しました。',
+            'part' => $part,
+        ], 201);
+    }
+
+    public function destroyPart(Request $request, $id)
+    {
+        $part = AttachedPart::findOrFail($id);
+        $part->delete();
+
+        return response()->json([
+            'message' => '部品を削除しました。',
+        ]);
+    }
+
     // 2. 新規登録画面
     public function create()
     {
@@ -429,6 +528,13 @@ class ServiceRecordController extends Controller
         
         $data = $request->except(['_token', '_method']);
         $record->update($data);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => '更新しました。',
+                'record' => $record->fresh(['returnCodeMaster', 'laborMaster', 'statusMaster']),
+            ]);
+        }
 
         return redirect()->route('servicerecord.index')->with('success', '更新しました。');
     }

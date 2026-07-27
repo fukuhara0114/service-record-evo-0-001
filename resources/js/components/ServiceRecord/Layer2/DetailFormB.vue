@@ -1,61 +1,483 @@
 <template>
     <div class="detail-form">
-        <h2>詳細フォーム B</h2>
-        <dl class="info-grid">
-            <dt>OrderID</dt><dd>{{ record?.orderID }}</dd>
-            <dt>製品名</dt><dd>{{ record?.productName }}</dd>
-            <dt>S/N</dt><dd>{{ record?.SN }}</dd>
-            <dt>ステータス</dt><dd>{{ record?.status_master?.status }}</dd>
-            <dt>販売店</dt><dd>{{ record?.dealer }}</dd>
-        </dl>
+        <Splitpanes horizontal class="default-theme detail-splitpanes" @resized="syncOuterPaneSizes">
+            <Pane class="detail-pane detail-pane-top" :size="topPaneSize" :min-size="30">
+                <div class="detail-top-section pane-content-scroll">
+                    <div class="detail-top-stack">
+                        <section class="section-card detail-card">
+                            <p class="card-meta">OrderID: {{ record?.orderID }} / receivedDate: {{ record?.receivedDate }}</p>
+                            <div class="first-card-row">
+                                <div class="grid-cell">
+                                    <span class="cell-label">productName</span>
+                                    <button type="button" class="field-button" @click="openServiceMasterSelect">
+                                        {{ draftRecord?.productName || record?.productName || '選択してください' }}
+                                    </button>
+                                </div>
+                                <label class="grid-cell">
+                                    <span class="cell-label">SN</span>
+                                    <input type="text" class="field-input" :value="draftRecord?.SN ?? record?.SN ?? ''" @input="updateDraftValue('SN', $event.target.value)">
+                                </label>
+                                <label class="grid-cell">
+                                    <span class="cell-label">poNum</span>
+                                    <input type="text" class="field-input" :value="draftRecord?.poNum ?? record?.poNum ?? ''" @input="updateDraftValue('poNum', $event.target.value)">
+                                </label>
+                            </div>
+                            <div class="first-card-row first-card-row-second">
+                                <label class="grid-cell">
+                                    <!-- <span class="cell-label">returnCode</span> -->
+                                    <select class="field-select" :value="draftRecord?.returnCode ?? record?.returnCode ?? ''" @change="updateNumericDraftValue('returnCode', $event.target.value)">
+                                        <option value="">選択してください</option>
+                                        <option v-for="returnCode in page.props.returnCodes ?? []" :key="returnCode.id" :value="returnCode.id">
+                                            {{ returnCode.description }} ({{ returnCode.id }})
+                                        </option>
+                                    </select>
+                                </label>
+                                <label class="grid-cell">
+                                    <span class="cell-label">a2la</span>
+                                    <input type="text" class="field-input" :value="draftRecord?.a2la ?? record?.a2la ?? ''" @input="updateDraftValue('a2la', $event.target.value)">
+                                </label>
+                            </div>
+                        </section>
 
-        <div class="action-row">
-            <button type="button" @click="$emit('open-dialog', 'A', { source: 'formA' })">
-                入力ダイアログ A
-            </button>
-            <button type="button" @click="$emit('open-dialog', 'D', { action: 'confirm' })">
-                確認ダイアログ D
-            </button>
-        </div>
+                        <section class="section-card detail-card">
+                            <div class="address-card-rows">
+                                <div class="address-row address-row-3col">
+                                    企業様名
+                                    <label class="input-field">
+                                        <!-- <span>企業様名</span> -->
+                                        <input type="text" :value="draftRecord?.dealer ?? record?.dealer ?? ''" @input="updateDraftValue('dealer', $event.target.value)">
+                                    </label>
+                                    部署
+                                    <label class="input-field">
+                                        <!-- <span>部署</span> -->
+                                        <input type="text" :value="draftRecord?.dealer_depart ?? record?.dealer_depart ?? ''" @input="updateDraftValue('dealer_depart', $event.target.value)">
+                                    </label>
+                                    担当者
+                                    <label class="input-field">
+                                        <!-- <span>担当者</span> -->
+                                        <input type="text" :value="draftRecord?.contactPerson ?? record?.contactPerson ?? ''" @input="updateDraftValue('contactPerson', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-address">
+                                    〒
+                                    <label class="input-field field-zipcode">
+                                        <!-- <span>zipcode</span> -->
+                                        <input type="text" maxlength="10" :value="draftRecord?.zipcode ?? record?.zipcode ?? ''" @input="updateDraftValue('zipcode', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address1">
+                                        <!-- <span>address1</span> -->
+                                        <input type="text" maxlength="5" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address2">
+                                        <!-- <span>address2</span> -->
+                                        <input type="text" :value="draftRecord?.address2 ?? record?.address2 ?? ''" @input="updateDraftValue('address2', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-contact">
+                                    ℡
+                                    <label class="input-field field-phone">
+                                        <!-- <span>phone</span> -->
+                                        <input type="text" :value="draftRecord?.phone ?? record?.phone ?? ''" @input="updateDraftValue('phone', $event.target.value)">
+                                    </label>
+                                    E-mail
+                                    <label class="input-field field-email">
+                                        <!-- <span>email</span> -->
+                                        <input type="text" :value="draftRecord?.email ?? record?.email ?? ''" @input="updateDraftValue('email', $event.target.value)">
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="section-card detail-card">
+                            <div class="address-card-rows">
+                                <div class="address-row address-row-3col">
+                                    E/U
+                                    <label class="input-field">
+                                        <!-- <span>endUser</span> -->
+                                        <input type="text" :value="draftRecord?.endUser ?? record?.endUser ?? ''" @input="updateDraftValue('endUser', $event.target.value)">
+                                    </label>
+                                    部署
+                                    <label class="input-field">
+                                        <!-- <span>endUser_depart</span> -->
+                                        <input type="text" :value="draftRecord?.endUser_depart ?? record?.endUser_depart ?? ''" @input="updateDraftValue('endUser_depart', $event.target.value)">
+                                    </label>
+                                    担当者
+                                    <label class="input-field">
+                                        <!-- <span>endUser_contactPerson</span> -->
+                                        <input type="text" :value="draftRecord?.endUser_contactPerson ?? record?.endUser_contactPerson ?? ''" @input="updateDraftValue('endUser_contactPerson', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-address">
+                                    〒
+                                    <label class="input-field field-zipcode">
+                                        <!-- <span>endUser_zipcode</span> -->
+                                        <input type="text" maxlength="10" :value="draftRecord?.endUser_zipcode ?? record?.endUser_zipcode ?? ''" @input="updateDraftValue('endUser_zipcode', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address1">
+                                        <!-- <span>endUser_address1</span> -->
+                                        <input type="text" maxlength="5" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address2">
+                                        <!-- <span>endUser_address2</span> -->
+                                        <input type="text" :value="draftRecord?.endUser_address2 ?? record?.endUser_address2 ?? ''" @input="updateDraftValue('endUser_address2', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-contact">
+                                    ℡
+                                    <label class="input-field field-phone">
+                                        <!-- <span>endUser_phone</span> -->
+                                        <input type="text" :value="draftRecord?.endUser_phone ?? record?.endUser_phone ?? ''" @input="updateDraftValue('endUser_phone', $event.target.value)">
+                                    </label>
+                                    E-mail
+                                    <label class="input-field field-email">
+                                        <!-- <span>endUser_email</span> -->
+                                        <input type="text" :value="draftRecord?.endUser_email ?? record?.endUser_email ?? ''" @input="updateDraftValue('endUser_email', $event.target.value)">
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="section-card detail-card">
+                            <div class="address-card-rows">
+                                <div class="address-row address-row-3col">
+                                    発送先企業様名
+                                    <label class="input-field">
+                                        <!-- <span>deliveryDestination_company</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_company ?? record?.deliveryDestination_company ?? ''" @input="updateDraftValue('deliveryDestination_company', $event.target.value)">
+                                    </label>
+                                    発送先部署
+                                    <label class="input-field">
+                                        <!-- <span>deliveryDestination_depart</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_depart ?? record?.deliveryDestination_depart ?? ''" @input="updateDraftValue('deliveryDestination_depart', $event.target.value)">
+                                    </label>
+                                    担当者
+                                    <label class="input-field">
+                                        <!-- <span>deliveryDestination_contactPerson</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_contactPerson ?? record?.deliveryDestination_contactPerson ?? ''" @input="updateDraftValue('deliveryDestination_contactPerson', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-address">
+                                    〒
+                                    <label class="input-field field-zipcode">
+                                        <!-- <span>deliveryDestination_zipcode</span> -->
+                                        <input type="text" maxlength="10" :value="draftRecord?.deliveryDestination_zipcode ?? record?.deliveryDestination_zipcode ?? ''" @input="updateDraftValue('deliveryDestination_zipcode', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address1">
+                                        <!-- <span>deliveryDestination_address1</span> -->
+                                        <input type="text" maxlength="5" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
+                                    </label>
+                                    <label class="input-field field-address2">
+                                        <!-- <span>deliveryDestination_address2</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2 ?? ''" @input="updateDraftValue('deliveryDestination_address2', $event.target.value)">
+                                    </label>
+                                </div>
+                                <div class="address-row address-row-contact">
+                                    ℡
+                                    <label class="input-field field-phone">
+                                        <!-- <span>deliveryDestination_phone</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_phone ?? record?.deliveryDestination_phone ?? ''" @input="updateDraftValue('deliveryDestination_phone', $event.target.value)">
+                                    </label>
+                                    E-mail
+                                    <label class="input-field field-email">
+                                        <!-- <span>deliveryDestination_email</span> -->
+                                        <input type="text" :value="draftRecord?.deliveryDestination_email ?? record?.deliveryDestination_email ?? ''" @input="updateDraftValue('deliveryDestination_email', $event.target.value)">
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </Pane>
+
+            <Pane class="detail-pane detail-pane-bottom" :size="bottomPaneSize" :min-size="15">
+                <div class="detail-bottom-section pane-content-scroll">
+                    <section class="section-card section-card-files">
+                        <div class="section-header">
+                            <h3>Files（{{ files.length }}件）</h3>
+                        </div>
+
+                        <div v-if="files.length" class="files-list-wrap">
+                            <AttachedFileItem
+                                v-for="file in files"
+                                :key="file.id"
+                                :file="file"
+                            />
+                        </div>
+                        <p v-else class="empty-message">Files がありません。</p>
+                    </section>
+                </div>
+            </Pane>
+        </Splitpanes>
     </div>
 </template>
 
 <script setup>
-defineProps({
+import { ref } from 'vue'
+import { usePage } from '@inertiajs/vue3'
+import { Pane, Splitpanes } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
+import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+
+const page = usePage()
+
+const props = defineProps({
     record: Object,
+    draftRecord: Object,
+    notes: { type: Array, default: () => [] },
+    parts: { type: Array, default: () => [] },
+    files: { type: Array, default: () => [] },
+    attachmentsLoading: { type: Boolean, default: false },
+    attachmentsError: { type: String, default: '' },
 })
 
-defineEmits(['open-dialog'])
+const emit = defineEmits(['open-dialog'])
+
+const topPaneSize = ref(72)
+const bottomPaneSize = ref(28)
+
+function syncOuterPaneSizes({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    topPaneSize.value = panes[0].size
+    bottomPaneSize.value = panes[1].size
+}
+
+function updateDraftValue(field, value) {
+    if (!props.draftRecord) return
+    props.draftRecord[field] = value
+}
+
+function updateNumericDraftValue(field, value) {
+    if (!props.draftRecord) return
+    props.draftRecord[field] = value === '' ? null : Number(value)
+}
+
+function openServiceMasterSelect() {
+    emit('open-dialog', 'MASTER_SELECT', {
+        kind: 'serviceMaster',
+        serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
+        productName: props.draftRecord?.productName ?? props.record?.productName,
+    })
+}
 </script>
 
 <style scoped>
-.detail-form h2 {
-    margin-bottom: 16px;
+.detail-form {
+    height: 100%;
+    min-height: 0;
 }
 
-.info-grid {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 8px 16px;
-    margin-bottom: 24px;
+.detail-splitpanes {
+    height: 100%;
 }
 
-.info-grid dt {
-    font-weight: bold;
-    color: #475569;
+.detail-splitpanes::before {
+    content: '';
+    position: absolute;
+    background-color:rgb(255, 0, 0);
+    border-radius: 2px;
+    transition: all 0.2s;
 }
 
-.action-row {
+.detail-pane {
+    min-width: 0;
+    min-height: 0;
     display: flex;
+}
+
+.detail-top-section {
+    width: 100%;
+    min-height: 0;
+    height: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.detail-bottom-section {
+    width: 100%;
+    min-height: 0;
+    height: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    background-color:rgb(80, 80, 80);
+}
+
+.pane-content-scroll {
+    overflow: auto;
+    height: 100%;
+}
+
+.detail-top-stack {
+    display: flex;
+    flex-direction: column;
     gap: 12px;
 }
 
-.action-row button {
-    padding: 8px 16px;
-    background: #2563eb;
-    color: white;
-    border: none;
+.detail-card {
+    min-height: 0;
+}
+
+.card-meta {
+    margin: -4px 0 12px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.first-card-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+}
+
+.first-card-row-second {
+    margin-top: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 66%;
+}
+
+.grid-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cell-label {
+    font-size: 13px;
+    color: #475569;
+    font-weight: 600;
+}
+
+.address-card-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.address-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.address-row-3col .input-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.field-zipcode {
+    flex: 0 0 auto;
+}
+
+.field-address1 {
+    flex: 0 0 auto;
+}
+
+.field-address2 {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.field-phone {
+    flex: 0 0 auto;
+}
+
+.field-email {
+    flex: 0 0 auto;
+}
+
+.field-zipcode input {
+    width: 12ch;
+    max-width: 12ch;
+}
+
+.field-address1 input {
+    width: 10ch;
+    max-width: 10ch;
+}
+
+.field-phone input {
+    width: 20ch;
+    max-width: 20ch;
+}
+
+.field-email input {
+    width: 32ch;
+    max-width: 32ch;
+}
+
+.section-card {
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+}
+
+.section-card h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    color: #1e293b;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.section-header h3 {
+    margin: 0;
+}
+
+.field-button,
+.field-select,
+.field-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
     border-radius: 4px;
+    background: #fff;
+    color: #1e293b;
+    box-sizing: border-box;
+}
+
+.field-button {
+    text-align: left;
     cursor: pointer;
+}
+
+.input-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: #475569;
+}
+
+.input-field input {
+    padding: 6px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.input-field:not(.field-zipcode):not(.field-address1):not(.field-phone):not(.field-email) input {
+    width: 100%;
+}
+
+.section-card-files {
+    height: 100%;
+    min-height: 120px;
+}
+
+.files-list-wrap {
+    display: grid;
+    gap: 12px;
+}
+
+.empty-message {
+    margin: 0;
+    color: #64748b;
 }
 </style>

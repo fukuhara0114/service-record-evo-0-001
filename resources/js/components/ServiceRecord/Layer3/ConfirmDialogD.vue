@@ -12,6 +12,11 @@
             <span v-if="payload.file.fileType" class="file-type">{{ payload.file.fileType }}</span>
         </div>
 
+        <div v-if="isDeletePart && payload?.part" class="part-preview">
+            <span class="part-id">Part ID: {{ payload.part.partID }}</span>
+            <span class="part-name">{{ payload.part.part_master?.partName || '—' }}</span>
+        </div>
+
         <div v-if="isDeleteFile" class="delete-mode-options">
             <label class="delete-mode-option">
                 <input v-model="fileDeleteMode" type="radio" value="unlink">
@@ -95,11 +100,13 @@ watch(
 
 const isDeleteNote = computed(() => props.payload?.action === 'delete-note')
 const isDeleteFile = computed(() => props.payload?.action === 'delete-file')
-const isDestructive = computed(() => isDeleteNote.value || isDeleteFile.value)
+const isDeletePart = computed(() => props.payload?.action === 'delete-part')
+const isDestructive = computed(() => isDeleteNote.value || isDeleteFile.value || isDeletePart.value)
 
 const title = computed(() => {
     if (isDeleteNote.value) return 'Note 削除確認'
     if (isDeleteFile.value) return 'ファイル削除確認'
+    if (isDeletePart.value) return '部品削除確認'
     return '確認'
 })
 
@@ -109,6 +116,9 @@ const message = computed(() => {
     }
     if (isDeleteFile.value) {
         return '削除方法を選択してください。'
+    }
+    if (isDeletePart.value) {
+        return '選択した部品を削除してよろしいですか？'
     }
     return 'この内容で保存してよろしいですか？'
 })
@@ -131,6 +141,11 @@ async function confirm() {
 
     if (isDeleteFile.value) {
         await deleteFile(fileDeleteMode.value)
+        return
+    }
+
+    if (isDeletePart.value) {
+        await deletePart()
         return
     }
 
@@ -219,6 +234,45 @@ async function deleteFile(mode = 'delete') {
         processing.value = false
     }
 }
+
+async function deletePart() {
+    const partId = props.payload?.partId ?? props.payload?.part?.id
+    if (!partId) {
+        error.value = '削除対象の部品が見つかりません。'
+        return
+    }
+
+    processing.value = true
+    error.value = ''
+
+    const basePath = getApiBasePath()
+    const url = `${window.location.origin}${basePath}/parts/${partId}`
+
+    try {
+        const result = await apiFetch(url, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+        })
+
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
+
+        if (!response.ok) {
+            throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        emit('saved', data)
+    } catch (e) {
+        error.value = e.message || '削除に失敗しました。'
+    } finally {
+        processing.value = false
+    }
+}
 </script>
 
 <style scoped>
@@ -257,6 +311,26 @@ async function deleteFile(mode = 'delete') {
 
 .file-type {
     color: #64748b;
+}
+
+.part-preview {
+    margin-top: 12px;
+    padding: 10px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 14px;
+}
+
+.part-id {
+    font-weight: bold;
+}
+
+.part-name {
+    color: #475569;
 }
 
 .delete-mode-options {

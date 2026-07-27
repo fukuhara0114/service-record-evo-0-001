@@ -1,6 +1,6 @@
 <template>
     <div class="dialog-overlay" @click.self="$emit('close')">
-        <div class="dialog-panel">
+        <div class="dialog-panel" :class="{ large }">
             <div class="dialog-header">
                 <h3>{{ title }}</h3>
                 <button type="button" class="close-btn" @click="$emit('close')">×</button>
@@ -20,6 +20,10 @@ defineProps({
     title: {
         type: String,
         default: 'ダイアログ',
+    },
+    large: {
+        type: Boolean,
+        default: false,
     },
 })
 
@@ -46,6 +50,14 @@ defineEmits(['close'])
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
+.dialog-panel.large {
+    width: min(96vw, 1600px);
+    height: 96vh;
+    max-width: 96vw;
+    display: flex;
+    flex-direction: column;
+}
+
 .dialog-header {
     display: flex;
     justify-content: space-between;
@@ -70,6 +82,14 @@ defineEmits(['close'])
 
 .dialog-body {
     padding: 16px;
+}
+
+.dialog-panel.large .dialog-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
 }
 
 .dialog-footer {

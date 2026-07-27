@@ -14,7 +14,7 @@
                 <button type="button" @click="clearSearch">Clear</button>
             </div>
             <div class="home-link-area">
-                <a href="/home">Home</a>
+                <a :href="homeUrl">Home</a>
             </div>
         </div>
 
@@ -66,20 +66,25 @@
         </div>
 
         <!-- 第2階層: 詳細 A/B/C -->
-        <p v-if="attachmentsLoading" class="global-loading">添付データを読み込み中...</p>
+        <p v-if="detailLoading" class="global-loading">詳細データを読み込み中...</p>
+        <p v-if="detailOpenError" class="global-error">{{ detailOpenError }}</p>
 
         <DetailShell
             v-if="isDetailOpen"
             :record="activeRecord"
+            :draft-record="draftRecord"
             :notes="activeNotes"
             :files="activeFiles"
             :parts="activeParts"
             :attachments-loading="attachmentsLoading"
             :attachments-error="attachmentsError"
+            :saving-record="isSavingRecord"
+            :save-error="saveError"
             :layout="detailLayout"
             @close="closeDetail"
             @switch-layout="switchDetailLayout"
             @open-dialog="openDialog"
+            @save="saveRecord"
         />
 
         <!-- 第3階層: 入力・確認ダイアログ -->
@@ -125,6 +130,20 @@
             @close="closeDialog"
             @saved="onDialogSaved"
         />
+        <ServiceMasterSelectDialog
+            v-if="activeDialog === 'MASTER_SELECT'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
+        <PartSelectDialog
+            v-if="activeDialog === 'PART'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
     </div>
 </template>
 
@@ -132,6 +151,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import { redirectToLogin } from '@/utils/auth'
+import { apiFetch } from '@/utils/apiFetch'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
 import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
@@ -139,6 +159,8 @@ import InputDialogC from '@/components/ServiceRecord/Layer3/InputDialogC.vue'
 import ConfirmDialogD from '@/components/ServiceRecord/Layer3/ConfirmDialogD.vue'
 import NoteEditDialog from '@/components/ServiceRecord/Layer3/NoteEditDialog.vue'
 import FileUploadDialog from '@/components/ServiceRecord/Layer3/FileUploadDialog.vue'
+import ServiceMasterSelectDialog from '@/components/ServiceRecord/Layer3/ServiceMasterSelectDialog.vue'
+import PartSelectDialog from '@/components/ServiceRecord/Layer3/PartSelectDialog.vue'
 
 const props = defineProps({
     initialRecords: Array,
@@ -149,6 +171,8 @@ const props = defineProps({
 })
 
 const page = usePage()
+
+const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 
 onMounted(() => {
     if (!page.props.authUser) {
@@ -203,12 +227,21 @@ function clearSearch() {
 // --- 第2階層 ---
 const isDetailOpen = ref(false)
 const activeRecord = ref(null)
+const draftRecord = ref(null)
 const detailLayout = ref('A')
 const activeNotes = ref([])
 const activeFiles = ref([])
 const activeParts = ref([])
 const attachmentsLoading = ref(false)
 const attachmentsError = ref('')
+const isSavingRecord = ref(false)
+const saveError = ref('')
+const detailLoading = ref(false)
+const detailOpenError = ref('')
+
+function getBasePath() {
+    return window.location.pathname.replace(/\/administrator\/?$/, '')
+}
 
 function applyAttachmentData(data) {
     if (!data) {
@@ -265,18 +298,48 @@ function loadAttachments(orderID) {
     })
 }
 
+async function fetchRecord(orderID) {
+    const url = `${window.location.origin}${getBasePath()}/record/${orderID}`
+    const result = await apiFetch(url)
+
+    if (!result) {
+        throw new Error('詳細データの取得に失敗しました。')
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        throw new Error(data?.message || `詳細データの取得に失敗しました。（HTTP ${response.status}）`)
+    }
+
+    return data
+}
+
 async function openSecondLayer(record) {
     if (!record?.orderID) {
         console.error('orderID が取得できません', record)
         return
     }
 
+    detailOpenError.value = ''
+    attachmentsError.value = ''
     activeRecord.value = record
+    draftRecord.value = { ...record }
     detailLayout.value = 'A'
     closeDialog()
+    isDetailOpen.value = true
+    detailLoading.value = true
+
+    try {
+        const fullRecord = await fetchRecord(record.orderID)
+        activeRecord.value = fullRecord
+        draftRecord.value = { ...fullRecord }
+    } catch (e) {
+        detailOpenError.value = `${e.message || '詳細データの取得に失敗しました。'}（一覧の情報のみ表示しています）`
+    } finally {
+        detailLoading.value = false
+    }
 
     await loadAttachments(record.orderID)
-    isDetailOpen.value = true
 }
 
 function switchDetailLayout(layout) {
@@ -286,11 +349,16 @@ function switchDetailLayout(layout) {
 function closeDetail() {
     isDetailOpen.value = false
     activeRecord.value = null
+    draftRecord.value = null
     activeNotes.value = []
     activeFiles.value = []
     activeParts.value = []
     attachmentsLoading.value = false
     attachmentsError.value = ''
+    detailLoading.value = false
+    detailOpenError.value = ''
+    saveError.value = ''
+    isSavingRecord.value = false
     closeDialog()
 }
 
@@ -309,6 +377,12 @@ function closeDialog() {
 }
 
 async function onDialogSaved(result) {
+    if (activeDialog.value === 'MASTER_SELECT' && result && draftRecord.value) {
+        Object.assign(draftRecord.value, result)
+        closeDialog()
+        return
+    }
+
     if (result && activeRecord.value) {
         Object.assign(activeRecord.value, result)
     }
@@ -318,6 +392,85 @@ async function onDialogSaved(result) {
     }
 
     closeDialog()
+}
+
+async function saveRecord() {
+    if (!activeRecord.value?.orderID || !draftRecord.value) {
+        return
+    }
+
+    isSavingRecord.value = true
+    saveError.value = ''
+
+    const url = `${window.location.origin}${getBasePath()}/${activeRecord.value.orderID}`
+
+    try {
+        const result = await apiFetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({
+                serviceID: draftRecord.value.serviceID,
+                productName: draftRecord.value.productName,
+                entityID: draftRecord.value.entityID,
+                status: draftRecord.value.status,
+                returnCode: draftRecord.value.returnCode,
+                laborID: draftRecord.value.laborID,
+                receivedDate: draftRecord.value.receivedDate,
+                SN: draftRecord.value.SN,
+                RMA: draftRecord.value.RMA,
+                sm_workorder: draftRecord.value.sm_workorder,
+                sm_quote: draftRecord.value.sm_quote,
+                coNum: draftRecord.value.coNum,
+                dealer: draftRecord.value.dealer,
+                dealer_depart: draftRecord.value.dealer_depart,
+                contactPerson: draftRecord.value.contactPerson,
+                email: draftRecord.value.email,
+                phone: draftRecord.value.phone,
+                receiptNumber: draftRecord.value.receiptNumber,
+                quoteDate: draftRecord.value.quoteDate,
+                quoteNum: draftRecord.value.quoteNum,
+                poNum: draftRecord.value.poNum,
+                orderDate: draftRecord.value.orderDate,
+                orderNum: draftRecord.value.orderNum,
+                invNum: draftRecord.value.invNum,
+                shippedDate: draftRecord.value.shippedDate,
+                productType: draftRecord.value.productType,
+                price: draftRecord.value.price,
+                discountRate: draftRecord.value.discountRate,
+                a2la: draftRecord.value.a2la,
+                sentOut: draftRecord.value.sentOut,
+                shipTo: draftRecord.value.shipTo,
+                rmaNumOverSea: draftRecord.value.rmaNumOverSea,
+                preData: draftRecord.value.preData,
+                postData: draftRecord.value.postData,
+            }),
+        })
+
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `保存に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        Object.assign(activeRecord.value, draftRecord.value)
+        activeRecord.value.status_master = page.props.statuses?.find(status => String(status.processID) === String(draftRecord.value.status)) ?? null
+        activeRecord.value.return_code_master = page.props.returnCodes?.find(code => String(code.id) === String(draftRecord.value.returnCode)) ?? null
+        activeRecord.value.labor_master = page.props.labors?.find(labor => String(labor.laborID) === String(draftRecord.value.laborID)) ?? null
+        activeRecord.value.serviceMaster = page.props.servicesMaster?.find(service => String(service.serviceID) === String(draftRecord.value.serviceID)) ?? null
+    } catch (e) {
+        saveError.value = e.message || '保存に失敗しました。'
+    } finally {
+        isSavingRecord.value = false
+    }
 }
 </script>
 
@@ -425,6 +578,8 @@ async function onDialogSaved(result) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: bold;
 }
 
 .table-row {
@@ -447,5 +602,22 @@ async function onDialogSaved(result) {
     font-size: 18px;
     font-weight: bold;
     z-index: 90;
+}
+
+.global-error {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(90vw, 720px);
+    margin: 0;
+    padding: 10px 16px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    color: #b91c1c;
+    font-size: 14px;
+    z-index: 95;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
 }
 </style>

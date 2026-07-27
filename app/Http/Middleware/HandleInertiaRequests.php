@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'appBaseUrl' => $root,
+            'homeUrl' => route('home'),
             'attachmentUrlTemplate' => $root . '/servicerecord/attachments/{orderID}',
             'authUser' => $request->user() ? [
                 'kanji_name' => $request->user()->kanji_name,
