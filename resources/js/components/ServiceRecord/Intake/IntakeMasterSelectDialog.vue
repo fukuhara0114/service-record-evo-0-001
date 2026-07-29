@@ -14,9 +14,9 @@
                         v-model="searchQuery"
                         type="text"
                         class="search-input"
-                        :class="{ 'ime-latin': kind === 'serviceMaster' }"
-                        :lang="kind === 'serviceMaster' ? 'en' : 'ja'"
-                        :inputmode="kind === 'serviceMaster' ? 'latin' : 'text'"
+                        :class="{ 'ime-latin': kind === 'serviceMaster' || kind === 'loanerProduct' }"
+                        :lang="kind === 'serviceMaster' || kind === 'loanerProduct' ? 'en' : 'ja'"
+                        :inputmode="kind === 'serviceMaster' || kind === 'loanerProduct' ? 'latin' : 'text'"
                         autocomplete="off"
                         autocapitalize="off"
                         spellcheck="false"
@@ -144,6 +144,21 @@ const configs = {
             phone: item?.phone ?? '',
         }),
     },
+    loanerProduct: {
+        title: '貸出機種選択',
+        searchPlaceholder: '半角英数で検索（productName）',
+        columns: [
+            { key: 'productName', label: 'productName', getter: item => item?.productName ?? '—' },
+            { key: 'availableCount', label: '在庫', getter: item => item?.availableCount ?? 0 },
+            { key: 'totalCount', label: '台数', getter: item => item?.totalCount ?? 0 },
+            { key: 'order_type', label: '判定', getter: item => item?.order_type ?? '—' },
+        ],
+        valueGetter: item => item?.productName,
+        searchFields: item => [item?.productName],
+        buildResult: item => ({
+            productName: String(item?.productName ?? ''),
+        }),
+    },
 }
 
 const config = computed(() => configs[props.kind] ?? configs.serviceMaster)
@@ -200,12 +215,12 @@ function onCompositionStart() {
 
 function onCompositionEnd(event) {
     isComposing.value = false
-    if (props.kind !== 'serviceMaster') return
+    if (props.kind !== 'serviceMaster' && props.kind !== 'loanerProduct') return
     searchQuery.value = toHalfWidthAlnum(event.target.value)
 }
 
 function onSearchInput(event) {
-    if (props.kind !== 'serviceMaster' || isComposing.value) return
+    if ((props.kind !== 'serviceMaster' && props.kind !== 'loanerProduct') || isComposing.value) return
     const next = toHalfWidthAlnum(event.target.value)
     if (next !== searchQuery.value) {
         searchQuery.value = next

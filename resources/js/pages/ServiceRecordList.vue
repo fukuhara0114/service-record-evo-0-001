@@ -2,7 +2,32 @@
     <div class="list-page-container">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
-            <div style="flex: 1;"></div>
+            <div class="order-type-filters">
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'service' }"
+                    @click="orderTypeFilter = 'service'"
+                >
+                    service
+                </button>
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'loaner' }"
+                    @click="orderTypeFilter = 'loaner'"
+                >
+                    loaner
+                </button>
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'waiting_list' }"
+                    @click="orderTypeFilter = 'waiting_list'"
+                >
+                    waiting
+                </button>
+            </div>
             <div class="search-area">
                 <label for="customSearchInput">Quick Filer:</label>
                 <input
@@ -49,7 +74,7 @@
                     >
                         <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                         <td>{{ r.receivedDate }}</td>
-                        <td>{{ r.status_master?.status || '' }}</td>
+                        <td>{{ statusLabel(r) }}</td>
                         <td>{{ r.RMA }}</td>
                         <td>{{ r.productName }}</td>
                         <td>{{ r.SN }}</td>
@@ -188,10 +213,15 @@ onMounted(() => {
 
 // --- 第1階層 ---
 const searchQuery = ref('')
+const orderTypeFilter = ref('service')
 const selectedOrderId = ref(null)
 
 const filteredRecords = computed(() => {
-    if (!searchQuery.value) return props.initialRecords
+    let records = props.initialRecords ?? []
+
+    records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+
+    if (!searchQuery.value) return records
 
     const queries = searchQuery.value
         .toLowerCase()
@@ -199,13 +229,13 @@ const filteredRecords = computed(() => {
         .split(/\s+/)
         .filter(q => q.length > 0)
 
-    if (queries.length === 0) return props.initialRecords
+    if (queries.length === 0) return records
 
-    return props.initialRecords.filter(r => {
+    return records.filter(r => {
         const rowText = [
             r.orderID?.toString(),
             r.receivedDate,
-            r.status_master?.status,
+            statusLabel(r),
             r.RMA,
             r.productName,
             r.SN,
@@ -216,6 +246,7 @@ const filteredRecords = computed(() => {
             r.contactPerson,
             r.email,
             r.phone,
+            r.order_type,
         ]
             .filter(Boolean)
             .join(' ')
@@ -224,6 +255,31 @@ const filteredRecords = computed(() => {
         return queries.every(q => rowText.includes(q))
     })
 })
+
+function matchesOrderTypeFilter(record, filter) {
+    const orderType = record?.order_type ?? null
+
+    if (filter === 'service') {
+        return orderType === 'service' || orderType == null || orderType === ''
+    }
+    if (filter === 'loaner') {
+        return orderType === 'loaner'
+    }
+    if (filter === 'waiting_list') {
+        return orderType === 'waiting_list'
+    }
+    return true
+}
+
+function statusLabel(record) {
+    if (record?.order_type === 'waiting_list') {
+        return ''
+    }
+    if (record?.order_type === 'loaner') {
+        return record.status_master_loaner?.status || ''
+    }
+    return record.status_master?.status || ''
+}
 
 function clearSearch() {
     searchQuery.value = ''
@@ -501,6 +557,30 @@ async function saveRecord() {
     border-bottom: 2px solid #3b82f6;
     z-index: 20;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.order-type-filters {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.order-type-btn {
+    padding: 6px 12px;
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.order-type-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
 }
 
 .search-area {

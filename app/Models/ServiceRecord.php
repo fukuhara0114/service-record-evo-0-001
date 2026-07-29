@@ -133,6 +133,27 @@ class ServiceRecord extends Model
         return $this->belongsTo(Status::class, 'status', 'processID');
     }
 
+    public function statusMasterLoaner()
+    {
+        return $this->belongsTo(StatusLoaner::class, 'status', 'processID');
+    }
+
+    /**
+     * order_type に応じた status マスタ（waiting_list は status なし）
+     */
+    public function getResolvedStatusMasterAttribute()
+    {
+        if ($this->order_type === 'waiting_list') {
+            return null;
+        }
+
+        if (in_array($this->order_type, ['loaner'], true)) {
+            return $this->statusMasterLoaner;
+        }
+
+        return $this->statusMaster;
+    }
+
     
     public function userMaster() 
     {

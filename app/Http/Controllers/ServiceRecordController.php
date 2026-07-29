@@ -123,9 +123,16 @@ class ServiceRecordController extends Controller
         //     ->where('status', '>', -1)
         //     ->orderBy('receivedDate', 'asc')
         //     ->get();
-        $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster'])
-            ->where('status', '<', 399)
-            ->where('status', '>', -1)
+        $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner'])
+            ->where(function ($query) {
+                $query
+                    ->where(function ($statusQuery) {
+                        $statusQuery
+                            ->where('status', '<', 399)
+                            ->where('status', '>', -1);
+                    })
+                    ->orWhereNull('status');
+            })
             ->orderBy('receivedDate', 'asc')
             ->get();
 
@@ -164,7 +171,7 @@ class ServiceRecordController extends Controller
 
     public function detail($orderID) {
 
-        $record = ServiceRecord::with(['statusMaster', 'laborMaster', 'statusMaster'])
+        $record = ServiceRecord::with(['statusMaster', 'statusMasterLoaner', 'laborMaster'])
                     ->where('orderID', $orderID)
                     ->first(); // 1件だけ取得
 
@@ -213,7 +220,7 @@ class ServiceRecordController extends Controller
 
     public function record($orderID)
     {
-        $record = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster'])
+        $record = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner'])
             ->where('orderID', $orderID)
             ->first();
 
@@ -772,6 +779,7 @@ class ServiceRecordController extends Controller
             'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
             'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
             'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
+            'order_type' => 'service',
             'lastEditPerson' => $user?->kanji_name,
             'lastEditDate' => now(),
         ]);
