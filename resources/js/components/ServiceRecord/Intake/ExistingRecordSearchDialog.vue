@@ -1,9 +1,12 @@
 <template>
-    <div :class="inline ? 'inline-root' : 'dialog-overlay'" @click.self="!inline && $emit('close')">
+    <div
+        :class="inline ? 'inline-root' : 'dialog-overlay dialog-overlay-blocking'"
+        @click.self="!inline && $emit('close')"
+    >
         <div :class="inline ? 'inline-panel' : 'dialog-panel'">
             <div v-if="!inline" class="dialog-header">
                 <div>
-                    <h3>既存案件検索</h3>
+                    <h3>{{ purpose === 'parent' ? '親案件の検索' : '既存案件検索' }}</h3>
                     <p>{{ querySummary || '検索キーワードなし' }}</p>
                 </div>
                 <button type="button" class="close-btn" @click="$emit('close')">×</button>
@@ -63,6 +66,16 @@
                     <p v-else class="empty-message">左の一覧から案件を選択してください。</p>
                     <div class="detail-actions">
                         <button
+                            v-if="purpose === 'parent'"
+                            type="button"
+                            class="btn-primary"
+                            :disabled="!selectedRecord"
+                            @click="confirmParentSelect"
+                        >
+                            この案件を親として選択
+                        </button>
+                        <button
+                            v-else
                             type="button"
                             class="btn-primary"
                             :disabled="!selectedRecord"
@@ -149,9 +162,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    /** 'file' = PDF紐づけ / 'parent' = 貸出案件の親選択 */
+    purpose: {
+        type: String,
+        default: 'file',
+    },
 })
 
-const emit = defineEmits(['close', 'link-selected', 'search'])
+const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'search'])
 
 const selectedOrderId = ref(null)
 const showLinkConfirm = ref(false)
@@ -190,6 +208,13 @@ function openLinkConfirm() {
     showLinkConfirm.value = true
 }
 
+function confirmParentSelect() {
+    if (!selectedRecord.value) return
+    emit('parent-selected', {
+        record: selectedRecord.value,
+    })
+}
+
 function confirmLink() {
     if (!selectedRecord.value) return
     emit('link-selected', {
@@ -215,6 +240,10 @@ function confirmLink() {
     pointer-events: none;
 }
 
+.dialog-overlay-blocking {
+    pointer-events: auto;
+}
+
 .dialog-panel,
 .confirm-overlay,
 .inline-root {
@@ -230,6 +259,11 @@ function confirmLink() {
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.dialog-panel > .dialog-body {
+    margin: 12px;
+    flex: 1;
 }
 
 .inline-root {

@@ -7,6 +7,7 @@ use App\Models\ServiceMaster;
 use App\Models\ReturnCode;
 use App\Models\Dealer;
 use App\Models\Status;
+use App\Models\StatusLoaner;
 use App\Models\Labor;
 use App\Models\User;
 use App\Models\AttachedFile;

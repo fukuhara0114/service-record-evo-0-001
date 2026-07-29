@@ -80,7 +80,15 @@
                     <section v-if="showLoanerMetaFields" class="info-card info-card-status">
                         <label class="field">
                             <span>status</span>
-                            <select v-model="form.status">
+                            <template v-if="linkMode === 'none'">
+                                <input
+                                    type="text"
+                                    :value="unregisteredStatusLabel"
+                                    readonly
+                                >
+                                <p class="field-hint">紐づけ無しのため「案件未登録-期間仮予約」(35) で保存します。後から service 案件が作成されたら、貸出期間編集画面で親案件を紐づけできます。</p>
+                            </template>
+                            <select v-else v-model="form.status">
                                 <option value="">選択してください</option>
                                 <option
                                     v-for="status in statuses"
@@ -91,6 +99,64 @@
                                 </option>
                             </select>
                         </label>
+                    </section>
+
+                    <section class="info-card info-card-link">
+                        <h3 class="card-title">既存案件との紐づけ</h3>
+                        <div class="link-mode-row">
+                            <label class="radio-option">
+                                <input v-model="linkMode" type="radio" value="none">
+                                <span>紐づけ無し（service 案件を後から待つ）</span>
+                            </label>
+                            <label class="radio-option">
+                                <input v-model="linkMode" type="radio" value="parent">
+                                <span>既存案件に紐づけ</span>
+                            </label>
+                        </div>
+
+                        <div v-if="linkMode === 'parent'" class="parent-link-box">
+                            <div v-if="selectedParent" class="parent-selected">
+                                <div class="parent-summary">
+                                    <strong>orderID: {{ selectedParent.orderID }}</strong>
+                                    <span>{{ selectedParent.productName || '—' }}</span>
+                                    <span>SN: {{ selectedParent.SN || '—' }}</span>
+                                    <span>{{ selectedParent.dealer || '—' }}</span>
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm" @click="clearParent">クリア</button>
+                            </div>
+                            <p v-else class="field-hint">service 案件を検索して親として選択してください（parentID に登録）。</p>
+                            <div class="parent-search-row">
+                                <input
+                                    v-model="parentSearchQuery"
+                                    type="text"
+                                    placeholder="productName / SN / dealer / contactPerson / orderID"
+                                    @keydown.enter.prevent="openParentSearch"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary"
+                                    :disabled="parentSearching"
+                                    @click="openParentSearch"
+                                >
+                                    {{ parentSearching ? '検索中...' : '既存案件を検索' }}
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="info-card info-card-period">
+                        <h3 class="card-title">貸出期間（初期値）</h3>
+                        <div class="form-row row-2">
+                            <label class="field">
+                                <span>開始日</span>
+                                <input v-model="form.plannedSentDate" type="date">
+                            </label>
+                            <label class="field">
+                                <span>終了日</span>
+                                <input v-model="form.plannedReturnedDate" type="date">
+                            </label>
+                        </div>
+                        <p class="field-hint">保存後も貸出期間編集画面から変更できます。</p>
                     </section>
 
                     <section class="info-card info-card-dealer">
@@ -231,6 +297,18 @@
             @selected="onMasterSelected"
         />
 
+        <ExistingRecordSearchDialog
+            v-if="showParentSearch"
+            purpose="parent"
+            :records="parentSearchRecords"
+            :query-summary="parentSearchQuerySummary"
+            :searching="parentSearching"
+            :has-searched="parentHasSearched"
+            @close="showParentSearch = false"
+            @search="openParentSearch"
+            @parent-selected="onParentSelected"
+        />
+
         <div v-if="showWaitingConfirm" class="confirm-overlay" @click.self="cancelWaitingList">
             <div class="confirm-panel">
                 <div class="confirm-header">
@@ -250,10 +328,11 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { apiFetch } from '@/utils/apiFetch'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
+import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 
 const props = defineProps({
     loanerProducts: {
@@ -272,6 +351,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    unregisteredStatus: {
+        type: Object,
+        default: null,
+    },
 })
 
 const page = usePage()
@@ -284,11 +367,30 @@ const availability = ref(null)
 const availabilityChecking = ref(false)
 const showWaitingConfirm = ref(false)
 const waitingListAccepted = ref(false)
+const linkMode = ref('none')
+const selectedParent = ref(null)
+const showParentSearch = ref(false)
+const parentSearching = ref(false)
+const parentHasSearched = ref(false)
+const parentSearchRecords = ref([])
+const parentSearchQuery = ref('')
+
+function defaultPeriodStart() {
+    return new Date().toISOString().slice(0, 10)
+}
+
+function defaultPeriodEnd() {
+    const d = new Date()
+    d.setDate(d.getDate() + 7)
+    return d.toISOString().slice(0, 10)
+}
 
 const form = reactive({
     productName: '',
     status: '',
     SN: '',
+    plannedSentDate: defaultPeriodStart(),
+    plannedReturnedDate: defaultPeriodEnd(),
     dealer: '',
     dealer_depart: '',
     contactPerson: '',
@@ -335,6 +437,14 @@ const loanerProductOptions = computed(() =>
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
 
+const unregisteredStatusLabel = computed(() => {
+    const row = props.unregisteredStatus
+    if (!row) return '案件未登録'
+    return `${row.status} (${row.processID})`
+})
+
+const parentSearchQuerySummary = computed(() => parentSearchQuery.value.trim() || '検索キーワードなし')
+
 const availabilityLabel = computed(() => {
     if (!form.productName) return ''
     if (availabilityChecking.value) return '確認中...'
@@ -346,6 +456,14 @@ const showLoanerMetaFields = computed(() => availability.value?.order_type === '
 const showWaitingWarning = computed(() =>
     availability.value?.order_type === 'waiting_list' && waitingListAccepted.value,
 )
+
+watch(linkMode, (mode) => {
+    if (mode === 'none') {
+        form.status = ''
+        selectedParent.value = null
+        showParentSearch.value = false
+    }
+})
 
 const filteredLoaners = computed(() => {
     const tokens = listSearch.value
@@ -417,6 +535,71 @@ function acceptWaitingList() {
 
 function cancelWaitingList() {
     clearProductSelection()
+}
+
+function clearParent() {
+    selectedParent.value = null
+}
+
+function onParentSelected(payload) {
+    const record = payload?.record ?? payload
+    if (!record?.orderID) return
+    selectedParent.value = record
+    showParentSearch.value = false
+    error.value = ''
+}
+
+async function openParentSearch() {
+    const tokens = parentSearchQuery.value
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+
+    const fallbackTokens = [
+        form.productName,
+        form.SN,
+        form.dealer,
+        form.contactPerson,
+    ].map(v => String(v ?? '').trim()).filter(Boolean)
+
+    const useTokens = tokens.length > 0 ? tokens : fallbackTokens
+
+    if (useTokens.length === 0) {
+        error.value = '検索キーワードを入力するか、dealer / productName 等を入力してから検索してください。'
+        return
+    }
+
+    parentSearching.value = true
+    error.value = ''
+
+    try {
+        const params = new URLSearchParams({ for: 'loaner_parent' })
+        // API は productName/SN/dealer/contactPerson を個別に受けるため、先頭〜4語を割当
+        const keys = ['productName', 'SN', 'dealer', 'contactPerson']
+        useTokens.slice(0, 4).forEach((token, index) => {
+            params.set(keys[index], token)
+        })
+
+        const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        parentSearchRecords.value = data.records ?? []
+        parentHasSearched.value = true
+        showParentSearch.value = true
+        if (!parentSearchQuery.value.trim()) {
+            parentSearchQuery.value = useTokens.join(' ')
+        }
+    } catch (e) {
+        error.value = e.message || '検索に失敗しました。'
+    } finally {
+        parentSearching.value = false
+    }
 }
 
 function onMasterSelected(result) {
@@ -547,6 +730,25 @@ async function save() {
         return
     }
 
+    if (linkMode.value === 'parent' && !selectedParent.value?.orderID) {
+        error.value = '既存案件を選択するか、紐づけ無しを選んでください。'
+        return
+    }
+
+    if (
+        linkMode.value === 'parent'
+        && availability.value?.order_type === 'loaner'
+        && form.status === ''
+    ) {
+        error.value = 'status を選択してください。'
+        return
+    }
+
+    if (form.plannedSentDate && form.plannedReturnedDate && form.plannedReturnedDate < form.plannedSentDate) {
+        error.value = '貸出終了日は開始日以降にしてください。'
+        return
+    }
+
     saving.value = true
     error.value = ''
 
@@ -561,11 +763,15 @@ async function save() {
             body: JSON.stringify({
                 productName: form.productName,
                 receivedDate: null,
-                status: availability.value?.order_type === 'loaner' && form.status !== ''
+                linkMode: linkMode.value,
+                parentID: linkMode.value === 'parent' ? Number(selectedParent.value.orderID) : null,
+                status: availability.value?.order_type === 'loaner' && linkMode.value === 'parent' && form.status !== ''
                     ? Number(form.status)
                     : null,
                 returnCode: null,
                 SN: form.SN || null,
+                plannedSentDate: form.plannedSentDate || null,
+                plannedReturnedDate: form.plannedReturnedDate || null,
                 dealer: form.dealer || null,
                 dealer_depart: form.dealer_depart || null,
                 contactPerson: form.contactPerson || null,
@@ -602,7 +808,11 @@ async function save() {
             throw new Error(validationMessage || data.message || `保存に失敗しました。（HTTP ${response.status}）`)
         }
 
-        window.location.href = adminUrl.value
+        if (data.attachedLoanerId) {
+            window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/period/${data.attachedLoanerId}`
+        } else {
+            window.location.href = adminUrl.value
+        }
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
     } finally {
@@ -807,6 +1017,84 @@ onBeforeUnmount(() => {
 .info-card-status {
     border-color: #c1c1c1;
     background: #dedede;
+}
+
+.info-card-link,
+.info-card-period {
+    border-color: #c1c1c1;
+    background: #dedede;
+}
+
+.link-mode-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #1e293b;
+    cursor: pointer;
+}
+
+.parent-link-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.parent-selected {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #eff6ff;
+}
+
+.parent-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: #334155;
+}
+
+.parent-summary strong {
+    color: #1e40af;
+    font-size: 13px;
+}
+
+.parent-search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.parent-search-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    color: #1e293b;
+}
+
+.field-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.btn-sm {
+    padding: 6px 10px;
+    font-size: 12px;
 }
 
 .info-card-dealer {

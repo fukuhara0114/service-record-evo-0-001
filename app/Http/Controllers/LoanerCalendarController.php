@@ -28,7 +28,7 @@ class LoanerCalendarController extends Controller
 
         $query = AttachedLoaner::query()
             ->with([
-                'serviceRecord:orderID,productName,order_type,dealer,SN,status',
+                'serviceRecord',
                 'loanerMaster:loanerID,productName,item,SN',
             ]);
 
@@ -65,7 +65,10 @@ class LoanerCalendarController extends Controller
 
                 $record = $row->serviceRecord;
                 $master = $row->loanerMaster;
-                $orderType = $record?->order_type ?? 'loaner';
+                $orderType = $record?->order_type ?? null;
+                $statusRaw = $record?->getAttribute('status');
+                $status = ($statusRaw !== null && $statusRaw !== '') ? (int) $statusRaw : null;
+                $colors = $this->resolveEventColors($orderType, $status);
                 $titleParts = array_filter([
                     $master?->productName ?? $record?->productName ?? $row->productName,
                     $master?->item,
@@ -78,12 +81,16 @@ class LoanerCalendarController extends Controller
                     'start' => $start,
                     'end' => $row->calendar_end,
                     'allDay' => true,
-                    'backgroundColor' => $orderType === 'waiting_list' ? '#d97706' : '#2563eb',
-                    'borderColor' => $orderType === 'waiting_list' ? '#b45309' : '#1d4ed8',
+                    'color' => $colors['background'],
+                    'backgroundColor' => $colors['background'],
+                    'borderColor' => $colors['border'],
+                    'textColor' => '#ffffff',
+                    'classNames' => [$colors['class']],
                     'extendedProps' => [
                         'associatedID' => $row->associatedID,
                         'loanerID' => $row->loanerID,
                         'order_type' => $orderType,
+                        'status' => $status,
                         'assignStatus' => $row->assignStatus ?? null,
                         'dealer' => $record?->dealer,
                         'SN' => $master?->SN ?? $record?->SN,
@@ -92,6 +99,7 @@ class LoanerCalendarController extends Controller
                         'plannedSentDate' => optional($row->plannedSentDate)->format('Y-m-d'),
                         'plannedReturnedDate' => optional($row->plannedReturnedDate)->format('Y-m-d'),
                         'comment' => $row->comment,
+                        'colorClass' => $colors['class'],
                     ],
                 ];
             })
@@ -99,6 +107,52 @@ class LoanerCalendarController extends Controller
             ->values();
 
         return response()->json(['events' => $events]);
+    }
+
+    /**
+     * loaner 案件のみ StatusLoaner の processID で色分けする。
+     * status 35: 期間仮予約 → 赤
+     * status 40以上: 期間予約済以降 → 青
+     */
+    private function resolveEventColors(?string $orderType, ?int $status): array
+    {
+        if ($orderType === 'loaner') {
+            if ($status === 35) {
+                return [
+                    'background' => '#dc2626',
+                    'border' => '#b91c1c',
+                    'class' => 'loaner-status-35',
+                ];
+            }
+
+            if ($status !== null && $status >= 40) {
+                return [
+                    'background' => '#2563eb',
+                    'border' => '#1d4ed8',
+                    'class' => 'loaner-status-40',
+                ];
+            }
+
+            return [
+                'background' => '#94a3b8',
+                'border' => '#64748b',
+                'class' => 'loaner-status-other',
+            ];
+        }
+
+        if ($orderType === 'waiting_list') {
+            return [
+                'background' => '#d97706',
+                'border' => '#b45309',
+                'class' => 'loaner-status-waiting',
+            ];
+        }
+
+        return [
+            'background' => '#94a3b8',
+            'border' => '#64748b',
+            'class' => 'loaner-status-legacy',
+        ];
     }
 
     private function loanerOptions()

@@ -190,6 +190,7 @@ import PartSelectDialog from '@/components/ServiceRecord/Layer3/PartSelectDialog
 const props = defineProps({
     initialRecords: Array,
     statuses: Array,
+    statusesLoaner: Array,
     returnCodes: Array,
     labors: Array,
     mode: String,
@@ -524,7 +525,19 @@ async function saveRecord() {
         }
 
         Object.assign(activeRecord.value, draftRecord.value)
-        activeRecord.value.status_master = page.props.statuses?.find(status => String(status.processID) === String(draftRecord.value.status)) ?? null
+        if (activeRecord.value.order_type === 'loaner') {
+            activeRecord.value.status_master_loaner = page.props.statusesLoaner?.find(
+                status => String(status.processID) === String(draftRecord.value.status),
+            ) ?? null
+            activeRecord.value.status_master = null
+        } else if (activeRecord.value.order_type === 'waiting_list') {
+            activeRecord.value.status_master = null
+            activeRecord.value.status_master_loaner = null
+        } else {
+            activeRecord.value.status_master = page.props.statuses?.find(
+                status => String(status.processID) === String(draftRecord.value.status),
+            ) ?? null
+        }
         activeRecord.value.return_code_master = page.props.returnCodes?.find(code => String(code.id) === String(draftRecord.value.returnCode)) ?? null
         activeRecord.value.labor_master = page.props.labors?.find(labor => String(labor.laborID) === String(draftRecord.value.laborID)) ?? null
         activeRecord.value.serviceMaster = page.props.servicesMaster?.find(service => String(service.serviceID) === String(draftRecord.value.serviceID)) ?? null

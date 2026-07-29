@@ -5,7 +5,7 @@
             <dt>OrderID</dt><dd>{{ record?.orderID }}</dd>
             <dt>製品名</dt><dd>{{ record?.productName }}</dd>
             <dt>S/N</dt><dd>{{ record?.SN }}</dd>
-            <dt>ステータス</dt><dd>{{ record?.status_master?.status }}</dd>
+            <dt>ステータス</dt><dd>{{ resolvedStatusLabel }}</dd>
             <dt>販売店</dt><dd>{{ record?.dealer }}</dd>
         </dl>
 
@@ -21,11 +21,23 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
     record: Object,
 })
 
 defineEmits(['open-dialog'])
+
+const resolvedStatusLabel = computed(() => {
+    if (props.record?.order_type === 'waiting_list') return ''
+    if (props.record?.order_type === 'loaner') {
+        return props.record?.status_master_loaner?.status
+            || props.record?.resolved_status_master?.status
+            || ''
+    }
+    return props.record?.status_master?.status || ''
+})
 </script>
 
 <style scoped>

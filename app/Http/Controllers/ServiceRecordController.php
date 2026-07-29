@@ -136,8 +136,20 @@ class ServiceRecordController extends Controller
             ->orderBy('receivedDate', 'asc')
             ->get();
 
+        $records->each(function (ServiceRecord $record) {
+            if ($record->order_type === 'loaner') {
+                $record->unsetRelation('statusMaster');
+            } elseif ($record->order_type === 'waiting_list') {
+                $record->unsetRelation('statusMaster');
+                $record->unsetRelation('statusMasterLoaner');
+            } else {
+                $record->unsetRelation('statusMasterLoaner');
+            }
+        });
 
-        $statuses = \App\Models\Status::orderBy('processID')->get(); 
+
+        $statuses = \App\Models\Status::orderBy('processID')->get();
+        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get();
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
@@ -159,6 +171,7 @@ class ServiceRecordController extends Controller
         return Inertia::render('ServiceRecordList', [
                     'initialRecords' => $records,
                     'statuses'       => $statuses,
+                    'statusesLoaner' => $statusesLoaner,
                     'returnCodes'    => $returnCodes,
                     'labors'         => $labors,
                     'dealersMaster'  => $dealers,
@@ -196,7 +209,8 @@ class ServiceRecordController extends Controller
             abort(404, '指定された作業内容は存在しません。');
         }
 
-        $statuses = \App\Models\Status::orderBy('processID')->get(); 
+        $statuses = \App\Models\Status::orderBy('processID')->get();
+        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get();
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
         $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
@@ -206,6 +220,7 @@ class ServiceRecordController extends Controller
         return Inertia::render('ServiceRecords.detail', [
                     'initialRecord' => $record,
                     'statuses'       => $statuses,
+                    'statusesLoaner' => $statusesLoaner,
                     'returnCodes'    => $returnCodes,
                     'labors'         => $labors,
                     'notes'         => $notes,
@@ -226,6 +241,15 @@ class ServiceRecordController extends Controller
 
         if (!$record) {
             return response()->json(['message' => '指定された案件は存在しません。'], 404);
+        }
+
+        if ($record->order_type === 'loaner') {
+            $record->unsetRelation('statusMaster');
+        } elseif ($record->order_type === 'waiting_list') {
+            $record->unsetRelation('statusMaster');
+            $record->unsetRelation('statusMasterLoaner');
+        } else {
+            $record->unsetRelation('statusMasterLoaner');
         }
 
         return response()->json($record);
@@ -267,9 +291,23 @@ class ServiceRecordController extends Controller
             ]);
         }
 
-        $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster'])
-            ->where('status', '<', 399)
-            ->where('status', '>', -1)
+        $forLoanerParent = $request->input('for') === 'loaner_parent';
+
+        $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster']);
+
+        if ($forLoanerParent) {
+            // 貸出案件の親は service 案件のみ
+            $query->where(function ($q) {
+                $q->where('order_type', 'service')
+                    ->orWhereNull('order_type')
+                    ->orWhere('order_type', '');
+            });
+        } else {
+            $query->where('status', '<', 399)
+                ->where('status', '>', -1);
+        }
+
+        $records = $query
             ->where(function ($outerQuery) use ($tokens) {
                 foreach ($tokens as $token) {
                     $outerQuery->where(function ($tokenQuery) use ($token) {
@@ -278,7 +316,8 @@ class ServiceRecordController extends Controller
                             ->where('productName', 'like', $like)
                             ->orWhere('SN', 'like', $like)
                             ->orWhere('dealer', 'like', $like)
-                            ->orWhere('contactPerson', 'like', $like);
+                            ->orWhere('contactPerson', 'like', $like)
+                            ->orWhere('orderID', 'like', $like);
                     });
                 }
             })
@@ -828,9 +867,16 @@ class ServiceRecordController extends Controller
         $record->update($data);
 
         if ($request->expectsJson()) {
+            $freshRelations = ['returnCodeMaster', 'laborMaster'];
+            if ($record->order_type === 'loaner') {
+                $freshRelations[] = 'statusMasterLoaner';
+            } else {
+                $freshRelations[] = 'statusMaster';
+            }
+
             return response()->json([
                 'message' => '更新しました。',
-                'record' => $record->fresh(['returnCodeMaster', 'laborMaster', 'statusMaster']),
+                'record' => $record->fresh($freshRelations),
             ]);
         }
 

@@ -53,6 +53,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/loaner/create', [LoanerRecordController::class, 'create'])->name('servicerecord.loaner.create');
     Route::get('/servicerecord/loaner/availability', [LoanerRecordController::class, 'availability'])->name('servicerecord.loaner.availability');
     Route::post('/servicerecord/loaner/store', [LoanerRecordController::class, 'store'])->name('servicerecord.loaner.store');
+    Route::get('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'editPeriod'])->name('servicerecord.loaner.period.edit');
+    Route::put('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'updatePeriod'])->name('servicerecord.loaner.period.update');
+    Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
     Route::post('/servicerecord/notes', [ServiceRecordController::class, 'storeNote'])->name('servicerecord.notes.store');

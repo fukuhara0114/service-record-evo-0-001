@@ -27,14 +27,18 @@
                                         </dd>
                                         <dt>status</dt>
                                         <dd>
+                                            <template v-if="isWaitingListRecord">
+                                                <span class="status-empty">—（waiting_list）</span>
+                                            </template>
                                             <select
+                                                v-else
                                                 class="field-select"
                                                 :value="draftRecord?.status ?? record?.status ?? ''"
                                                 @change="updateNumericDraftValue('status', $event.target.value)"
                                             >
                                                 <option value="">選択してください</option>
                                                 <option
-                                                    v-for="status in page.props.statuses ?? []"
+                                                    v-for="status in statusOptions"
                                                     :key="status.processID"
                                                     :value="status.processID"
                                                 >
@@ -435,6 +439,18 @@ const selectedFileId = ref(null)
 
 const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
 const selectedNote = computed(() => props.notes.find(n => n.id === selectedNoteId.value))
+
+const recordOrderType = computed(() =>
+    props.draftRecord?.order_type ?? props.record?.order_type ?? null,
+)
+const isLoanerRecord = computed(() => recordOrderType.value === 'loaner')
+const isWaitingListRecord = computed(() => recordOrderType.value === 'waiting_list')
+const statusOptions = computed(() => {
+    if (isLoanerRecord.value) {
+        return page.props.statusesLoaner ?? []
+    }
+    return page.props.statuses ?? []
+})
 
 function isNoteOwner(note) {
     return note?.whoWrote === authUserName.value
@@ -958,6 +974,11 @@ function formatDate(value) {
     background: #fff;
     color: #1e293b;
     box-sizing: border-box;
+}
+
+.status-empty {
+    color: #64748b;
+    font-size: 13px;
 }
 
 .field-button {

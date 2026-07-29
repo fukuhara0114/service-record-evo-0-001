@@ -4,7 +4,7 @@
             <div>
                 <h1>貸出カレンダー（サンプル）</h1>
                 <p class="subtitle">
-                    attachedloaners の予約期間を表示します（dealer 等は servicerecord 側）。
+                    attachedloaners の予約期間を表示します。loaner status 35=赤 / 40以上=青。
                 </p>
             </div>
             <div class="header-actions">
@@ -31,7 +31,8 @@
                 </select>
             </label>
             <div class="legend">
-                <span class="legend-item loaner">loaner 予約</span>
+                <span class="legend-item status-35">仮予約 (35)</span>
+                <span class="legend-item status-40">予約済以降 (40+)</span>
                 <span class="legend-item waiting">waiting_list</span>
             </div>
         </div>
@@ -50,6 +51,17 @@
                 <div><dt>orderID</dt><dd>{{ selectedEvent.extendedProps?.associatedID ?? '—' }}</dd></div>
                 <div><dt>loanerID</dt><dd>{{ selectedEvent.extendedProps?.loanerID ?? '—' }}</dd></div>
                 <div><dt>order_type</dt><dd>{{ selectedEvent.extendedProps?.order_type ?? '—' }}</dd></div>
+                <div>
+                    <dt>status</dt>
+                    <dd>
+                        <span
+                            class="status-chip"
+                            :style="{ background: selectedEventColor }"
+                        >
+                            {{ selectedEvent.extendedProps?.status ?? '—' }}
+                        </span>
+                    </dd>
+                </div>
                 <div><dt>assignStatus</dt><dd>{{ selectedEvent.extendedProps?.assignStatus ?? '—' }}</dd></div>
                 <div><dt>dealer</dt><dd>{{ selectedEvent.extendedProps?.dealer ?? '—' }}</dd></div>
                 <div><dt>SN</dt><dd>{{ selectedEvent.extendedProps?.SN ?? '—' }}</dd></div>
@@ -59,6 +71,15 @@
                 <div><dt>plannedReturnedDate</dt><dd>{{ selectedEvent.extendedProps?.plannedReturnedDate ?? '—' }}</dd></div>
                 <div><dt>comment</dt><dd>{{ selectedEvent.extendedProps?.comment ?? '—' }}</dd></div>
             </dl>
+            <div class="detail-actions">
+                <a
+                    v-if="selectedEvent.id"
+                    class="btn btn-primary"
+                    :href="periodEditUrl(selectedEvent.id)"
+                >
+                    貸出期間を編集
+                </a>
+            </div>
         </aside>
     </div>
 </template>
@@ -89,8 +110,88 @@ const error = ref('')
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
 const loanerCreateUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/create`)
+const selectedEventColor = computed(() =>
+    resolveColors(
+        selectedEvent.value?.extendedProps?.order_type,
+        selectedEvent.value?.extendedProps?.status,
+    ).background,
+)
 
-const calendarOptions = computed(() => ({
+function resolveColors(orderType, statusRaw) {
+    const status = statusRaw === null || statusRaw === undefined || statusRaw === ''
+        ? null
+        : Number(statusRaw)
+
+    if (orderType === 'loaner') {
+        if (status === 35) {
+            return { background: '#dc2626', border: '#b91c1c', className: 'loaner-status-35' }
+        }
+        if (status !== null && !Number.isNaN(status) && status >= 40) {
+            return { background: '#2563eb', border: '#1d4ed8', className: 'loaner-status-40' }
+        }
+        return { background: '#64748b', border: '#475569', className: 'loaner-status-other' }
+    }
+
+    if (orderType === 'waiting_list') {
+        return { background: '#d97706', border: '#b45309', className: 'loaner-status-waiting' }
+    }
+
+    return { background: '#94a3b8', border: '#64748b', className: 'loaner-status-legacy' }
+}
+
+function paintEventElement(el, background, border) {
+    if (!el) return
+
+    el.style.setProperty('background-color', background, 'important')
+    el.style.setProperty('border-color', border, 'important')
+    el.style.setProperty('color', '#ffffff', 'important')
+    el.style.setProperty('--fc-event-bg-color', background, 'important')
+    el.style.setProperty('--fc-event-border-color', border, 'important')
+    el.style.setProperty('--fc-event-text-color', '#ffffff', 'important')
+
+    el.querySelectorAll('.fc-event-main, .fc-event-title, .fc-list-event-dot, .fc-daygrid-event-dot').forEach((node) => {
+        node.style.setProperty('background-color', background, 'important')
+        node.style.setProperty('border-color', border, 'important')
+        node.style.setProperty('color', '#ffffff', 'important')
+    })
+}
+
+function applyEventColors(info) {
+    const colors = resolveColors(
+        info.event.extendedProps?.order_type,
+        info.event.extendedProps?.status,
+    )
+    paintEventElement(info.el, colors.background, colors.border)
+}
+
+function decorateEvents(events) {
+    return (events ?? [])
+        .filter((event) => {
+            const orderType = event?.extendedProps?.order_type
+            return orderType === 'loaner' || orderType === 'waiting_list'
+        })
+        .map((event) => {
+            const colors = resolveColors(
+                event?.extendedProps?.order_type,
+                event?.extendedProps?.status,
+            )
+            const status = event?.extendedProps?.status
+            const statusPrefix = status != null ? `[${status}] ` : ''
+
+            return {
+                ...event,
+                title: `${statusPrefix}${event.title || ''}`.trim(),
+                color: colors.background,
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                textColor: '#ffffff',
+                classNames: [colors.className, ...(event.classNames ?? [])],
+                display: 'block',
+            }
+        })
+}
+
+const calendarOptions = {
     plugins: [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin],
     initialView: 'dayGridMonth',
     locale: 'ja',
@@ -109,9 +210,21 @@ const calendarOptions = computed(() => ({
     editable: false,
     selectable: false,
     dayMaxEvents: true,
+    eventDisplay: 'block',
     events: fetchEvents,
     eventClick: handleEventClick,
-}))
+    eventDidMount: applyEventColors,
+    eventContent(arg) {
+        const colors = resolveColors(
+            arg.event.extendedProps?.order_type,
+            arg.event.extendedProps?.status,
+        )
+        const title = arg.event.title || ''
+        return {
+            html: `<div class="loaner-event-chip" style="background:${colors.background};border-color:${colors.border};">${title}</div>`,
+        }
+    },
+}
 
 async function fetchEvents(info, successCallback, failureCallback) {
     error.value = ''
@@ -136,7 +249,7 @@ async function fetchEvents(info, successCallback, failureCallback) {
             throw new Error(data.message || `イベント取得に失敗しました。（HTTP ${response.status}）`)
         }
 
-        successCallback(data.events ?? [])
+        successCallback(decorateEvents(data.events ?? []))
     } catch (e) {
         error.value = e.message || 'イベント取得に失敗しました。'
         failureCallback(e)
@@ -145,9 +258,14 @@ async function fetchEvents(info, successCallback, failureCallback) {
 
 function handleEventClick(clickInfo) {
     selectedEvent.value = {
+        id: clickInfo.event.id,
         title: clickInfo.event.title,
         extendedProps: clickInfo.event.extendedProps,
     }
+}
+
+function periodEditUrl(id) {
+    return `${page.props.appBaseUrl}/servicerecord/loaner/period/${id}`
 }
 
 function reloadEvents() {
@@ -195,6 +313,26 @@ function reloadEvents() {
     flex-wrap: wrap;
 }
 
+.btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-secondary {
+    background: #64748b;
+}
+
+.btn-primary {
+    background: #2563eb;
+}
+
 .global-error {
     margin: 0;
     padding: 10px 14px;
@@ -232,10 +370,13 @@ function reloadEvents() {
 
 .legend {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .legend-item {
+    display: inline-flex;
+    align-items: center;
     padding: 4px 10px;
     border-radius: 999px;
     font-size: 12px;
@@ -243,7 +384,11 @@ function reloadEvents() {
     color: #fff;
 }
 
-.legend-item.loaner {
+.legend-item.status-35 {
+    background: #dc2626;
+}
+
+.legend-item.status-40 {
     background: #2563eb;
 }
 
@@ -322,32 +467,69 @@ function reloadEvents() {
     word-break: break-word;
 }
 
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 14px;
-    border: none;
-    border-radius: 4px;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.btn-secondary {
-    background: #64748b;
+.status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
     color: #fff;
+    font-weight: 700;
 }
 
-:deep(.fc) {
-    --fc-border-color: #e2e8f0;
-    --fc-button-bg-color: #334155;
-    --fc-button-border-color: #334155;
-    --fc-button-hover-bg-color: #1e293b;
-    --fc-button-hover-border-color: #1e293b;
-    --fc-button-active-bg-color: #0f172a;
-    --fc-button-active-border-color: #0f172a;
-    font-size: 13px;
+.detail-actions {
+    padding: 0 12px 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.detail-actions .btn {
+    padding: 8px 14px;
+}
+</style>
+
+<style>
+/* FullCalendar は scoped 外で色を強制する */
+.calendar-shell .fc .fc-event,
+.calendar-shell .fc .fc-event .fc-event-main {
+    border-style: solid !important;
+}
+
+.calendar-shell .fc .loaner-event-chip {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    color: #fff !important;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.calendar-shell .fc .fc-event.loaner-status-35,
+.calendar-shell .fc .fc-event.loaner-status-35 .fc-event-main,
+.calendar-shell .fc .fc-event.loaner-status-35 .loaner-event-chip {
+    background-color: #dc2626 !important;
+    border-color: #b91c1c !important;
+    color: #fff !important;
+}
+
+.calendar-shell .fc .fc-event.loaner-status-40,
+.calendar-shell .fc .fc-event.loaner-status-40 .fc-event-main,
+.calendar-shell .fc .fc-event.loaner-status-40 .loaner-event-chip {
+    background-color: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    color: #fff !important;
+}
+
+.calendar-shell .fc .fc-event.loaner-status-waiting,
+.calendar-shell .fc .fc-event.loaner-status-waiting .fc-event-main,
+.calendar-shell .fc .fc-event.loaner-status-waiting .loaner-event-chip {
+    background-color: #d97706 !important;
+    border-color: #b45309 !important;
+    color: #fff !important;
 }
 </style>
