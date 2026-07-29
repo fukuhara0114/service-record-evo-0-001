@@ -28,7 +28,7 @@
                                         <dt>status</dt>
                                         <dd>
                                             <template v-if="isWaitingListRecord">
-                                                <span class="status-empty">—（waiting_list）</span>
+                                                <span class="status-empty">—（waiting_list / status=-1）</span>
                                             </template>
                                             <select
                                                 v-else

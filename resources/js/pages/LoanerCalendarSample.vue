@@ -64,6 +64,8 @@
                 </div>
                 <div><dt>assignStatus</dt><dd>{{ selectedEvent.extendedProps?.assignStatus ?? '—' }}</dd></div>
                 <div><dt>dealer</dt><dd>{{ selectedEvent.extendedProps?.dealer ?? '—' }}</dd></div>
+                <div><dt>dealer_depart</dt><dd>{{ selectedEvent.extendedProps?.dealer_depart ?? '—' }}</dd></div>
+                <div><dt>contactPerson</dt><dd>{{ selectedEvent.extendedProps?.contactPerson ?? '—' }}</dd></div>
                 <div><dt>SN</dt><dd>{{ selectedEvent.extendedProps?.SN ?? '—' }}</dd></div>
                 <div><dt>sentDate</dt><dd>{{ selectedEvent.extendedProps?.sentDate ?? '—' }}</dd></div>
                 <div><dt>returnedDate</dt><dd>{{ selectedEvent.extendedProps?.returnedDate ?? '—' }}</dd></div>

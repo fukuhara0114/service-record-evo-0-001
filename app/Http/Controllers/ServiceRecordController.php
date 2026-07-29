@@ -131,7 +131,10 @@ class ServiceRecordController extends Controller
                             ->where('status', '<', 399)
                             ->where('status', '>', -1);
                     })
-                    ->orWhereNull('status');
+                    ->orWhereNull('status')
+                    // waiting_list は status = -1 固定
+                    ->orWhere('status', -1)
+                    ->orWhere('order_type', 'waiting_list');
             })
             ->orderBy('receivedDate', 'asc')
             ->get();

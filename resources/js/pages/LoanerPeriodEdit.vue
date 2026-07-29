@@ -15,7 +15,7 @@
                     :disabled="saving"
                     @click="save"
                 >
-                    {{ saving ? '保存中...' : '期間を保存' }}
+                    {{ saving ? '保存中...' : '保存' }}
                 </button>
             </div>
         </div>
@@ -33,6 +33,8 @@
                     <div><dt>SN</dt><dd>{{ attachedLocal.SN || '—' }}</dd></div>
                     <div><dt>order_type</dt><dd>{{ attachedLocal.order_type || '—' }}</dd></div>
                     <div><dt>dealer</dt><dd>{{ attachedLocal.dealer || '—' }}</dd></div>
+                    <div><dt>dealer_depart</dt><dd>{{ attachedLocal.dealer_depart || '—' }}</dd></div>
+                    <div><dt>contactPerson</dt><dd>{{ attachedLocal.contactPerson || '—' }}</dd></div>
                     <div><dt>assignStatus</dt><dd>{{ attachedLocal.assignStatus || '—' }}</dd></div>
                     <div>
                         <dt>parentID</dt>
@@ -106,8 +108,24 @@
             </section>
 
             <section class="info-card">
-                <h2 class="card-title">貸出期間</h2>
+                <h2 class="card-title">貸出期間 / status</h2>
                 <div class="form-stack">
+                    <label v-if="attachedLocal.order_type === 'loaner'" class="field">
+                        <span>status（StatusLoaner）</span>
+                        <select v-model="form.status">
+                            <option value="">選択してください</option>
+                            <option
+                                v-for="status in statuses"
+                                :key="status.processID"
+                                :value="String(status.processID)"
+                            >
+                                {{ status.status }} ({{ status.processID }})
+                            </option>
+                        </select>
+                    </label>
+                    <p v-else-if="attachedLocal.order_type === 'waiting_list'" class="field-hint">
+                        waiting_list 案件のため status リレーションはありません（DB上は -1 固定）。
+                    </p>
                     <div v-if="dateFields.hasPlannedSent || dateFields.hasPlannedReturned" class="form-row">
                         <label v-if="dateFields.hasPlannedSent" class="field">
                             <span>plannedSentDate（予定開始）</span>
@@ -193,6 +211,7 @@ const form = reactive({
     sentDate: props.attached.sentDate || '',
     returnedDate: props.attached.returnedDate || '',
     comment: props.attached.comment || '',
+    status: props.attached.status != null ? String(props.attached.status) : '',
 })
 
 const showParentSearch = ref(false)
@@ -343,6 +362,9 @@ async function save() {
         if (props.dateFields.hasPlannedReturned) {
             body.plannedReturnedDate = form.plannedReturnedDate || null
         }
+        if (attachedLocal.order_type === 'loaner') {
+            body.status = form.status === '' ? null : Number(form.status)
+        }
 
         const url = `${page.props.appBaseUrl}/servicerecord/loaner/period/${props.attached.id}`
         const result = await apiFetch(url, {
@@ -371,6 +393,10 @@ async function save() {
             form.plannedSentDate = data.attached.plannedSentDate || ''
             form.plannedReturnedDate = data.attached.plannedReturnedDate || ''
             form.comment = data.attached.comment || ''
+            if (Object.prototype.hasOwnProperty.call(data.attached, 'status')) {
+                form.status = data.attached.status != null ? String(data.attached.status) : ''
+                attachedLocal.status = data.attached.status
+            }
         }
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'

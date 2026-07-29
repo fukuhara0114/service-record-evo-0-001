@@ -149,7 +149,7 @@ class LoanerRecordController extends Controller
             $parentId = (int) $parent->orderID;
         }
 
-        $status = null;
+        $status = -1; // waiting_list は status リレーションなし。NOT NULL 制約のため -1 固定
         if ($orderType === 'loaner') {
             if ($linkMode === 'none') {
                 $status = $this->resolveUnregisteredStatus()?->processID;
@@ -241,7 +241,7 @@ class LoanerRecordController extends Controller
     public function editPeriod(int $id)
     {
         $attached = AttachedLoaner::with([
-            'serviceRecord:orderID,productName,order_type,dealer,SN,status,parentID',
+            'serviceRecord',
             'loanerMaster:loanerID,productName,item,SN',
         ])->findOrFail($id);
 
@@ -274,6 +274,8 @@ class LoanerRecordController extends Controller
                 'SN' => $attached->loanerMaster?->SN ?? $attached->serviceRecord?->SN,
                 'order_type' => $attached->serviceRecord?->order_type,
                 'dealer' => $attached->serviceRecord?->dealer,
+                'dealer_depart' => $attached->serviceRecord?->dealer_depart,
+                'contactPerson' => $attached->serviceRecord?->contactPerson,
                 'parentID' => $attached->serviceRecord?->parentID,
                 'status' => $attached->serviceRecord?->status,
             ],
@@ -358,15 +360,18 @@ class LoanerRecordController extends Controller
 
     public function updatePeriod(Request $request, int $id)
     {
-        $attached = AttachedLoaner::findOrFail($id);
+        $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
         $columns = Schema::getColumnListing('attachedloaners');
         $hasPlannedSent = in_array('plannedSentDate', $columns, true);
         $hasPlannedReturned = in_array('plannedReturnedDate', $columns, true);
+        $record = $attached->serviceRecord;
+        $isLoaner = $record?->order_type === 'loaner';
 
         $rules = [
             'sentDate' => 'nullable|date',
             'returnedDate' => 'nullable|date|after_or_equal:sentDate',
             'comment' => 'nullable|string|max:1000',
+            'status' => 'nullable|integer',
         ];
 
         if ($hasPlannedSent) {
@@ -377,6 +382,17 @@ class LoanerRecordController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        if ($isLoaner && array_key_exists('status', $validated) && $validated['status'] !== null) {
+            $statusExists = StatusLoaner::query()
+                ->where('processID', $validated['status'])
+                ->exists();
+            if (!$statusExists) {
+                return response()->json([
+                    'message' => '指定された status は statusmaster_loaner に存在しません。',
+                ], 422);
+            }
+        }
 
         $payload = [
             'sentDate' => $validated['sentDate'] ?? null,
@@ -393,8 +409,20 @@ class LoanerRecordController extends Controller
             $payload['comment'] = $validated['comment'];
         }
 
-        $attached->fill($payload);
-        $attached->save();
+        DB::transaction(function () use ($attached, $payload, $record, $isLoaner, $validated, $request) {
+            $attached->fill($payload);
+            $attached->save();
+
+            if ($record && $isLoaner && array_key_exists('status', $validated)) {
+                $record->status = $validated['status'];
+                $record->lastEditPerson = $request->user()?->kanji_name;
+                $record->lastEditDate = now();
+                $record->save();
+            }
+        });
+
+        $attached->refresh();
+        $record?->refresh();
 
         return response()->json([
             'message' => '貸出期間を更新しました。',
@@ -405,6 +433,7 @@ class LoanerRecordController extends Controller
                 'plannedSentDate' => optional($attached->plannedSentDate)->format('Y-m-d'),
                 'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
                 'comment' => $attached->comment,
+                'status' => $record?->status,
             ],
         ]);
     }

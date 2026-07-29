@@ -73,7 +73,10 @@ class LoanerCalendarController extends Controller
                     $master?->productName ?? $record?->productName ?? $row->productName,
                     $master?->item,
                     $row->loanerID ? ('ID:' . $row->loanerID) : null,
-                ]);
+                    $record?->dealer,
+                    $record?->dealer_depart,
+                    $record?->contactPerson,
+                ], fn ($part) => $part !== null && $part !== '');
 
                 return [
                     'id' => (string) $row->id,
@@ -93,6 +96,8 @@ class LoanerCalendarController extends Controller
                         'status' => $status,
                         'assignStatus' => $row->assignStatus ?? null,
                         'dealer' => $record?->dealer,
+                        'dealer_depart' => $record?->dealer_depart,
+                        'contactPerson' => $record?->contactPerson,
                         'SN' => $master?->SN ?? $record?->SN,
                         'sentDate' => optional($row->sentDate)->format('Y-m-d'),
                         'returnedDate' => optional($row->returnedDate)->format('Y-m-d'),
