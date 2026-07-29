@@ -126,6 +126,69 @@
                     <p v-else-if="attachedLocal.order_type === 'waiting_list'" class="field-hint">
                         waiting_list 案件のため status リレーションはありません（DB上は -1 固定）。
                     </p>
+
+                    <div v-if="attachedLocal.order_type === 'waiting_list'" class="schedule-box">
+                        <h3 class="section-title">同機種の貸出終了予定</h3>
+                        <p v-if="!productLoanSchedule" class="field-hint">終了予定情報を取得できませんでした。</p>
+                        <template v-else>
+                            <dl class="schedule-summary">
+                                <div>
+                                    <dt>最も早い終了予定</dt>
+                                    <dd>{{ productLoanSchedule.earliestEndDate || '（該当なし）' }}</dd>
+                                </div>
+                                <div>
+                                    <dt>最も遅い終了予定</dt>
+                                    <dd>{{ productLoanSchedule.latestEndDate || '（該当なし）' }}</dd>
+                                </div>
+                                <div>
+                                    <dt>推奨開始日（終了翌日）</dt>
+                                    <dd>
+                                        {{ productLoanSchedule.suggestedStartDate || '—' }}
+                                        <button
+                                            v-if="productLoanSchedule.suggestedStartDate"
+                                            type="button"
+                                            class="btn btn-secondary btn-xs"
+                                            @click="applySuggestedPeriod"
+                                        >
+                                            この期間を反映
+                                        </button>
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            <div v-if="productLoanSchedule.items?.length" class="schedule-table-wrap">
+                                <table class="schedule-table">
+                                    <thead>
+                                        <tr>
+                                            <th>終了予定</th>
+                                            <th>開始</th>
+                                            <th>order_type</th>
+                                            <th>loanerID</th>
+                                            <th>SN</th>
+                                            <th>dealer</th>
+                                            <th>orderID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="item in productLoanSchedule.items"
+                                            :key="`${item.attachedId}-${item.endDate}`"
+                                        >
+                                            <td>{{ item.endDate }}</td>
+                                            <td>{{ item.startDate || '—' }}</td>
+                                            <td>{{ item.order_type || '—' }}</td>
+                                            <td>{{ item.loanerID || '—' }}</td>
+                                            <td>{{ item.SN || '—' }}</td>
+                                            <td>{{ item.dealer || '—' }}</td>
+                                            <td>{{ item.associatedID || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="field-hint">現在以降の同機種貸出予定はありません。</p>
+                        </template>
+                    </div>
+
                     <div v-if="dateFields.hasPlannedSent || dateFields.hasPlannedReturned" class="form-row">
                         <label v-if="dateFields.hasPlannedSent" class="field">
                             <span>plannedSentDate（予定開始）</span>
@@ -183,6 +246,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    productLoanSchedule: {
+        type: Object,
+        default: null,
+    },
     statuses: {
         type: Array,
         default: () => [],
@@ -234,6 +301,14 @@ const statuses = computed(() => props.statuses ?? [])
 
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function applySuggestedPeriod() {
+    if (!props.productLoanSchedule?.suggestedStartDate) return
+    form.plannedSentDate = props.productLoanSchedule.suggestedStartDate
+    form.plannedReturnedDate = props.productLoanSchedule.suggestedEndDate || ''
+    form.sentDate = props.productLoanSchedule.suggestedStartDate
+    form.returnedDate = props.productLoanSchedule.suggestedEndDate || ''
 }
 
 async function openParentSearch() {
@@ -460,10 +535,80 @@ async function save() {
     background: #64748b;
 }
 
+.btn-xs {
+    padding: 4px 8px;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
 .btn-primary:disabled,
 .btn-secondary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.schedule-box {
+    margin: 4px 0 8px;
+    padding: 12px;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+    background: #fffbeb;
+}
+
+.schedule-summary {
+    margin: 0 0 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.schedule-summary div {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+}
+
+.schedule-summary dt {
+    margin: 0;
+    color: #92400e;
+}
+
+.schedule-summary dd {
+    margin: 0;
+    color: #1e293b;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.schedule-table-wrap {
+    overflow: auto;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.schedule-table th,
+.schedule-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #fef3c7;
+    text-align: left;
+    white-space: nowrap;
+    color: #1e293b;
+}
+
+.schedule-table th {
+    background: #fef3c7;
+    color: #92400e;
 }
 
 .global-error,

@@ -7,6 +7,7 @@ use App\Models\Dealer;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -68,10 +69,11 @@ class LoanerRecordController extends Controller
         ]);
 
         $available = $this->findAvailableLoaner($validated['productName']);
+        $orderType = $available ? 'loaner' : 'waiting_list';
 
-        return response()->json([
+        $payload = [
             'available' => $available !== null,
-            'order_type' => $available ? 'loaner' : 'waiting_list',
+            'order_type' => $orderType,
             'loaner' => $available ? [
                 'loanerID' => $available->loanerID,
                 'productName' => $available->productName,
@@ -79,7 +81,18 @@ class LoanerRecordController extends Controller
                 'manageNum' => $available->manageNum,
                 'item' => $available->item,
             ] : null,
-        ]);
+        ];
+
+        if ($orderType === 'waiting_list') {
+            [$start, $end, $basedOn] = $this->resolveWaitingListDefaultPeriod($validated['productName']);
+            $payload['suggestedPeriod'] = [
+                'plannedSentDate' => $start,
+                'plannedReturnedDate' => $end,
+                'basedOnReturnedDate' => $basedOn,
+            ];
+        }
+
+        return response()->json($payload);
     }
 
     public function store(Request $request)
@@ -256,6 +269,18 @@ class LoanerRecordController extends Controller
                 ->first(['orderID', 'productName', 'SN', 'dealer', 'contactPerson', 'order_type']);
         }
 
+        $productName = $attached->productName
+            ?? $attached->loanerMaster?->productName
+            ?? $attached->serviceRecord?->productName;
+
+        $productLoanSchedule = null;
+        if ($attached->serviceRecord?->order_type === 'waiting_list' && $productName) {
+            $productLoanSchedule = $this->buildProductLoanSchedule(
+                $productName,
+                (int) $attached->id,
+            );
+        }
+
         return Inertia::render('LoanerPeriodEdit', [
             'attached' => [
                 'id' => $attached->id,
@@ -267,9 +292,7 @@ class LoanerRecordController extends Controller
                 'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
                 'assignStatus' => $attached->assignStatus ?? null,
                 'comment' => $attached->comment,
-                'productName' => $attached->productName
-                    ?? $attached->loanerMaster?->productName
-                    ?? $attached->serviceRecord?->productName,
+                'productName' => $productName,
                 'item' => $attached->loanerMaster?->item,
                 'SN' => $attached->loanerMaster?->SN ?? $attached->serviceRecord?->SN,
                 'order_type' => $attached->serviceRecord?->order_type,
@@ -280,6 +303,7 @@ class LoanerRecordController extends Controller
                 'status' => $attached->serviceRecord?->status,
             ],
             'parentRecord' => $parent,
+            'productLoanSchedule' => $productLoanSchedule,
             'statuses' => StatusLoaner::orderBy('processID')->get(['processID', 'status']),
             'dateFields' => [
                 'hasPlannedSent' => $hasPlannedSent,
@@ -467,8 +491,20 @@ class LoanerRecordController extends Controller
             return null;
         }
 
-        $start = $plannedSentDate ?: now()->toDateString();
-        $end = $plannedReturnedDate ?: now()->addDays(7)->toDateString();
+        if ($orderType === 'waiting_list') {
+            // waiting_list は同機種の現在貸出終了翌日から（未指定時は自動計算）
+            if (!$plannedSentDate || !$plannedReturnedDate) {
+                [$autoStart, $autoEnd] = $this->resolveWaitingListDefaultPeriod($requestedProductName);
+                $start = $plannedSentDate ?: $autoStart;
+                $end = $plannedReturnedDate ?: $autoEnd;
+            } else {
+                $start = $plannedSentDate;
+                $end = $plannedReturnedDate;
+            }
+        } else {
+            $start = $plannedSentDate ?: now()->toDateString();
+            $end = $plannedReturnedDate ?: Carbon::parse($start)->addDays(7)->toDateString();
+        }
 
         $payload = [
             'associatedID' => $record->orderID,
@@ -496,6 +532,198 @@ class LoanerRecordController extends Controller
         }
 
         return AttachedLoaner::create($payload);
+    }
+
+    /**
+     * waiting_list の初期期間:
+     * 同機種の各貸出機について「現在以降の予約終了日」を取り、
+     * 最も早く空く個体の終了翌日を開始日とする（期間は7日）。
+     *
+     * @return array{0:string,1:string,2:?string} [start, end, basedOnReturnedDate]
+     */
+    private function resolveWaitingListDefaultPeriod(string $productName): array
+    {
+        $today = Carbon::today();
+        $masters = LoanerMaster::query()
+            ->where('productName', $productName)
+            ->get(['id', 'loanerID']);
+
+        $unitFreeDates = [];
+
+        foreach ($masters as $master) {
+            $ids = array_values(array_filter([$master->loanerID, $master->id], fn ($v) => $v !== null && $v !== ''));
+            if ($ids === []) {
+                continue;
+            }
+
+            $rows = AttachedLoaner::query()
+                ->whereIn('loanerID', $ids)
+                ->get(['sentDate', 'returnedDate', 'plannedSentDate', 'plannedReturnedDate']);
+
+            $latestEnd = null;
+            foreach ($rows as $row) {
+                $end = $this->resolveAttachedEndDate($row);
+                if (!$end) {
+                    continue;
+                }
+                if ($end->lt($today)) {
+                    continue;
+                }
+                if ($latestEnd === null || $end->gt($latestEnd)) {
+                    $latestEnd = $end->copy();
+                }
+            }
+
+            // その個体が今空いていれば今日から、貸出中なら終了翌日
+            $unitFreeDates[] = $latestEnd
+                ? $latestEnd->copy()->addDay()
+                : $today->copy();
+        }
+
+        // productName のみ紐づく予約（loanerID が曖昧な行）も考慮
+        $productRows = AttachedLoaner::query()
+            ->where('productName', $productName)
+            ->when($masters->isNotEmpty(), function ($q) use ($masters) {
+                $ids = $masters->flatMap(fn ($m) => array_filter([$m->loanerID, $m->id]))->unique()->values()->all();
+                if ($ids !== []) {
+                    $q->where(function ($inner) use ($ids) {
+                        $inner->whereNull('loanerID')
+                            ->orWhereNotIn('loanerID', $ids);
+                    });
+                }
+            })
+            ->get(['sentDate', 'returnedDate', 'plannedSentDate', 'plannedReturnedDate']);
+
+        $productLatestEnd = null;
+        foreach ($productRows as $row) {
+            $end = $this->resolveAttachedEndDate($row);
+            if (!$end || $end->lt($today)) {
+                continue;
+            }
+            if ($productLatestEnd === null || $end->gt($productLatestEnd)) {
+                $productLatestEnd = $end->copy();
+            }
+        }
+        if ($productLatestEnd) {
+            $unitFreeDates[] = $productLatestEnd->copy()->addDay();
+        }
+
+        if ($unitFreeDates === []) {
+            $start = $today->copy();
+            $basedOn = null;
+        } else {
+            // 最も早く空くタイミング（MIN）
+            $start = collect($unitFreeDates)->sortBy(fn (Carbon $d) => $d->timestamp)->first()->copy();
+            if ($start->lt($today)) {
+                $start = $today->copy();
+            }
+            $basedOn = $start->equalTo($today)
+                ? null
+                : $start->copy()->subDay()->toDateString();
+        }
+
+        $end = $start->copy()->addDays(7);
+
+        return [
+            $start->toDateString(),
+            $end->toDateString(),
+            $basedOn,
+        ];
+    }
+
+    /**
+     * waiting_list 編集画面用: 同機種の現行貸出終了予定一覧
+     */
+    private function buildProductLoanSchedule(string $productName, ?int $excludeAttachedId = null): array
+    {
+        $today = Carbon::today();
+        $masters = LoanerMaster::query()
+            ->where('productName', $productName)
+            ->get(['id', 'loanerID', 'SN', 'item']);
+
+        $loanerIds = $masters
+            ->flatMap(fn ($m) => array_filter([$m->loanerID, $m->id]))
+            ->unique()
+            ->values()
+            ->all();
+
+        $query = AttachedLoaner::query()
+            ->with(['serviceRecord:orderID,order_type,dealer,status,productName'])
+            ->when($excludeAttachedId, fn ($q) => $q->where('id', '!=', $excludeAttachedId))
+            ->where(function ($q) use ($productName, $loanerIds) {
+                $q->where('productName', $productName);
+                if ($loanerIds !== []) {
+                    $q->orWhereIn('loanerID', $loanerIds);
+                }
+            });
+
+        $rows = $query
+            ->orderByRaw('COALESCE(plannedReturnedDate, returnedDate) asc')
+            ->get();
+
+        $items = [];
+
+        foreach ($rows as $row) {
+            $end = $this->resolveAttachedEndDate($row);
+            if (!$end || $end->lt($today)) {
+                continue;
+            }
+
+            $orderType = $row->serviceRecord?->order_type;
+            $master = $masters->first(function ($m) use ($row) {
+                return (string) $m->loanerID === (string) $row->loanerID
+                    || (string) $m->id === (string) $row->loanerID;
+            });
+
+            $items[] = [
+                'attachedId' => $row->id,
+                'associatedID' => $row->associatedID,
+                'loanerID' => $row->loanerID,
+                'SN' => $master?->SN,
+                'item' => $master?->item,
+                'order_type' => $orderType,
+                'dealer' => $row->serviceRecord?->dealer,
+                'endDate' => $end->toDateString(),
+                'startDate' => optional($row->plannedSentDate ?? $row->sentDate)->format('Y-m-d'),
+            ];
+        }
+
+        usort($items, fn ($a, $b) => strcmp($a['endDate'], $b['endDate']));
+
+        $loanerEnds = array_values(array_filter($items, fn ($i) => $i['order_type'] === 'loaner'));
+        $earliestLoanerEnd = $loanerEnds[0]['endDate'] ?? ($items[0]['endDate'] ?? null);
+        $latestLoanerEnd = $loanerEnds !== []
+            ? $loanerEnds[array_key_last($loanerEnds)]['endDate']
+            : ($items !== [] ? $items[array_key_last($items)]['endDate'] : null);
+
+        [$suggestedStart, $suggestedEnd, $basedOn] = $this->resolveWaitingListDefaultPeriod($productName);
+
+        return [
+            'productName' => $productName,
+            'earliestEndDate' => $earliestLoanerEnd,
+            'latestEndDate' => $latestLoanerEnd,
+            'suggestedStartDate' => $suggestedStart,
+            'suggestedEndDate' => $suggestedEnd,
+            'basedOnReturnedDate' => $basedOn,
+            'items' => $items,
+        ];
+    }
+
+    private function resolveAttachedEndDate(AttachedLoaner $row): ?Carbon
+    {
+        $raw = $row->getAttribute('plannedReturnedDate')
+            ?? $row->getAttribute('returnedDate')
+            ?? null;
+
+        if (!$raw) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($raw)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function findAvailableLoaner(string $productName): ?LoanerMaster

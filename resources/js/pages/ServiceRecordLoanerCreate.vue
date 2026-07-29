@@ -156,7 +156,18 @@
                                 <input v-model="form.plannedReturnedDate" type="date">
                             </label>
                         </div>
-                        <p class="field-hint">保存後も貸出期間編集画面から変更できます。</p>
+                        <p class="field-hint">
+                            <template v-if="availability?.order_type === 'waiting_list' && availability?.suggestedPeriod">
+                                waiting_list のため、同機種の現在貸出終了
+                                <template v-if="availability.suggestedPeriod.basedOnReturnedDate">
+                                    （{{ availability.suggestedPeriod.basedOnReturnedDate }}）
+                                </template>
+                                翌日から自動設定しています。保存後も変更できます。
+                            </template>
+                            <template v-else>
+                                保存後も貸出期間編集画面から変更できます。
+                            </template>
+                        </p>
                     </section>
 
                     <section class="info-card info-card-dealer">
@@ -317,6 +328,15 @@
                 <div class="confirm-body">
                     <p class="confirm-warning">在庫が無いので予約リストに追加しますか？</p>
                     <p class="confirm-detail">機種: {{ form.productName || '—' }}</p>
+                    <p v-if="availability?.suggestedPeriod" class="confirm-detail">
+                        予定期間:
+                        {{ availability.suggestedPeriod.plannedSentDate }}
+                        〜
+                        {{ availability.suggestedPeriod.plannedReturnedDate }}
+                        <template v-if="availability.suggestedPeriod.basedOnReturnedDate">
+                            （現行貸出終了 {{ availability.suggestedPeriod.basedOnReturnedDate }} の翌日開始）
+                        </template>
+                    </p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-secondary" @click="cancelWaitingList">キャンセル</button>
@@ -653,9 +673,17 @@ async function checkAvailability() {
             form.status = ''
             waitingListAccepted.value = false
             showWaitingConfirm.value = true
+            if (data.suggestedPeriod?.plannedSentDate) {
+                form.plannedSentDate = data.suggestedPeriod.plannedSentDate
+            }
+            if (data.suggestedPeriod?.plannedReturnedDate) {
+                form.plannedReturnedDate = data.suggestedPeriod.plannedReturnedDate
+            }
         } else {
             waitingListAccepted.value = false
             showWaitingConfirm.value = false
+            form.plannedSentDate = defaultPeriodStart()
+            form.plannedReturnedDate = defaultPeriodEnd()
             if (data.loaner?.SN) {
                 form.SN = data.loaner.SN
             }
