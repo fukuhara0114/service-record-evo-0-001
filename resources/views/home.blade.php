@@ -54,21 +54,13 @@
 </head>
 <body>
 
-    <h1>メニューを選択してください</h1>
-
-    <div class="menu-container">
-        <!-- Vueアプリ（トップページ）へ遷移するボタン -->
-        {{-- <a href="{{ url('/servicerecord') }}" class="btn">Vueアプリケーションを開く</a>
-        <a href="{{ url('/servicerecord/administrator') }}" class="btn">Vueアプリケーションを開く</a> --}}
-        <a href="{{ url('/servicerecord_q') }}" class="btn">ServiceRecord 一覧</a>
-        <a href="{{ url('/servicerecord/administrator') }}" class="btn">Admin</a>
-        {{-- <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a>
-        <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a>
-        <a href="{{ url('/') }}" class="btn">Vueアプリケーションを開く</a> --}}
-        
-        <!-- 今後、別のBladeページなどを増やす場合はここにボタンを追加できます -->
-        <!-- <a href="{{ url('/other-page') }}" class="btn">別のページを開く</a> -->
+    <div class="menu-container" style="display: flex !important; flex-direction: row !important; justify-content: center; align-items: center; gap: 15px; flex-wrap: nowrap !important; min-height: 60vh; width: 100%;">
+        <!-- 各ボタンに min-width: 160px; と中央揃えを追加 -->
+        <a href="{{ url('/servicerecord_q') }}" class="btn" style="min-width: 160px; text-align: center;">ServiceRecord</a>
+        <a href="{{ url('/servicerecord/administrator') }}" class="btn" style="min-width: 160px; text-align: center;">Admin</a>
+        <a href="{{ url('/servicerecord/intake') }}" class="btn" style="min-width: 160px; text-align: center;">案件登録</a>
     </div>
+
 
     <!-- ログアウト用の簡易リンク -->
     <form action="{{ route('logout') }}" method="POST">

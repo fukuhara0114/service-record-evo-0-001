@@ -178,6 +178,12 @@ onMounted(() => {
     if (!page.props.authUser) {
         redirectToLogin()
     }
+
+    const params = new URLSearchParams(window.location.search)
+    const initialQuery = params.get('q')?.trim()
+    if (initialQuery) {
+        searchQuery.value = initialQuery
+    }
 })
 
 // --- 第1階層 ---

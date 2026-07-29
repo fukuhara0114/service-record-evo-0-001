@@ -94,7 +94,8 @@ class ServiceRecord extends Model
         'order_type',
         'lastEditPerson',
         'lastEditDate',
-        'entityID'
+        'entityID',
+        'loanerID'
     ];
 
 

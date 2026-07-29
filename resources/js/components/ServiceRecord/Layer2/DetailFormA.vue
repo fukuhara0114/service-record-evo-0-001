@@ -203,7 +203,10 @@
                                             <input type="text" placeholder="都道府県" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
                                         </label>
                                         <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="住所" :value="draftRecord?.address2 ?? record?.address2 ?? ''" @input="updateDraftValue('address2', $event.target.value)">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span>&nbsp;&nbsp;&nbsp;</span>
+                                                <input type="text" placeholder="住所" :value="draftRecord?.address2 ?? record?.address2 ?? ''" @input="updateDraftValue('address2', $event.target.value)">
+                                            </div>
                                         </label>
                                     </div>
                                 </section>
@@ -236,7 +239,10 @@
                                             <input type="text" placeholder="都道府県" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
                                         </label>
                                         <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="住所" :value="draftRecord?.endUser_address2 ?? record?.endUser_address2 ?? ''" @input="updateDraftValue('endUser_address2', $event.target.value)">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span>&nbsp;&nbsp;&nbsp;</span>
+                                                <input type="text" placeholder="住所" :value="draftRecord?.endUser_address2 ?? record?.endUser_address2 ?? ''" @input="updateDraftValue('endUser_address2', $event.target.value)">
+                                            </div>
                                         </label>
                                     </div>
                                 </section>
@@ -269,7 +275,10 @@
                                             <input type="text" placeholder="都道府県" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
                                         </label>
                                         <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="住所" :value="draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2 ?? ''" @input="updateDraftValue('deliveryDestination_address2', $event.target.value)">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span>&nbsp;&nbsp;&nbsp;</span>
+                                                <input type="text" placeholder="住所" :value="draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2 ?? ''" @input="updateDraftValue('deliveryDestination_address2', $event.target.value)">
+                                            </div>
                                         </label>
                                     </div>
                                 </section>

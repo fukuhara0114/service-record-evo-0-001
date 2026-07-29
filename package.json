@@ -19,6 +19,7 @@
     "dependencies": {
         "@inertiajs/vue3": "^3.3.1",
         "axios": "^1.17.0",
+        "pdf-lib": "^1.17.1",
         "splitpanes": "^4.1.2",
         "vue": "^3.5.35"
     }
