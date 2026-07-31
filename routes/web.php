@@ -43,12 +43,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord',[ServiceRecordController::class, 'index'])->name('servicerecord.index');
     Route::get('/servicerecord/administrator',[ServiceRecordController::class, 'administrator'])->name('servicerecord.administrator');
     Route::get('/servicerecord/intake', [ServiceRecordController::class, 'intakeList'])->name('servicerecord.intake');
+    Route::get('/servicerecord/intake/create', [ServiceRecordController::class, 'createWithoutFile'])->name('servicerecord.intake.create-blank');
     Route::get('/servicerecord/intake/{fileId}/create', [ServiceRecordController::class, 'createFromFile'])->name('servicerecord.intake.create');
     Route::get('/servicerecord/search-existing', [ServiceRecordController::class, 'searchExisting'])->name('servicerecord.search-existing');
     Route::post('/servicerecord/intake/link-existing', [ServiceRecordController::class, 'linkToExisting'])->name('servicerecord.intake.link-existing');
     Route::get('/servicerecord/record/{orderID}', [ServiceRecordController::class, 'record'])->name('servicerecord.record');
     Route::get('/servicerecord/attachments/{orderID}', [ServiceRecordController::class, 'attachments'])->name('servicerecord.attachments');
     Route::get('/servicerecord/files/{fileId}', [ServiceRecordController::class, 'fileContent'])->name('servicerecord.file-content');
+    Route::get('/servicerecord/files/{fileId}/eml-preview', [ServiceRecordController::class, 'emlPreview'])->name('servicerecord.files.eml-preview');
+    Route::get('/servicerecord/files/{fileId}/eml-attachment/{index}', [ServiceRecordController::class, 'emlAttachment'])->name('servicerecord.files.eml-attachment');
+    Route::post('/servicerecord/files/{fileId}/eml-reply-draft', [ServiceRecordController::class, 'emlReplyDraft'])->name('servicerecord.files.eml-reply-draft');
     Route::post('/servicerecord/intake/store', [ServiceRecordController::class, 'storeFromIntake'])->name('servicerecord.intake.store');
     Route::get('/servicerecord/loaner/create', [LoanerRecordController::class, 'create'])->name('servicerecord.loaner.create');
     Route::get('/servicerecord/loaner/availability', [LoanerRecordController::class, 'availability'])->name('servicerecord.loaner.availability');
@@ -62,6 +66,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/servicerecord/notes/{id}', [ServiceRecordController::class, 'updateNote'])->name('servicerecord.notes.update');
     Route::delete('/servicerecord/notes/{id}', [ServiceRecordController::class, 'destroyNote'])->name('servicerecord.notes.destroy');
     Route::post('/servicerecord/files', [ServiceRecordController::class, 'storeFile'])->name('servicerecord.files.store');
+    Route::put('/servicerecord/files/{id}', [ServiceRecordController::class, 'updateFile'])->name('servicerecord.files.update');
     Route::put('/servicerecord/files/{id}/content', [ServiceRecordController::class, 'updateFileContent'])->name('servicerecord.files.content.update');
     Route::delete('/servicerecord/files/{id}', [ServiceRecordController::class, 'destroyFile'])->name('servicerecord.files.destroy');
     Route::post('/servicerecord/parts', [ServiceRecordController::class, 'storePart'])->name('servicerecord.parts.store');

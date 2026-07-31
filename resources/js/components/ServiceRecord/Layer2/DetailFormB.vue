@@ -193,14 +193,20 @@
                 <div class="detail-bottom-section pane-content-scroll">
                     <section class="section-card section-card-files">
                         <div class="section-header">
-                            <h3>Files（{{ files.length }}件）</h3>
+                            <h3>Files（{{ sortedFiles.length }}件）</h3>
                         </div>
 
-                        <div v-if="files.length" class="files-list-wrap">
+                        <div v-if="sortedFiles.length" class="files-list-wrap">
                             <AttachedFileItem
-                                v-for="file in files"
+                                v-for="(file, index) in sortedFiles"
                                 :key="file.id"
                                 :file="file"
+                                :order-id="record?.orderID"
+                                :can-move-up="index > 0"
+                                :can-move-down="index < sortedFiles.length - 1"
+                                :sorting="fileSortSaving"
+                                @move="(direction) => moveFile(file.id, direction)"
+                                @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
                         </div>
                         <p v-else class="empty-message">Files がありません。</p>
@@ -212,11 +218,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const page = usePage()
 
@@ -230,8 +237,113 @@ const props = defineProps({
     attachmentsError: { type: String, default: '' },
 })
 
-const emit = defineEmits(['open-dialog'])
+const emit = defineEmits(['open-dialog', 'files-updated'])
+const fileSortSaving = ref(false)
 
+function compareFilesBySortNum(a, b) {
+    const aNull = a?.sortNum == null
+    const bNull = b?.sortNum == null
+    if (aNull && bNull) return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    if (aNull) return 1
+    if (bNull) return -1
+    if (Number(a.sortNum) !== Number(b.sortNum)) {
+        return Number(a.sortNum) - Number(b.sortNum)
+    }
+    return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+}
+
+const sortedFiles = computed(() =>
+    [...(props.files ?? [])].sort(compareFilesBySortNum),
+)
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function getFilesApiBase() {
+    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    return `${window.location.origin}${basePath}/files`
+}
+
+async function persistFileSortNum(fileId, sortNum) {
+    const result = await apiFetch(`${getFilesApiBase()}/${fileId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ sortNum }),
+    })
+
+    if (!result) {
+        throw new Error('順序の更新に失敗しました。')
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(validationMessage || data.message || `順序の更新に失敗しました。（HTTP ${response.status}）`)
+    }
+
+    return data.file
+}
+
+async function updateFileSortNum(fileId, sortNum) {
+    if (fileSortSaving.value) return
+
+    fileSortSaving.value = true
+    try {
+        const updated = await persistFileSortNum(fileId, sortNum)
+        const nextFiles = (props.files ?? []).map((file) => (
+            String(file.id) === String(fileId)
+                ? { ...file, ...updated, sortNum: updated?.sortNum ?? sortNum }
+                : file
+        ))
+        emit('files-updated', nextFiles.sort(compareFilesBySortNum))
+    } catch (e) {
+        window.alert(e.message || '順序の更新に失敗しました。')
+    } finally {
+        fileSortSaving.value = false
+    }
+}
+
+async function moveFile(fileId, direction) {
+    if (fileSortSaving.value) return
+
+    const list = [...sortedFiles.value]
+    const index = list.findIndex(file => String(file.id) === String(fileId))
+    if (index < 0) return
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= list.length) return
+
+    ;[list[index], list[swapIndex]] = [list[swapIndex], list[index]]
+
+    const updates = list.map((file, idx) => ({
+        id: file.id,
+        sortNum: (idx + 1) * 10,
+    }))
+
+    fileSortSaving.value = true
+    try {
+        const results = await Promise.all(
+            updates.map(item => persistFileSortNum(item.id, item.sortNum)),
+        )
+        const byId = new Map(results.map(file => [String(file.id), file]))
+        const nextFiles = (props.files ?? []).map((file) => {
+            const updated = byId.get(String(file.id))
+            return updated ? { ...file, ...updated } : file
+        })
+        emit('files-updated', nextFiles.sort(compareFilesBySortNum))
+    } catch (e) {
+        window.alert(e.message || '表示順の変更に失敗しました。')
+    } finally {
+        fileSortSaving.value = false
+    }
+}
 const topPaneSize = ref(72)
 const bottomPaneSize = ref(28)
 

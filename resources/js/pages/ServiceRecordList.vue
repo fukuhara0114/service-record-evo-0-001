@@ -101,6 +101,7 @@
             :notes="activeNotes"
             :files="activeFiles"
             :parts="activeParts"
+            :loaners="activeLoaners"
             :attachments-loading="attachmentsLoading"
             :attachments-error="attachmentsError"
             :saving-record="isSavingRecord"
@@ -110,6 +111,8 @@
             @switch-layout="switchDetailLayout"
             @open-dialog="openDialog"
             @save="saveRecord"
+            @files-updated="onFilesUpdated"
+            @reload-attachments="onReloadAttachments"
         />
 
         <!-- 第3階層: 入力・確認ダイアログ -->
@@ -295,6 +298,7 @@ const detailLayout = ref('A')
 const activeNotes = ref([])
 const activeFiles = ref([])
 const activeParts = ref([])
+const activeLoaners = ref([])
 const attachmentsLoading = ref(false)
 const attachmentsError = ref('')
 const isSavingRecord = ref(false)
@@ -312,6 +316,7 @@ function applyAttachmentData(data) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeLoaners.value = []
         return
     }
 
@@ -320,6 +325,7 @@ function applyAttachmentData(data) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeLoaners.value = []
         return
     }
 
@@ -327,6 +333,16 @@ function applyAttachmentData(data) {
     activeNotes.value = data.notes ?? []
     activeFiles.value = data.files ?? []
     activeParts.value = data.parts ?? []
+    activeLoaners.value = data.loaners ?? (data.loaner ? [data.loaner] : [])
+}
+
+function onFilesUpdated(nextFiles) {
+    activeFiles.value = Array.isArray(nextFiles) ? nextFiles : []
+}
+
+function onReloadAttachments() {
+    if (!activeRecord.value?.orderID) return
+    loadAttachments(activeRecord.value.orderID)
 }
 
 function loadAttachments(orderID) {
@@ -336,6 +352,7 @@ function loadAttachments(orderID) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeLoaners.value = []
 
         router.get(
             window.location.pathname,
@@ -416,6 +433,7 @@ function closeDetail() {
     activeNotes.value = []
     activeFiles.value = []
     activeParts.value = []
+    activeLoaners.value = []
     attachmentsLoading.value = false
     attachmentsError.value = ''
     detailLoading.value = false
@@ -503,6 +521,7 @@ async function saveRecord() {
                 productType: draftRecord.value.productType,
                 price: draftRecord.value.price,
                 discountRate: draftRecord.value.discountRate,
+                discount_service: draftRecord.value.discount_service,
                 a2la: draftRecord.value.a2la,
                 sentOut: draftRecord.value.sentOut,
                 shipTo: draftRecord.value.shipTo,

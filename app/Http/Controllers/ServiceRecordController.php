@@ -9,9 +9,11 @@ use App\Models\PartMaster;
 use App\Models\AttachedNote;
 use App\Models\AttachedFile;
 use App\Models\AttachedPart;
+use App\Models\AttachedLoaner;
+use App\Services\EmlReplyDraftService;
 use Illuminate\Http\Request;
-
 use Inertia\Inertia;
+use ZBateson\MailMimeParser\Message;
 
 class ServiceRecordController extends Controller
 {
@@ -94,48 +96,9 @@ class ServiceRecordController extends Controller
             ]);
         }
 
-        // $records = ServiceRecord::
-        //     select([
-        //         'orderID',
-        //         'serviceID',
-        //         'status',
-        //         'RMA',
-        //         'receivedDate',
-        //         'productName',
-        //         'SN',
-        //         'returnCode',
-        //         'laborID',
-        //         'dealer',
-        //         'dealer_depart',
-        //         'contactPerson',
-        //         'email',
-        //         'phone',
-        //         'endUser',
-        //         'endUser_depart',
-        //         'endUser_contactPerson',
-        //         'endUser_address1',
-        //         'endUser_address2',
-        //         'endUser_email',
-        //         'endUser_phone',
-        //     ])
-        //     ->with(['returnCodeMaster', 'laborMaster','statusMaster'])
-        //     ->where('status', '<', 399)
-        //     ->where('status', '>', -1)
-        //     ->orderBy('receivedDate', 'asc')
-        //     ->get();
         $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner'])
-            ->where(function ($query) {
-                $query
-                    ->where(function ($statusQuery) {
-                        $statusQuery
-                            ->where('status', '<', 399)
-                            ->where('status', '>', -1);
-                    })
-                    ->orWhereNull('status')
-                    // waiting_list は status = -1 固定
-                    ->orWhere('status', -1)
-                    ->orWhere('order_type', 'waiting_list');
-            })
+            ->where('status', '>=', 0)
+            ->where('status', '<', 399)
             ->orderBy('receivedDate', 'asc')
             ->get();
 
@@ -295,16 +258,30 @@ class ServiceRecordController extends Controller
         }
 
         $forLoanerParent = $request->input('for') === 'loaner_parent';
+        $orderTypeFilter = $request->input('order_type'); // service | loaner
 
-        $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster']);
+        $with = ['returnCodeMaster', 'laborMaster', 'statusMaster'];
+        if ($orderTypeFilter === 'loaner' || $orderTypeFilter === 'waiting_list') {
+            $with = ['returnCodeMaster', 'laborMaster', 'statusMasterLoaner'];
+        }
 
-        if ($forLoanerParent) {
-            // 貸出案件の親は service 案件のみ
+        $query = ServiceRecord::with($with);
+
+        if ($forLoanerParent || $orderTypeFilter === 'service') {
+            // service 案件（レガシーの order_type 未設定も含む）
             $query->where(function ($q) {
                 $q->where('order_type', 'service')
                     ->orWhereNull('order_type')
                     ->orWhere('order_type', '');
             });
+            if (!$forLoanerParent) {
+                $query->where('status', '<', 399)
+                    ->where('status', '>', -1);
+            }
+        } elseif ($orderTypeFilter === 'loaner') {
+            $query->where('order_type', 'loaner');
+        } elseif ($orderTypeFilter === 'waiting_list') {
+            $query->where('order_type', 'waiting_list');
         } else {
             $query->where('status', '<', 399)
                 ->where('status', '>', -1);
@@ -327,6 +304,17 @@ class ServiceRecordController extends Controller
             ->orderBy('receivedDate', 'desc')
             ->limit(100)
             ->get();
+
+        $records->each(function (ServiceRecord $record) {
+            if ($record->order_type === 'loaner') {
+                $record->unsetRelation('statusMaster');
+            } elseif ($record->order_type === 'waiting_list') {
+                $record->unsetRelation('statusMaster');
+                $record->unsetRelation('statusMasterLoaner');
+            } else {
+                $record->unsetRelation('statusMasterLoaner');
+            }
+        });
 
         return response()->json([
             'records' => $records,
@@ -421,11 +409,179 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function emlPreview($fileId)
+    {
+        $file = AttachedFile::findOrFail($fileId);
+
+        if (!$this->isEmlFile($file)) {
+            return response()->json([
+                'message' => 'EML ファイルではありません。',
+            ], 422);
+        }
+
+        try {
+            $binary = $this->decodeAttachedFileBinary($file);
+            $message = Message::from($binary, false);
+
+            $attachments = [];
+            foreach ($message->getAllAttachmentParts() as $index => $part) {
+                $stream = $part->getBinaryContentStream();
+                $content = $stream ? $stream->getContents() : '';
+                $attachments[] = [
+                    'index' => $index,
+                    'filename' => $part->getFilename() ?: ('attachment-' . ($index + 1)),
+                    'contentType' => $part->getContentType('application/octet-stream'),
+                    'size' => strlen($content),
+                ];
+            }
+
+            $bodyHtml = $message->getHtmlContent();
+            $bodyText = $message->getTextContent();
+
+            return response()->json([
+                'subject' => $message->getHeaderValue('Subject') ?: '(件名なし)',
+                'from' => $message->getHeaderValue('From') ?: '',
+                'to' => $message->getHeaderValue('To') ?: '',
+                'cc' => $message->getHeaderValue('Cc') ?: '',
+                'date' => $message->getHeaderValue('Date') ?: '',
+                'bodyText' => $bodyText ?: '',
+                'bodyHtml' => $bodyHtml ? $this->sanitizeEmailHtml($bodyHtml) : '',
+                'attachments' => $attachments,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'EML の解析に失敗しました: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function emlAttachment($fileId, $index)
+    {
+        $file = AttachedFile::findOrFail($fileId);
+
+        if (!$this->isEmlFile($file)) {
+            abort(422, 'EML ファイルではありません。');
+        }
+
+        $binary = $this->decodeAttachedFileBinary($file);
+        $message = Message::from($binary, false);
+        $parts = $message->getAllAttachmentParts();
+        $part = $parts[(int) $index] ?? null;
+
+        if (!$part) {
+            abort(404, '添付ファイルが見つかりません。');
+        }
+
+        $stream = $part->getBinaryContentStream();
+        $content = $stream ? $stream->getContents() : '';
+        $filename = $part->getFilename() ?: ('attachment-' . ((int) $index + 1));
+        $mimeType = $part->getContentType('application/octet-stream');
+
+        return response($content, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'attachment; filename="' . addslashes($filename) . '"',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    public function emlReplyDraft(Request $request, $fileId, EmlReplyDraftService $draftService)
+    {
+        $validated = $request->validate([
+            'templateType' => 'required|string|in:receipt,quote,work_change',
+            'orderID' => 'nullable|integer',
+        ]);
+
+        $file = AttachedFile::findOrFail($fileId);
+        if (!$this->isEmlFile($file)) {
+            return response()->json([
+                'message' => 'EML ファイルではありません。',
+            ], 422);
+        }
+
+        $orderID = $validated['orderID'] ?? $file->associatedID;
+        $record = ServiceRecord::query()->where('orderID', $orderID)->first();
+        if (!$record) {
+            return response()->json([
+                'message' => '案件が見つかりません。',
+            ], 404);
+        }
+
+        try {
+            $binary = $this->decodeAttachedFileBinary($file);
+            $draft = $draftService->buildDraftEml($binary, $record, $validated['templateType']);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'メールドラフトの作成に失敗しました: ' . $e->getMessage(),
+            ], 422);
+        }
+
+        return response($draft['content'], 200, [
+            'Content-Type' => 'message/rfc822',
+            'Content-Disposition' => 'attachment; filename="' . addslashes($draft['filename']) . '"',
+            'Cache-Control' => 'no-store, private',
+            'X-Draft-Subject' => rawurlencode($draft['subject']),
+            'X-Draft-To' => rawurlencode($draft['to']),
+            'X-Draft-Template' => $draft['templateType'],
+        ]);
+    }
+
+    private function isEmlFile(AttachedFile $file): bool
+    {
+        $name = strtolower((string) ($file->documentName ?? ''));
+        $type = strtolower((string) ($file->fileType ?? ''));
+        $docType = strtolower((string) ($file->documentType ?? ''));
+
+        return str_ends_with($name, '.eml')
+            || str_contains($type, 'message/rfc822')
+            || $type === 'application/eml'
+            || $type === 'message/rfc822'
+            || ($docType === 'メール' && str_ends_with($name, '.eml'));
+    }
+
+    private function decodeAttachedFileBinary(AttachedFile $file): string
+    {
+        $raw = $file->content ?? '';
+        if ($raw === '') {
+            abort(404, 'ファイル内容がありません。');
+        }
+
+        if (str_starts_with($raw, 'data:')) {
+            $parts = explode(',', $raw, 2);
+            $raw = $parts[1] ?? $raw;
+        }
+
+        $binary = base64_decode($raw, true);
+        if ($binary === false) {
+            $binary = $raw;
+        }
+
+        return $binary;
+    }
+
+    private function sanitizeEmailHtml(string $html): string
+    {
+        $html = preg_replace('#<(script|iframe|object|embed|link|meta)[^>]*>.*?</\1>#is', '', $html) ?? $html;
+        $html = preg_replace('#<(script|iframe|object|embed|link|meta)[^>]*/?>#is', '', $html) ?? $html;
+        $html = preg_replace('/\son\w+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/i', '', $html) ?? $html;
+        $html = preg_replace('/(href|src)\s*=\s*("|\')\s*javascript:[^"\']*\2/i', '$1="#"', $html) ?? $html;
+
+        return $html;
+    }
+
     public function intakeList()
     {
         return Inertia::render('ServiceRecordIntakeList', [
             'unregisteredFiles' => $this->fetchUnregisteredFiles(),
         ]);
+    }
+
+    public function createWithoutFile()
+    {
+        return $this->renderCreateFromFilePage(null);
     }
 
     public function createFromFile($fileId)
@@ -435,6 +591,11 @@ class ServiceRecordController extends Controller
             ->where('associatedID', -1)
             ->findOrFail($fileId);
 
+        return $this->renderCreateFromFilePage($sourceFile);
+    }
+
+    private function renderCreateFromFilePage($sourceFile)
+    {
         $statuses = \App\Models\Status::orderBy('processID')->get();
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
@@ -463,10 +624,44 @@ class ServiceRecordController extends Controller
         }
 
         try {
+            $linkedLoaners = ServiceRecord::query()
+                ->with(['statusMasterLoaner'])
+                ->where('parentID', $orderID)
+                ->whereIn('order_type', ['loaner', 'waiting_list'])
+                ->orderBy('orderID')
+                ->get()
+                ->map(function (ServiceRecord $loaner) {
+                    $attached = AttachedLoaner::query()
+                        ->where('associatedID', $loaner->orderID)
+                        ->orderByDesc('id')
+                        ->first();
+
+                    return [
+                        'orderID' => $loaner->orderID,
+                        'order_type' => $loaner->order_type,
+                        'status' => $loaner->status,
+                        'status_label' => $loaner->order_type === 'waiting_list'
+                            ? null
+                            : ($loaner->statusMasterLoaner?->status),
+                        'productName' => $loaner->productName,
+                        'SN' => $loaner->SN,
+                        'loanerID' => $loaner->loanerID,
+                        'dealer' => $loaner->dealer,
+                        'dealer_depart' => $loaner->dealer_depart,
+                        'contactPerson' => $loaner->contactPerson,
+                        'parentID' => $loaner->parentID,
+                        'attachedLoanerId' => $attached?->id,
+                        'plannedSentDate' => optional($attached?->plannedSentDate ?? $attached?->sentDate)->format('Y-m-d'),
+                        'plannedReturnedDate' => optional($attached?->plannedReturnedDate ?? $attached?->returnedDate)->format('Y-m-d'),
+                    ];
+                })
+                ->values();
+
             return [
                 'notes' => AttachedNote::where('associatedID', $orderID)->get(),
                 'files' => AttachedFile::where('associatedID', $orderID)
                     ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
+                    ->orderByRaw('CASE WHEN sortNum IS NULL THEN 1 ELSE 0 END')
                     ->orderBy('sortNum')
                     ->orderBy('id')
                     ->get(),
@@ -474,7 +669,8 @@ class ServiceRecordController extends Controller
                     ->with('partMaster')
                     ->orderBy('id')
                     ->get(),
-                'loaner' => ServiceRecord::where('parentID', $orderID)->first(),
+                'loaner' => $linkedLoaners->first(),
+                'loaners' => $linkedLoaners,
             ];
         } catch (\Throwable $e) {
             report($e);
@@ -484,6 +680,7 @@ class ServiceRecordController extends Controller
                 'files' => [],
                 'parts' => [],
                 'loaner' => null,
+                'loaners' => [],
                 'error' => $e->getMessage(),
             ];
         }
@@ -519,6 +716,7 @@ class ServiceRecordController extends Controller
             'whoWrote' => $whoWrote,
             'whenWrote' => now(),
             'important' => $request->boolean('important'),
+            'personal' => false,
         ]);
 
         return response()->json([
@@ -604,6 +802,13 @@ class ServiceRecordController extends Controller
         $content = base64_encode($uploaded->get());
         $fileType = $uploaded->getMimeType() ?: 'application/octet-stream';
         $documentName = $validated['documentName'] ?? $uploaded->getClientOriginalName();
+        $originalName = strtolower((string) $uploaded->getClientOriginalName());
+        if (str_ends_with($originalName, '.eml') && !str_contains(strtolower($fileType), 'rfc822')) {
+            $fileType = 'message/rfc822';
+        }
+        if (str_ends_with($originalName, '.msg') && $fileType === 'application/octet-stream') {
+            $fileType = 'application/vnd.ms-outlook';
+        }
 
         $file = AttachedFile::create([
             'associatedID' => $validated['associatedID'],
@@ -618,6 +823,41 @@ class ServiceRecordController extends Controller
             'message' => 'ファイルを登録しました。',
             'file' => $file->only(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum']),
         ], 201);
+    }
+
+    public function updateFile(Request $request, $id)
+    {
+        $file = AttachedFile::findOrFail($id);
+
+        $validated = $request->validate([
+            'sortNum' => 'nullable|integer',
+            'documentName' => 'nullable|string|max:255',
+            'documentType' => 'nullable|string|max:255',
+        ]);
+
+        $updates = [];
+        if (array_key_exists('sortNum', $validated)) {
+            $updates['sortNum'] = $validated['sortNum'];
+        }
+        if (array_key_exists('documentName', $validated)) {
+            $updates['documentName'] = $validated['documentName'];
+        }
+        if (array_key_exists('documentType', $validated)) {
+            $updates['documentType'] = $validated['documentType'];
+        }
+
+        if ($updates === []) {
+            return response()->json([
+                'message' => '更新する項目がありません。',
+            ], 422);
+        }
+
+        $file->update($updates);
+
+        return response()->json([
+            'message' => 'ファイル情報を更新しました。',
+            'file' => $file->fresh()->only(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum']),
+        ]);
     }
 
     public function updateFileContent(Request $request, $id)
@@ -726,7 +966,7 @@ class ServiceRecordController extends Controller
     public function storeFromIntake(Request $request)
     {
         $validated = $request->validate([
-            'sourceFileId' => 'required|integer',
+            'sourceFileId' => 'nullable|integer',
             'additionalFileIds' => 'nullable|array',
             'additionalFileIds.*' => 'integer',
             'receivedDate' => 'nullable|date',
@@ -757,24 +997,29 @@ class ServiceRecordController extends Controller
             'deliveryDestination_zipcode' => 'nullable|string|max:20',
             'deliveryDestination_address1' => 'nullable|string|max:255',
             'deliveryDestination_address2' => 'nullable|string|max:255',
+            'loanerOrderIds' => 'nullable|array',
+            'loanerOrderIds.*' => 'integer',
         ]);
 
-        $fileIds = collect([$validated['sourceFileId']])
+        $fileIds = collect()
+            ->when(!empty($validated['sourceFileId']), fn ($c) => $c->push((int) $validated['sourceFileId']))
             ->merge($validated['additionalFileIds'] ?? [])
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
-        $files = AttachedFile::query()
-            ->whereIn('id', $fileIds)
-            ->where('associatedID', -1)
-            ->get();
+        if ($fileIds->isNotEmpty()) {
+            $files = AttachedFile::query()
+                ->whereIn('id', $fileIds)
+                ->where('associatedID', -1)
+                ->get();
 
-        if ($files->count() !== $fileIds->count()) {
-            return response()->json([
-                'message' => '未登録ファイルの状態が変わったため、画面を再読み込みしてやり直してください。',
-            ], 422);
+            if ($files->count() !== $fileIds->count()) {
+                return response()->json([
+                    'message' => '未登録ファイルの状態が変わったため、画面を再読み込みしてやり直してください。',
+                ], 422);
+            }
         }
 
         $service = ServiceMaster::query()
@@ -788,52 +1033,114 @@ class ServiceRecordController extends Controller
             ], 404);
         }
 
+        $loanerOrderIds = collect($validated['loanerOrderIds'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($loanerOrderIds->isNotEmpty()) {
+            if (
+                blank($validated['SN'] ?? null)
+                || blank($validated['dealer'] ?? null)
+                || blank($validated['contactPerson'] ?? null)
+            ) {
+                return response()->json([
+                    'message' => 'loaner 紐づけで新規案件を作成するには SN / dealer / contactPerson が必要です。',
+                ], 422);
+            }
+
+            $loaners = ServiceRecord::query()
+                ->whereIn('orderID', $loanerOrderIds)
+                ->whereIn('order_type', ['loaner', 'waiting_list'])
+                ->get();
+
+            if ($loaners->count() !== $loanerOrderIds->count()) {
+                return response()->json([
+                    'message' => '紐づけ対象の貸出案件が見つからないか、loaner/waiting_list ではありません。',
+                ], 422);
+            }
+
+            $alreadyLinked = $loaners->first(fn (ServiceRecord $row) => !empty($row->parentID));
+            if ($alreadyLinked) {
+                return response()->json([
+                    'message' => "貸出案件 orderID {$alreadyLinked->orderID} は既に他案件へ紐づいています。",
+                ], 422);
+            }
+        }
+
         $user = $request->user();
 
-        $record = ServiceRecord::create([
-            'receivedDate' => $validated['receivedDate'] ?? null,
-            'status' => $validated['status'] ?? null,
-            'serviceID' => $service->serviceID,
-            'productName' => $service->productName,
-            'entityID' => $service->entityID,
-            'SN' => $validated['SN'] ?? null,
-            'returnCode' => $validated['returnCode'] ?? null,
-            'dealer' => $validated['dealer'] ?? null,
-            'dealer_depart' => $validated['dealer_depart'] ?? null,
-            'contactPerson' => $validated['contactPerson'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'zipcode' => $validated['zipcode'] ?? null,
-            'address1' => $validated['address1'] ?? null,
-            'address2' => $validated['address2'] ?? null,
-            'endUser' => $validated['endUser'] ?? null,
-            'endUser_depart' => $validated['endUser_depart'] ?? null,
-            'endUser_contactPerson' => $validated['endUser_contactPerson'] ?? null,
-            'endUser_phone' => $validated['endUser_phone'] ?? null,
-            'endUser_email' => $validated['endUser_email'] ?? null,
-            'endUser_zipcode' => $validated['endUser_zipcode'] ?? null,
-            'endUser_address1' => $validated['endUser_address1'] ?? null,
-            'endUser_address2' => $validated['endUser_address2'] ?? null,
-            'deliveryDestination_company' => $validated['deliveryDestination_company'] ?? null,
-            'deliveryDestination_depart' => $validated['deliveryDestination_depart'] ?? null,
-            'deliveryDestination_contactPerson' => $validated['deliveryDestination_contactPerson'] ?? null,
-            'deliveryDestination_phone' => $validated['deliveryDestination_phone'] ?? null,
-            'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
-            'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
-            'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
-            'order_type' => 'service',
-            'lastEditPerson' => $user?->kanji_name,
-            'lastEditDate' => now(),
-        ]);
+        $record = \Illuminate\Support\Facades\DB::transaction(function () use (
+            $validated,
+            $service,
+            $user,
+            $fileIds,
+            $loanerOrderIds,
+        ) {
+            $record = ServiceRecord::create([
+                'receivedDate' => $validated['receivedDate'] ?? null,
+                'status' => $validated['status'] ?? null,
+                'serviceID' => $service->serviceID,
+                'productName' => $service->productName,
+                'entityID' => $service->entityID,
+                'SN' => $validated['SN'] ?? null,
+                'returnCode' => $validated['returnCode'] ?? null,
+                'dealer' => $validated['dealer'] ?? null,
+                'dealer_depart' => $validated['dealer_depart'] ?? null,
+                'contactPerson' => $validated['contactPerson'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'zipcode' => $validated['zipcode'] ?? null,
+                'address1' => $validated['address1'] ?? null,
+                'address2' => $validated['address2'] ?? null,
+                'endUser' => $validated['endUser'] ?? null,
+                'endUser_depart' => $validated['endUser_depart'] ?? null,
+                'endUser_contactPerson' => $validated['endUser_contactPerson'] ?? null,
+                'endUser_phone' => $validated['endUser_phone'] ?? null,
+                'endUser_email' => $validated['endUser_email'] ?? null,
+                'endUser_zipcode' => $validated['endUser_zipcode'] ?? null,
+                'endUser_address1' => $validated['endUser_address1'] ?? null,
+                'endUser_address2' => $validated['endUser_address2'] ?? null,
+                'deliveryDestination_company' => $validated['deliveryDestination_company'] ?? null,
+                'deliveryDestination_depart' => $validated['deliveryDestination_depart'] ?? null,
+                'deliveryDestination_contactPerson' => $validated['deliveryDestination_contactPerson'] ?? null,
+                'deliveryDestination_phone' => $validated['deliveryDestination_phone'] ?? null,
+                'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
+                'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
+                'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
+                'order_type' => 'service',
+                'lastEditPerson' => $user?->kanji_name,
+                'lastEditDate' => now(),
+            ]);
 
-        AttachedFile::query()
-            ->whereIn('id', $fileIds)
-            ->where('associatedID', -1)
-            ->update(['associatedID' => $record->orderID]);
+            if ($fileIds->isNotEmpty()) {
+                AttachedFile::query()
+                    ->whereIn('id', $fileIds)
+                    ->where('associatedID', -1)
+                    ->update(['associatedID' => $record->orderID]);
+            }
+
+            if ($loanerOrderIds->isNotEmpty()) {
+                ServiceRecord::query()
+                    ->whereIn('orderID', $loanerOrderIds)
+                    ->whereIn('order_type', ['loaner', 'waiting_list'])
+                    ->where(function ($q) {
+                        $q->whereNull('parentID')->orWhere('parentID', 0);
+                    })
+                    ->update([
+                        'parentID' => $record->orderID,
+                        'lastEditPerson' => $user?->kanji_name,
+                        'lastEditDate' => now(),
+                    ]);
+            }
+
+            return $record;
+        });
 
         return response()->json([
             'message' => '新規案件を登録しました。',
             'record' => $record->fresh(['returnCodeMaster', 'laborMaster', 'statusMaster']),
+            'linkedLoanerIds' => $loanerOrderIds->values(),
         ], 201);
     }
 

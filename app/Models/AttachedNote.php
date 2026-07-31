@@ -23,6 +23,13 @@ class AttachedNote extends Model
         'whoWrote',
         'whenWrote',
         'important',
+        'personal',
+    ];
+
+    protected $casts = [
+        'important' => 'boolean',
+        'personal' => 'boolean',
+        'whenWrote' => 'datetime',
     ];
 
     public function serviceRecord(): BelongsTo

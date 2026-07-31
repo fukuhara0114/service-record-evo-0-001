@@ -5,10 +5,10 @@
                 <h1>新規案件作成</h1>
             </div>
             <div class="header-actions">
-                <a :href="intakeListUrl" class="btn btn-secondary">未登録PDF一覧へ戻る</a>
+                <a :href="intakeListUrl" class="btn btn-secondary">未登録ファイル一覧へ戻る</a>
                 <a :href="adminUrl" class="btn btn-secondary">既存案件一覧</a>
                 <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
-                    {{ saving ? '保存中...' : '保存' }}
+                    {{ saveButtonLabel }}
                 </button>
             </div>
         </div>
@@ -19,18 +19,49 @@
             <section class="panel panel-pdf" :style="pdfPanelStyle">
                 <div ref="pdfPanelHeaderEl" class="panel-header">
                     <div>
-                        <h2>申請フォームPDF</h2>
-                        <div class="panel-meta">
+                        <h2>{{ hasSourceFile ? '申請フォーム' : '添付ファイル無し' }}</h2>
+                        <div v-if="hasSourceFile" class="panel-meta">
                             <span>ID: {{ sourceFile?.id }}</span>
                             <span>{{ sourceFile?.documentName || '（名称なし）' }}</span>
+                            <span>{{ sourceFile?.fileType || '' }}</span>
+                        </div>
+                        <div v-else class="panel-meta">
+                            <span>情報入力のみで新規案件を作成します</span>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-secondary" @click="openPreview(sourceFile)">
+                    <button
+                        v-if="hasSourceFile"
+                        type="button"
+                        class="btn btn-secondary"
+                        @click="openPreview(sourceFile)"
+                    >
                         拡大・回転
                     </button>
                 </div>
-                <div class="pdf-preview-shell">
-                    <iframe :src="sourceFileUrl" class="pdf-frame" title="申請フォームPDF" />
+                <div v-if="hasSourceFile" class="pdf-preview-shell">
+                    <iframe
+                        v-if="isSourcePdf"
+                        :src="sourceFileUrl"
+                        class="pdf-frame"
+                        title="申請フォーム"
+                    />
+                    <img
+                        v-else-if="isSourceImage"
+                        :src="sourceFileUrl"
+                        :alt="sourceFile?.documentName || '画像'"
+                        class="pdf-frame image-frame"
+                    >
+                    <div v-else class="no-preview-panel">
+                        <p>{{ sourceFile?.documentName || '（名称なし）' }}</p>
+                        <p>{{ sourceFile?.fileType || 'この形式はプレビュー非対応です' }}</p>
+                        <a :href="sourceFileUrl" target="_blank" rel="noopener" class="btn btn-secondary">別タブで開く</a>
+                    </div>
+                </div>
+                <div v-else class="pdf-preview-shell no-file-shell">
+                    <div class="no-preview-panel">
+                        <p class="no-file-title">添付ファイル無し</p>
+                        <p>必要なら「関連する未登録書類」からファイルを選択できます。</p>
+                    </div>
                 </div>
             </section>
 
@@ -55,13 +86,24 @@
                         関連する未登録書類({{ relatedFileCount }}枚)
                     </button>
                     <button
+                        v-if="hasSourceFile"
                         type="button"
                         class="tab-btn"
                         :class="{ active: activeTab === 'existing' }"
                         role="tab"
                         @click="switchToExistingTab"
                     >
-                        既存案件検索
+                        service案件検索
+                    </button>
+                    <button
+                        type="button"
+                        class="tab-btn"
+                        :class="{ active: activeTab === 'loaner' }"
+                        role="tab"
+                        @click="switchToLoanerTab"
+                    >
+                        loaner案件検索
+                        <span v-if="selectedLoaners.length">（{{ selectedLoaners.length }}）</span>
                     </button>
                 </div>
 
@@ -201,7 +243,7 @@
 
                 <div v-show="activeTab === 'related'" class="tab-panel">
                     <div class="related-toolbar">
-                        <p class="section-help">申請フォーム本体以外で、この案件に紐付けたい未登録書類にチェックを入れてください。プレビューをクリックすると拡大表示できます。</p>
+                        <p class="section-help">この案件に紐付けたい未登録書類にチェックを入れてください。プレビューをクリックすると拡大表示できます。</p>
                         <span class="related-selected">{{ selectedAdditionalCount }}件選択中</span>
                     </div>
                     <div class="related-files">
@@ -244,6 +286,7 @@
                 <div v-show="activeTab === 'existing'" class="tab-panel tab-panel-existing">
                     <ExistingRecordSearchDialog
                         inline
+                        purpose="file"
                         :records="existingSearchRecords"
                         :query-summary="existingSearchSummary"
                         :statuses="statuses"
@@ -253,7 +296,76 @@
                         @link-selected="linkToExistingRecord"
                     />
                 </div>
+
+                <div v-show="activeTab === 'loaner'" class="tab-panel tab-panel-existing">
+                    <div class="loaner-flow-note">
+                        <p>
+                            loaner 紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
+                            得た orderID を選択した loaner の parentID に設定します。
+                            最低限 <strong>productName / SN / dealer / contactPerson</strong> の入力が必要です。
+                        </p>
+                    </div>
+                    <div v-if="selectedLoaners.length" class="selected-loaners">
+                        <h4>紐づけ対象（保存時に新規 service 作成 → parentID 設定）</h4>
+                        <div class="selected-loaner-list">
+                            <div
+                                v-for="loaner in selectedLoaners"
+                                :key="loaner.orderID"
+                                class="selected-loaner-chip"
+                            >
+                                <span>
+                                    #{{ loaner.orderID }}
+                                    {{ loaner.productName || '—' }}
+                                    / {{ loaner.SN || 'SNなし' }}
+                                </span>
+                                <button type="button" class="chip-remove" @click="removeSelectedLoaner(loaner.orderID)">×</button>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn btn-primary loaner-create-btn"
+                            :disabled="saving"
+                            @click="save"
+                        >
+                            {{ saving ? '作成中...' : '新規 service を作成して紐づけ' }}
+                        </button>
+                    </div>
+                    <ExistingRecordSearchDialog
+                        inline
+                        purpose="loaner"
+                        :records="loanerSearchRecords"
+                        :query-summary="existingSearchSummary"
+                        :searching="loanerSearchLoading"
+                        :has-searched="loanerHasSearched"
+                        @search="openLoanerRecordSearch"
+                        @loaner-selected="onLoanerSelected"
+                    />
+                </div>
             </section>
+        </div>
+
+        <div v-if="showLoanerRequirementDialog" class="confirm-overlay" @click.self="cancelLoanerRequirementDialog">
+            <div class="confirm-panel">
+                <div class="confirm-header">
+                    <h3>基本情報が不足しています</h3>
+                    <button type="button" class="close-btn" @click="cancelLoanerRequirementDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p>
+                        loaner に紐づける新規 service 案件を作成するには、
+                        productName / SN / dealer / contactPerson が必要です。
+                    </p>
+                    <ul class="missing-fields">
+                        <li v-for="field in missingLoanerLinkFields" :key="field">{{ field }}</li>
+                    </ul>
+                    <p>不足項目を OCR で読み取りますか？（OCR 未実装の場合は手入力へ進みます）</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" @click="cancelLoanerRequirementDialog">キャンセル</button>
+                    <button type="button" class="btn btn-secondary" @click="chooseManualEntryForLoaner">手入力する</button>
+                    <button type="button" class="btn btn-primary" @click="chooseOcrForLoaner">OCRで読み取る</button>
+                </div>
+            </div>
         </div>
 
         <IntakeMasterSelectDialog
@@ -271,7 +383,7 @@
             :files="previewFiles"
             :selectable="true"
             :selected-file-ids="form.additionalFileIds"
-            :fixed-file-ids="[String(sourceFile?.id)]"
+            :fixed-file-ids="hasSourceFile ? [String(sourceFile?.id)] : []"
             @close="previewFile = null"
             @saved="onPreviewSaved"
             @navigate="openPreview"
@@ -281,7 +393,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { apiFetch } from '@/utils/apiFetch'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
@@ -291,7 +403,7 @@ import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/Existi
 const props = defineProps({
     sourceFile: {
         type: Object,
-        required: true,
+        default: null,
     },
     unregisteredFiles: {
         type: Array,
@@ -329,6 +441,13 @@ const previewCacheBust = ref(Date.now())
 const existingSearchLoading = ref(false)
 const existingHasSearched = ref(false)
 const existingSearchRecords = ref([])
+const loanerSearchLoading = ref(false)
+const loanerHasSearched = ref(false)
+const loanerSearchRecords = ref([])
+const selectedLoaners = ref([])
+const showLoanerRequirementDialog = ref(false)
+const pendingLoanerRecord = ref(null)
+const loanerRequirementContext = ref(null) // 'select' | 'save'
 const createLayoutEl = ref(null)
 const pdfPanelHeaderEl = ref(null)
 const pdfPanelStyle = ref({})
@@ -416,12 +535,23 @@ const zipLookupTimers = {
 
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
 const intakeListUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake`)
-const sourceFileUrl = computed(() => buildFileUrl(props.sourceFile.id))
+const hasSourceFile = computed(() => Boolean(props.sourceFile?.id))
+const isSourcePdf = computed(() => props.sourceFile?.fileType === 'application/pdf')
+const isSourceImage = computed(() => String(props.sourceFile?.fileType || '').startsWith('image/'))
+const sourceFileUrl = computed(() => (
+    hasSourceFile.value ? buildFileUrl(props.sourceFile.id) : ''
+))
 
 const additionalFileCandidates = computed(() =>
-    (props.unregisteredFiles ?? []).filter(file => Number(file.id) !== Number(props.sourceFile.id)),
+    (props.unregisteredFiles ?? []).filter(file => (
+        !hasSourceFile.value || Number(file.id) !== Number(props.sourceFile.id)
+    )),
 )
-const previewFiles = computed(() => [props.sourceFile, ...additionalFileCandidates.value])
+const previewFiles = computed(() => (
+    hasSourceFile.value
+        ? [props.sourceFile, ...additionalFileCandidates.value]
+        : [...additionalFileCandidates.value]
+))
 
 const selectedAdditionalCount = computed(() => form.additionalFileIds.length)
 const relatedFileCount = computed(() => additionalFileCandidates.value.length)
@@ -443,6 +573,38 @@ const existingSearchTerms = computed(() =>
         .filter(Boolean)
 )
 const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / '))
+
+const missingLoanerLinkFields = computed(() => {
+    const missing = []
+    if (!form.serviceID || !form.productName) missing.push('productName')
+    if (!String(form.SN || '').trim()) missing.push('SN')
+    if (!String(form.dealer || '').trim()) missing.push('dealer')
+    if (!String(form.contactPerson || '').trim()) missing.push('contactPerson')
+    return missing
+})
+
+const hasLoanerLinkRequiredFields = computed(() => missingLoanerLinkFields.value.length === 0)
+
+const saveButtonLabel = computed(() => {
+    if (saving.value) {
+        return selectedLoaners.value.length ? '作成中...' : '保存中...'
+    }
+    if (selectedLoaners.value.length) {
+        return '新規 service を作成して紐づけ'
+    }
+    return '保存'
+})
+
+watch(hasLoanerLinkRequiredFields, (ok) => {
+    if (!ok || !pendingLoanerRecord.value) return
+    if (loanerRequirementContext.value !== 'select') return
+
+    addSelectedLoaner(pendingLoanerRecord.value)
+    pendingLoanerRecord.value = null
+    loanerRequirementContext.value = null
+    error.value = ''
+    activeTab.value = 'loaner'
+})
 
 const activeSelectItems = computed(() => {
     if (activeSelectKind.value === 'dealer') return dealers.value
@@ -592,7 +754,7 @@ async function openExistingRecordSearch() {
     error.value = ''
 
     try {
-        const params = new URLSearchParams()
+        const params = new URLSearchParams({ order_type: 'service' })
         if (form.productName) params.set('productName', form.productName)
         if (form.SN) params.set('SN', form.SN)
         if (form.dealer) params.set('dealer', form.dealer)
@@ -620,6 +782,45 @@ async function openExistingRecordSearch() {
     }
 }
 
+async function openLoanerRecordSearch() {
+    if (existingSearchTerms.value.length === 0) {
+        error.value = 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
+        activeTab.value = 'basic'
+        return
+    }
+
+    loanerSearchLoading.value = true
+    error.value = ''
+
+    try {
+        const params = new URLSearchParams({ order_type: 'loaner' })
+        if (form.productName) params.set('productName', form.productName)
+        if (form.SN) params.set('SN', form.SN)
+        if (form.dealer) params.set('dealer', form.dealer)
+        if (form.contactPerson) params.set('contactPerson', form.contactPerson)
+
+        const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
+        const result = await apiFetch(url)
+
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        loanerSearchRecords.value = data.records ?? []
+        loanerHasSearched.value = true
+        activeTab.value = 'loaner'
+    } catch (e) {
+        error.value = e.message || '検索に失敗しました。'
+    } finally {
+        loanerSearchLoading.value = false
+    }
+}
+
 function switchToExistingTab() {
     activeTab.value = 'existing'
     if (!existingHasSearched.value && !existingSearchLoading.value) {
@@ -627,9 +828,76 @@ function switchToExistingTab() {
     }
 }
 
+function switchToLoanerTab() {
+    activeTab.value = 'loaner'
+    if (!loanerHasSearched.value && !loanerSearchLoading.value) {
+        openLoanerRecordSearch()
+    }
+}
+
+function addSelectedLoaner(record) {
+    if (!record?.orderID) return
+    if (record.parentID) {
+        error.value = `orderID ${record.orderID} は既に parentID=${record.parentID} へ紐づいています。`
+        return
+    }
+    if (selectedLoaners.value.some(item => String(item.orderID) === String(record.orderID))) {
+        return
+    }
+    selectedLoaners.value = [...selectedLoaners.value, record]
+    error.value = ''
+}
+
+function openLoanerRequirementDialog(context, record = null) {
+    loanerRequirementContext.value = context
+    pendingLoanerRecord.value = record
+    showLoanerRequirementDialog.value = true
+}
+
+function cancelLoanerRequirementDialog() {
+    showLoanerRequirementDialog.value = false
+    pendingLoanerRecord.value = null
+    loanerRequirementContext.value = null
+}
+
+function chooseManualEntryForLoaner() {
+    showLoanerRequirementDialog.value = false
+    activeTab.value = 'basic'
+    error.value = `不足項目を入力してください: ${missingLoanerLinkFields.value.join(', ')}（入力後、loaner案件検索から再度追加できます）`
+}
+
+function chooseOcrForLoaner() {
+    showLoanerRequirementDialog.value = false
+    activeTab.value = 'basic'
+    // OCR 未実装: 手入力へ誘導。実装後はここで OCR API を呼び結果を form に流し込む。
+    error.value = 'OCR機能はまだ未実装です。productName / SN / dealer / contactPerson を手入力してください。'
+}
+
+function onLoanerSelected(payload) {
+    const record = payload?.record ?? payload
+    if (!record?.orderID) return
+    if (record.parentID) {
+        error.value = `orderID ${record.orderID} は既に parentID=${record.parentID} へ紐づいています。`
+        return
+    }
+    if (!hasLoanerLinkRequiredFields.value) {
+        openLoanerRequirementDialog('select', record)
+        return
+    }
+    addSelectedLoaner(record)
+}
+
+function removeSelectedLoaner(orderID) {
+    selectedLoaners.value = selectedLoaners.value.filter(item => String(item.orderID) !== String(orderID))
+}
+
 async function linkToExistingRecord(payload) {
     const record = payload?.record ?? payload
     if (!record?.orderID) return
+    if (!hasSourceFile.value) {
+        error.value = '添付ファイル無しの場合は既存案件へのファイル紐づけはできません。新規保存を利用してください。'
+        return
+    }
 
     existingSearchLoading.value = true
     error.value = ''
@@ -703,7 +971,12 @@ onBeforeUnmount(() => {
 })
 
 async function save() {
-    if (!form.serviceID) {
+    if (selectedLoaners.value.length > 0) {
+        if (!hasLoanerLinkRequiredFields.value) {
+            openLoanerRequirementDialog('save')
+            return
+        }
+    } else if (!form.serviceID) {
         error.value = 'productName を選択してください。'
         return
     }
@@ -721,7 +994,7 @@ async function save() {
                 'X-CSRF-TOKEN': getCsrfToken(),
             },
             body: JSON.stringify({
-                sourceFileId: props.sourceFile.id,
+                sourceFileId: hasSourceFile.value ? props.sourceFile.id : null,
                 additionalFileIds: form.additionalFileIds.map(id => Number(id)),
                 receivedDate: form.receivedDate || null,
                 status: form.status === '' ? null : Number(form.status),
@@ -751,6 +1024,7 @@ async function save() {
                 deliveryDestination_zipcode: form.deliveryDestination_zipcode || null,
                 deliveryDestination_address1: form.deliveryDestination_address1 || null,
                 deliveryDestination_address2: form.deliveryDestination_address2 || null,
+                loanerOrderIds: selectedLoaners.value.map(item => Number(item.orderID)),
             }),
         })
 
@@ -896,6 +1170,132 @@ async function save() {
 
 .tab-panel-existing {
     overflow: hidden;
+}
+
+.selected-loaners {
+    flex-shrink: 0;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #eff6ff;
+}
+
+.selected-loaners h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #1e40af;
+}
+
+.selected-loaner-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.selected-loaner-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1e293b;
+    font-size: 12px;
+}
+
+.chip-remove {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.loaner-flow-note {
+    flex-shrink: 0;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+    background: #fffbeb;
+}
+
+.loaner-flow-note p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #92400e;
+}
+
+.loaner-create-btn {
+    margin-top: 10px;
+}
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.confirm-panel {
+    width: min(480px, 100%);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.confirm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.confirm-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #0f172a;
+}
+
+.close-btn {
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.confirm-body {
+    padding: 14px 16px;
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.confirm-body p {
+    margin: 0 0 10px;
+}
+
+.missing-fields {
+    margin: 0 0 12px;
+    padding-left: 1.2em;
+    color: #b91c1c;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px 16px;
 }
 
 .form-stack {
@@ -1072,6 +1472,42 @@ async function save() {
     justify-content: center;
     align-items: stretch;
     overflow: hidden;
+}
+
+.no-file-shell {
+    align-items: center;
+}
+
+.no-preview-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    box-sizing: border-box;
+    background: #f8fafc;
+    border: 1px dashed #94a3b8;
+    border-radius: 6px;
+    color: #64748b;
+    text-align: center;
+}
+
+.no-preview-panel p {
+    margin: 0;
+}
+
+.no-file-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.image-frame {
+    object-fit: contain;
+    background: #fff;
 }
 
 .pdf-frame {

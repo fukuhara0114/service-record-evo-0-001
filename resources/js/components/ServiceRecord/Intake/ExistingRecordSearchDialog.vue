@@ -6,7 +6,7 @@
         <div :class="inline ? 'inline-panel' : 'dialog-panel'">
             <div v-if="!inline" class="dialog-header">
                 <div>
-                    <h3>{{ purpose === 'parent' ? '親案件の検索' : '既存案件検索' }}</h3>
+                    <h3>{{ dialogTitle }}</h3>
                     <p>{{ querySummary || '検索キーワードなし' }}</p>
                 </div>
                 <button type="button" class="close-btn" @click="$emit('close')">×</button>
@@ -14,7 +14,7 @@
             <div v-else class="inline-toolbar">
                 <div>
                     <p class="inline-summary">{{ querySummary || '検索キーワードなし' }}</p>
-                    <p class="inline-hint">productName / SN / dealer / contactPerson で検索します</p>
+                    <p class="inline-hint">{{ dialogHint }}</p>
                 </div>
                 <button
                     type="button"
@@ -41,12 +41,14 @@
                             @click="selectedOrderId = record.orderID"
                         >
                             <strong>{{ record.productName || '—' }}</strong>
+                            <span>orderID: {{ record.orderID }}</span>
+                            <span v-if="purpose === 'loaner'">type: {{ record.order_type || '—' }}</span>
                             <span>S/N: {{ record.SN || '—' }}</span>
                             <span>Dealer: {{ record.dealer || '—' }}</span>
                             <span>Contact: {{ record.contactPerson || '—' }}</span>
                         </button>
                         <p v-if="!records.length" class="empty-message">
-                            {{ hasSearched ? '該当案件はありません。' : '「再検索」で既存案件を検索してください。' }}
+                            {{ hasSearched ? '該当案件はありません。' : '「再検索」で検索してください。' }}
                         </p>
                     </div>
                 </div>
@@ -56,12 +58,25 @@
                         <h4>案件詳細</h4>
                     </div>
                     <div v-if="selectedRecord" class="detail-grid">
+                        <div><span>orderID</span><strong>{{ selectedRecord.orderID || '—' }}</strong></div>
+                        <div><span>order_type</span><strong>{{ selectedRecord.order_type || '—' }}</strong></div>
                         <div><span>productName</span><strong>{{ selectedRecord.productName || '—' }}</strong></div>
                         <div><span>SN</span><strong>{{ selectedRecord.SN || '—' }}</strong></div>
                         <div><span>dealer</span><strong>{{ selectedRecord.dealer || '—' }}</strong></div>
                         <div><span>dealer_depart</span><strong>{{ selectedRecord.dealer_depart || '—' }}</strong></div>
                         <div><span>contactPerson</span><strong>{{ selectedRecord.contactPerson || '—' }}</strong></div>
-                        <div><span>returnCode</span><strong>{{ selectedRecord.return_code_master?.description || '—' }}</strong></div>
+                        <div v-if="purpose === 'loaner'">
+                            <span>status</span>
+                            <strong>{{ selectedRecord.status_master_loaner?.status || selectedRecord.status || '—' }}</strong>
+                        </div>
+                        <div v-if="purpose === 'loaner'">
+                            <span>parentID</span>
+                            <strong>{{ selectedRecord.parentID || 'なし' }}</strong>
+                        </div>
+                        <div v-if="purpose !== 'loaner'">
+                            <span>returnCode</span>
+                            <strong>{{ selectedRecord.return_code_master?.description || '—' }}</strong>
+                        </div>
                     </div>
                     <p v-else class="empty-message">左の一覧から案件を選択してください。</p>
                     <div class="detail-actions">
@@ -75,13 +90,22 @@
                             この案件を親として選択
                         </button>
                         <button
+                            v-else-if="purpose === 'loaner'"
+                            type="button"
+                            class="btn-primary"
+                            :disabled="!selectedRecord || Boolean(selectedRecord.parentID)"
+                            @click="confirmLoanerSelect"
+                        >
+                            {{ selectedRecord?.parentID ? '既に紐づき済み' : '新規作成して紐づけ対象に追加' }}
+                        </button>
+                        <button
                             v-else
                             type="button"
                             class="btn-primary"
                             :disabled="!selectedRecord"
                             @click="openLinkConfirm"
                         >
-                            選択した案件に紐づけ
+                            選択した案件にPDFをアタッチ
                         </button>
                     </div>
                 </div>
@@ -162,20 +186,40 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
-    /** 'file' = PDF紐づけ / 'parent' = 貸出案件の親選択 */
+    /** 'file' = PDF紐づけ / 'parent' = 貸出の親選択 / 'loaner' = 貸出案件選択 */
     purpose: {
         type: String,
         default: 'file',
     },
 })
 
-const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'search'])
+const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'loaner-selected', 'search'])
 
 const selectedOrderId = ref(null)
 const showLinkConfirm = ref(false)
 const linkForm = reactive({
     receivedDate: '',
     status: '',
+})
+
+const dialogTitle = computed(() => {
+    if (props.purpose === 'parent') return '親案件の検索'
+    if (props.purpose === 'loaner') return 'loaner案件検索'
+    if (props.purpose === 'file') return 'service案件検索'
+    return '既存案件検索'
+})
+
+const dialogHint = computed(() => {
+    if (props.purpose === 'loaner') {
+        return '選択した loaner に対し、新規 service を作成して parentID を設定します（productName / SN / dealer / contactPerson 必須）'
+    }
+    if (props.purpose === 'file') {
+        return '選択した既存 service 案件へ、このファイルをアタッチします'
+    }
+    if (props.purpose === 'parent') {
+        return 'order_type=service を productName / SN / dealer / contactPerson で検索'
+    }
+    return 'productName / SN / dealer / contactPerson で検索します'
 })
 
 watch(
@@ -211,6 +255,13 @@ function openLinkConfirm() {
 function confirmParentSelect() {
     if (!selectedRecord.value) return
     emit('parent-selected', {
+        record: selectedRecord.value,
+    })
+}
+
+function confirmLoanerSelect() {
+    if (!selectedRecord.value || selectedRecord.value.parentID) return
+    emit('loaner-selected', {
         record: selectedRecord.value,
     })
 }

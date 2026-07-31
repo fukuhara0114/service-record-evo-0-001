@@ -8,6 +8,7 @@
                 ref="fileInput"
                 type="file"
                 class="form-input"
+                multiple
                 @change="onFileChange"
             >
         </label>
@@ -19,7 +20,7 @@
 
         <label class="form-field">
             ドキュメント種別（必須）
-            <input v-model="documentType" type="text" class="form-input" placeholder="例: 見積書、修理報告書" required>
+            <input v-model="documentType" type="text" class="form-input" placeholder="例: メール、見積書、修理報告書" required>
         </label>
 
         <label class="form-field">
@@ -27,14 +28,14 @@
             <input v-model.number="sortNum" type="number" class="form-input" placeholder="数値が小さいほど先に表示">
         </label>
 
-        <p v-if="selectedFileName" class="file-info">選択中: {{ selectedFileName }}</p>
+        <p v-if="selectedFileNames.length" class="file-info">選択中: {{ selectedFileNames.join(', ') }}</p>
         <p v-if="error" class="error-message">{{ error }}</p>
 
         <template #footer>
             <button type="button" class="btn-secondary" :disabled="saving" @click="$emit('close')">
                 キャンセル
             </button>
-            <button type="button" class="btn-primary" :disabled="saving || !selectedFile || !documentType.trim()" @click="save">
+            <button type="button" class="btn-primary" :disabled="saving || !selectedFiles.length || !documentType.trim()" @click="save">
                 {{ saving ? 'アップロード中...' : '追加' }}
             </button>
         </template>
@@ -42,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BaseDialog from './BaseDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -54,19 +55,19 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 
 const fileInput = ref(null)
-const selectedFile = ref(null)
-const selectedFileName = ref('')
+const selectedFiles = ref([])
 const documentName = ref('')
 const documentType = ref('')
 const sortNum = ref(null)
 const saving = ref(false)
 const error = ref('')
 
+const selectedFileNames = computed(() => selectedFiles.value.map(file => file.name).filter(Boolean))
+
 watch(
     () => props.payload,
     () => {
-        selectedFile.value = null
-        selectedFileName.value = ''
+        selectedFiles.value = []
         documentName.value = ''
         documentType.value = ''
         sortNum.value = null
@@ -78,12 +79,29 @@ watch(
     { immediate: true },
 )
 
+function guessDocumentType(file) {
+    const name = String(file?.name || '').toLowerCase()
+    const type = String(file?.type || '').toLowerCase()
+    if (name.endsWith('.eml') || name.endsWith('.msg') || type.includes('message') || type.includes('ms-outlook')) {
+        return 'メール'
+    }
+    if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return 'PDF'
+    }
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(name)) {
+        return '画像'
+    }
+    return '添付ファイル'
+}
+
 function onFileChange(event) {
-    const file = event.target.files?.[0] ?? null
-    selectedFile.value = file
-    selectedFileName.value = file?.name ?? ''
-    if (file && !documentName.value) {
-        documentName.value = file.name
+    const files = [...(event.target.files ?? [])]
+    selectedFiles.value = files
+    if (files[0] && !documentName.value) {
+        documentName.value = files.length === 1 ? files[0].name : ''
+    }
+    if (files[0] && !documentType.value.trim()) {
+        documentType.value = guessDocumentType(files[0])
     }
 }
 
@@ -95,8 +113,46 @@ function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
 }
 
+async function uploadOne(file, options = {}) {
+    const formData = new FormData()
+    formData.append('associatedID', props.record?.orderID)
+    formData.append('file', file)
+    if (options.documentName) {
+        formData.append('documentName', options.documentName)
+    }
+    formData.append('documentType', options.documentType)
+    if (options.sortNum != null && options.sortNum !== '') {
+        formData.append('sortNum', options.sortNum)
+    }
+
+    const basePath = getApiBasePath()
+    const url = `${window.location.origin}${basePath}/files`
+
+    const result = await apiFetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': getCsrfToken(),
+        },
+        body: formData,
+    })
+
+    if (!result) {
+        throw new Error('アップロードに失敗しました。')
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(validationMessage || data.message || `アップロードに失敗しました。（HTTP ${response.status}）`)
+    }
+
+    return data
+}
+
 async function save() {
-    if (!selectedFile.value) {
+    if (!selectedFiles.value.length) {
         error.value = 'ファイルを選択してください。'
         return
     }
@@ -109,43 +165,23 @@ async function save() {
     saving.value = true
     error.value = ''
 
-    const formData = new FormData()
-    formData.append('associatedID', props.record?.orderID)
-    formData.append('file', selectedFile.value)
-    if (documentName.value.trim()) {
-        formData.append('documentName', documentName.value.trim())
-    }
-    formData.append('documentType', documentType.value.trim())
-    if (sortNum.value != null && sortNum.value !== '') {
-        formData.append('sortNum', sortNum.value)
-    }
-
-    const basePath = getApiBasePath()
-    const url = `${window.location.origin}${basePath}/files`
-
     try {
-        const result = await apiFetch(url, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': getCsrfToken(),
-            },
-            body: formData,
-        })
-
-        if (!result) {
-            return
+        let lastResult = null
+        let currentSort = sortNum.value
+        for (let i = 0; i < selectedFiles.value.length; i += 1) {
+            const file = selectedFiles.value[i]
+            lastResult = await uploadOne(file, {
+                documentName: selectedFiles.value.length === 1
+                    ? (documentName.value.trim() || file.name)
+                    : file.name,
+                documentType: documentType.value.trim(),
+                sortNum: currentSort,
+            })
+            if (currentSort != null && currentSort !== '') {
+                currentSort = Number(currentSort) + 10
+            }
         }
-
-        const { response, data } = result
-
-        if (!response.ok) {
-            const validationMessage = data.errors
-                ? Object.values(data.errors).flat().join(' ')
-                : null
-            throw new Error(validationMessage || data.message || `アップロードに失敗しました。（HTTP ${response.status}）`)
-        }
-
-        emit('saved', data)
+        emit('saved', lastResult)
     } catch (e) {
         error.value = e.message || 'アップロードに失敗しました。'
     } finally {

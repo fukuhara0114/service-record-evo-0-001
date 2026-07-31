@@ -99,9 +99,16 @@
                                                 </option>
                                             </select>
                                         </dd>
-                                        <dt>価格</dt>
+                                        <dt>A2LA</dt>
                                         <dd>
-                                                <input type="text" :value="draftRecord?.price ?? record?.price ?? ''" @input="updateDraftValue('price', $event.target.value)">
+                                            <button
+                                                type="button"
+                                                class="a2la-toggle"
+                                                :class="{ active: isA2laOn }"
+                                                @click="toggleA2la"
+                                            >
+                                                {{ isA2laOn ? 'ON' : 'OFF' }}
+                                            </button>
                                         </dd>
                                     </dl>
                                 </section>
@@ -156,14 +163,6 @@
                                 <section class="section-card detail-card detail-card-input">
                                     <div class="input-grid">
                                         <label class="input-field">
-                                            <span>price</span>
-                                            <input type="text" :value="draftRecord?.price ?? record?.price ?? ''" @input="updateDraftValue('price', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <span>a2la</span>
-                                            <input type="text" :value="draftRecord?.a2la ?? record?.a2la ?? ''" @input="updateDraftValue('a2la', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
                                             <span>sentOut</span>
                                             <input type="text" :value="draftRecord?.sentOut ?? record?.sentOut ?? ''" @input="updateDraftValue('sentOut', $event.target.value)">
                                         </label>
@@ -175,6 +174,27 @@
                                 </section>
 
                             </div>
+
+                            <section class="section-card price-adjust-row">
+                                <div class="price-adjust-main">
+                                    <span class="price-adjust-label">価格</span>
+                                    <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
+                                </div>
+                                <div class="price-adjust-actions">
+                                    <button
+                                        type="button"
+                                        class="action-btn action-btn-primary"
+                                        :disabled="!record?.orderID || priceAdjustSaving"
+                                        @click="openPriceAdjustDialog"
+                                    >
+                                        価格調整
+                                    </button>
+                                    <div class="price-adjust-delta">
+                                        <span class="price-adjust-label">調整額</span>
+                                        <strong>{{ formatSignedAmount(displayAdjustmentAmount) }}</strong>
+                                    </div>
+                                </div>
+                            </section>
 
                             <div class="detail-bottom-grid">
                                 <section class="section-card detail-card detail-card-input">
@@ -287,6 +307,70 @@
                                     </div>
                                 </section>
                             </div>
+
+                            <section
+                                v-if="showLinkedLoaners"
+                                class="section-card detail-card linked-loaner-card"
+                            >
+                                <div class="section-header">
+                                    <h3>loaner案件（{{ loaners.length }}件）</h3>
+                                </div>
+                                <!-- <p class="linked-loaner-help">
+                                    parentID = この service 案件の orderID（{{ record?.orderID }}）の loaner / waiting_list
+                                </p> -->
+                                <div v-if="loaners.length" class="attachment-table-wrap">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>orderID</th>
+                                                <th>order_type</th>
+                                                <th>status</th>
+                                                <th>productName</th>
+                                                <th>SN</th>
+                                                <th>loanerID</th>
+                                                <th>dealer</th>
+                                                <th>期間</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="loaner in loaners" :key="loaner.orderID">
+                                                <td>{{ loaner.orderID }}</td>
+                                                <td>{{ loaner.order_type || '—' }}</td>
+                                                <td>
+                                                    <template v-if="loaner.order_type === 'waiting_list'">—</template>
+                                                    <template v-else>{{ loaner.status_label || loaner.status || '—' }}</template>
+                                                </td>
+                                                <td>{{ loaner.productName || '—' }}</td>
+                                                <td>{{ loaner.SN || '—' }}</td>
+                                                <td>{{ loaner.loanerID || '—' }}</td>
+                                                <td>{{ loaner.dealer || '—' }}</td>
+                                                <td>
+                                                    <template v-if="loaner.plannedSentDate || loaner.plannedReturnedDate">
+                                                        {{ loaner.plannedSentDate || '—' }}
+                                                        〜
+                                                        {{ loaner.plannedReturnedDate || '—' }}
+                                                    </template>
+                                                    <template v-else>—</template>
+                                                </td>
+                                                <td>
+                                                    <a
+                                                        v-if="loaner.attachedLoanerId"
+                                                        class="loaner-period-link"
+                                                        :href="periodEditUrl(loaner.attachedLoanerId)"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        期間編集
+                                                    </a>
+                                                    <span v-else class="loaner-period-missing">期間なし</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p v-else class="empty-message">関連loaner案件はありません。</p>
+                            </section>
                         </div>
                     </Pane>
 
@@ -304,12 +388,12 @@
                                             </div>
                                         </div>
                                         <div v-if="notes.length" class="attachment-table-wrap">
-                                            <table class="data-table">
+                                            <table class="data-table notes-table">
                                                 <thead>
                                                     <tr>
-                                                        <th>日時</th>
-                                                        <th>記入者</th>
-                                                        <th>内容</th>
+                                                        <th class="col-note-date">日時</th>
+                                                        <th class="col-note-author">記入者</th>
+                                                        <th class="col-note-body">内容</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -320,9 +404,9 @@
                                                         :class="{ 'important-row': note.important, 'active-row': selectedNoteId === note.id }"
                                                         @click="selectedNoteId = note.id"
                                                     >
-                                                        <td>{{ formatDate(note.whenWrote) }}</td>
-                                                        <td>{{ note.whoWrote || '—' }}</td>
-                                                        <td class="text-cell">{{ note.note || '—' }}</td>
+                                                        <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
+                                                        <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                                                        <td class="text-cell col-note-body">{{ note.note || '—' }}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -382,20 +466,65 @@
                 <div class="pane-content">
                     <section class="section-card section-card-files">
                         <div class="section-header">
-                            <h3>Files（{{ files.length }}件）</h3>
+                            <h3>Files（{{ sortedFiles.length }}件）</h3>
                             <div class="section-actions">
                                 <button type="button" class="action-btn action-btn-danger" :disabled="!selectedFileId" :title="selectedFileId ? '' : 'ファイルを選択してください'" @click="openFileDelete">削除</button>
                                 <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                             </div>
                         </div>
 
-                        <div v-if="files.length" class="files-list-wrap">
+                        <div
+                            v-if="showFileDropzone"
+                            class="file-dropzone"
+                            :class="{
+                                'file-dropzone-active': fileDropActive,
+                                'file-dropzone-disabled': !canDropFiles || fileDropUploading,
+                            }"
+                            @dragenter.prevent="onFileDragEnter"
+                            @dragover.prevent="onFileDragOver"
+                            @dragleave.prevent="onFileDragLeave"
+                            @drop.prevent="onFileDrop"
+                            @click="openFileDropPicker"
+                        >
+                            <input
+                                ref="fileDropInputEl"
+                                type="file"
+                                class="file-drop-input"
+                                multiple
+                                @change="onFileDropInputChange"
+                            >
+                            <div class="file-dropzone-top" @click.stop>
+                                <p class="file-dropzone-title">
+                                    {{ fileDropUploading ? `アップロード中...（${fileDropProgress}）` : 'ファイルをドロップ、またはクリックして選択' }}
+                                </p>
+                                <button
+                                    type="button"
+                                    class="action-btn file-dropzone-cancel"
+                                    :disabled="fileDropUploading"
+                                    @click="closeFileDropzone"
+                                >
+                                    閉じる
+                                </button>
+                            </div>
+                            <p class="file-dropzone-help">
+                                Explorer から任意ファイル（.eml / .msg / PDF / 画像など）を追加できます
+                            </p>
+                            <p v-if="fileDropError" class="file-dropzone-error" @click.stop>{{ fileDropError }}</p>
+                        </div>
+
+                        <div v-if="sortedFiles.length" class="files-list-wrap">
                             <AttachedFileItem
-                                v-for="file in files"
+                                v-for="(file, index) in sortedFiles"
                                 :key="file.id"
                                 :file="file"
+                                :order-id="record?.orderID"
                                 :selected="selectedFileId === file.id"
+                                :can-move-up="index > 0"
+                                :can-move-down="index < sortedFiles.length - 1"
+                                :sorting="fileSortSaving"
                                 @select="selectedFileId = file.id"
+                                @move="(direction) => moveFile(file.id, direction)"
+                                @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
                         </div>
                         <p v-else class="empty-message">Files がありません。</p>
@@ -403,15 +532,58 @@
                 </div>
             </Pane>
         </Splitpanes>
+
+        <div v-if="showPriceAdjustDialog" class="confirm-overlay" @click.self="closePriceAdjustDialog">
+            <div class="confirm-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>価格調整</h3>
+                    <button type="button" class="close-btn" @click="closePriceAdjustDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p class="confirm-current-price">
+                        元価格: {{ formatPrice(basePrice) }}
+                        ／ 表示価格: {{ formatPrice(displayPrice) }}
+                    </p>
+                    <label class="confirm-field">
+                        調整額
+                        <input
+                            v-model="priceAdjustForm.amount"
+                            type="number"
+                            class="confirm-input"
+                            placeholder="例: 5000（表示は price - 調整額）"
+                        >
+                    </label>
+                    <label class="confirm-field">
+                        調整理由
+                        <textarea
+                            v-model="priceAdjustForm.reason"
+                            rows="4"
+                            class="confirm-textarea"
+                            placeholder="調整理由を入力"
+                        />
+                    </label>
+                    <p v-if="priceAdjustError" class="confirm-error">{{ priceAdjustError }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="action-btn" :disabled="priceAdjustSaving" @click="closePriceAdjustDialog">
+                        キャンセル
+                    </button>
+                    <button type="button" class="action-btn action-btn-primary" :disabled="priceAdjustSaving" @click="confirmPriceAdjust">
+                        {{ priceAdjustSaving ? '保存中...' : 'OK' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const page = usePage()
 
@@ -421,11 +593,12 @@ const props = defineProps({
     notes: { type: Array, default: () => [] },
     files: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
+    loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
 
-const emit = defineEmits(['open-dialog'])
+const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
@@ -436,6 +609,22 @@ const partsPaneSize = ref(30)
 const selectedNoteId = ref(null)
 const selectedPartId = ref(null)
 const selectedFileId = ref(null)
+const fileSortSaving = ref(false)
+const showPriceAdjustDialog = ref(false)
+const priceAdjustSaving = ref(false)
+const priceAdjustError = ref('')
+const priceAdjustForm = reactive({
+    amount: '',
+    reason: '',
+})
+const sessionAdjustmentAmount = ref(null)
+const fileDropInputEl = ref(null)
+const showFileDropzone = ref(false)
+const fileDropActive = ref(false)
+const fileDropUploading = ref(false)
+const fileDropError = ref('')
+const fileDropProgress = ref('')
+const fileDragDepth = ref(0)
 
 const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
 const selectedNote = computed(() => props.notes.find(n => n.id === selectedNoteId.value))
@@ -445,12 +634,22 @@ const recordOrderType = computed(() =>
 )
 const isLoanerRecord = computed(() => recordOrderType.value === 'loaner')
 const isWaitingListRecord = computed(() => recordOrderType.value === 'waiting_list')
+const isServiceRecord = computed(() =>
+    recordOrderType.value === 'service'
+    || recordOrderType.value == null
+    || recordOrderType.value === '',
+)
+const showLinkedLoaners = computed(() => isServiceRecord.value)
 const statusOptions = computed(() => {
     if (isLoanerRecord.value) {
         return page.props.statusesLoaner ?? []
     }
     return page.props.statuses ?? []
 })
+
+function periodEditUrl(attachedId) {
+    return `${page.props.appBaseUrl}/servicerecord/loaner/period/${attachedId}`
+}
 
 function isNoteOwner(note) {
     return note?.whoWrote === authUserName.value
@@ -580,6 +779,115 @@ function updateNumericDraftValue(field, value) {
     props.draftRecord[field] = value === '' ? null : Number(value)
 }
 
+const isA2laOn = computed(() => {
+    const value = props.draftRecord?.a2la ?? props.record?.a2la
+    return value === 1 || value === '1' || value === true
+})
+
+const basePrice = computed(() => {
+    const value = Number(props.draftRecord?.price ?? props.record?.price ?? 0)
+    return Number.isFinite(value) ? value : 0
+})
+
+const displayAdjustmentAmount = computed(() => {
+    if (sessionAdjustmentAmount.value != null && sessionAdjustmentAmount.value !== '') {
+        return sessionAdjustmentAmount.value
+    }
+    return props.draftRecord?.discount_service ?? props.record?.discount_service ?? ''
+})
+
+const displayPrice = computed(() => {
+    const discount = Number(displayAdjustmentAmount.value)
+    const discountValue = Number.isFinite(discount) ? discount : 0
+    return basePrice.value - discountValue
+})
+
+function toggleA2la() {
+    if (!props.draftRecord) return
+    props.draftRecord.a2la = isA2laOn.value ? 0 : 1
+}
+
+function openPriceAdjustDialog() {
+    const currentDiscount = props.draftRecord?.discount_service ?? props.record?.discount_service
+    priceAdjustForm.amount = currentDiscount == null || currentDiscount === '' ? '' : String(currentDiscount)
+    priceAdjustForm.reason = ''
+    priceAdjustError.value = ''
+    showPriceAdjustDialog.value = true
+}
+
+function closePriceAdjustDialog() {
+    if (priceAdjustSaving.value) return
+    showPriceAdjustDialog.value = false
+    priceAdjustError.value = ''
+}
+
+function getNotesApiBase() {
+    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    return `${window.location.origin}${basePath}/notes`
+}
+
+async function confirmPriceAdjust() {
+    if (!props.record?.orderID || !props.draftRecord) {
+        priceAdjustError.value = '案件が選択されていません。'
+        return
+    }
+
+    const amountRaw = String(priceAdjustForm.amount ?? '').trim()
+    const reason = String(priceAdjustForm.reason ?? '').trim()
+    if (amountRaw === '' || !Number.isFinite(Number(amountRaw))) {
+        priceAdjustError.value = '調整額を数値で入力してください。'
+        return
+    }
+    if (!reason) {
+        priceAdjustError.value = '調整理由を入力してください。'
+        return
+    }
+
+    const amount = Number(amountRaw)
+    const noteText = `[調整理由]${reason}`
+
+    priceAdjustSaving.value = true
+    priceAdjustError.value = ''
+
+    try {
+        const result = await apiFetch(getNotesApiBase(), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                associatedID: props.record.orderID,
+                note: noteText,
+                important: true,
+            }),
+        })
+
+        if (!result) {
+            throw new Error('Notes の追加に失敗しました。')
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        // price 本体は変更せず、discount_service のみ更新（表示は price - discount_service）
+        props.draftRecord.discount_service = amount
+        sessionAdjustmentAmount.value = amount
+        showPriceAdjustDialog.value = false
+        emit('reload-attachments')
+    } catch (e) {
+        priceAdjustError.value = e.message || '価格調整に失敗しました。'
+    } finally {
+        priceAdjustSaving.value = false
+    }
+}
+
 function toDateInputValue(value) {
     if (!value) return ''
     const normalized = String(value).trim().replace(' ', 'T')
@@ -615,14 +923,277 @@ const partsPriceTotal = computed(() =>
     }, 0),
 )
 
+function compareFilesBySortNum(a, b) {
+    const aNull = a?.sortNum == null
+    const bNull = b?.sortNum == null
+    if (aNull && bNull) return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    if (aNull) return 1
+    if (bNull) return -1
+    if (Number(a.sortNum) !== Number(b.sortNum)) {
+        return Number(a.sortNum) - Number(b.sortNum)
+    }
+    return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+}
+
+const sortedFiles = computed(() =>
+    [...(props.files ?? [])].sort(compareFilesBySortNum),
+)
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function getFilesApiBase() {
+    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    return `${window.location.origin}${basePath}/files`
+}
+
+async function persistFileSortNum(fileId, sortNum) {
+    const result = await apiFetch(`${getFilesApiBase()}/${fileId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ sortNum }),
+    })
+
+    if (!result) {
+        throw new Error('順序の更新に失敗しました。')
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(validationMessage || data.message || `順序の更新に失敗しました。（HTTP ${response.status}）`)
+    }
+
+    return data.file
+}
+
+async function updateFileSortNum(fileId, sortNum) {
+    if (fileSortSaving.value) return
+
+    fileSortSaving.value = true
+    try {
+        const updated = await persistFileSortNum(fileId, sortNum)
+        const nextFiles = (props.files ?? []).map((file) => (
+            String(file.id) === String(fileId)
+                ? { ...file, ...updated, sortNum: updated?.sortNum ?? sortNum }
+                : file
+        ))
+        emit('files-updated', nextFiles.sort(compareFilesBySortNum))
+    } catch (e) {
+        window.alert(e.message || '順序の更新に失敗しました。')
+    } finally {
+        fileSortSaving.value = false
+    }
+}
+
+async function moveFile(fileId, direction) {
+    if (fileSortSaving.value) return
+
+    const list = [...sortedFiles.value]
+    const index = list.findIndex(file => String(file.id) === String(fileId))
+    if (index < 0) return
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= list.length) return
+
+    ;[list[index], list[swapIndex]] = [list[swapIndex], list[index]]
+
+    const updates = list.map((file, idx) => ({
+        id: file.id,
+        sortNum: (idx + 1) * 10,
+    }))
+
+    fileSortSaving.value = true
+    try {
+        const results = await Promise.all(
+            updates.map(item => persistFileSortNum(item.id, item.sortNum)),
+        )
+        const byId = new Map(results.map(file => [String(file.id), file]))
+        const nextFiles = (props.files ?? []).map((file) => {
+            const updated = byId.get(String(file.id))
+            return updated ? { ...file, ...updated } : file
+        })
+        emit('files-updated', nextFiles.sort(compareFilesBySortNum))
+    } catch (e) {
+        window.alert(e.message || '表示順の変更に失敗しました。')
+    } finally {
+        fileSortSaving.value = false
+    }
+}
+
 function openFileCreate() {
-    emit('open-dialog', 'FILE', { mode: 'create' })
+    if (!canDropFiles.value) {
+        window.alert('案件が選択されていません。')
+        return
+    }
+    showFileDropzone.value = true
+    fileDropError.value = ''
+    fileDropActive.value = false
+    fileDragDepth.value = 0
+}
+
+function closeFileDropzone() {
+    if (fileDropUploading.value) return
+    showFileDropzone.value = false
+    fileDropActive.value = false
+    fileDropError.value = ''
+    fileDragDepth.value = 0
 }
 
 function openFileDelete() {
     const file = selectedFile.value
     if (!file) return
     emit('open-dialog', 'D', { action: 'delete-file', file, fileId: file.id })
+}
+
+const canDropFiles = computed(() => Boolean(props.record?.orderID))
+
+function guessDocumentType(file) {
+    const name = String(file?.name || '').toLowerCase()
+    const type = String(file?.type || '').toLowerCase()
+    if (name.endsWith('.eml') || name.endsWith('.msg') || type.includes('message') || type.includes('ms-outlook')) {
+        return 'メール'
+    }
+    if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return 'PDF'
+    }
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(name)) {
+        return '画像'
+    }
+    return '添付ファイル'
+}
+
+function nextSortNum() {
+    const nums = (props.files ?? [])
+        .map(file => Number(file.sortNum))
+        .filter(num => Number.isFinite(num))
+    if (!nums.length) return 10
+    return Math.max(...nums) + 10
+}
+
+function onFileDragEnter(event) {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    if (![...event.dataTransfer?.types ?? []].includes('Files')) return
+    fileDragDepth.value += 1
+    fileDropActive.value = true
+}
+
+function onFileDragOver(event) {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy'
+    }
+    fileDropActive.value = true
+}
+
+function onFileDragLeave() {
+    fileDragDepth.value = Math.max(0, fileDragDepth.value - 1)
+    if (fileDragDepth.value === 0) {
+        fileDropActive.value = false
+    }
+}
+
+function onFileDrop(event) {
+    fileDragDepth.value = 0
+    fileDropActive.value = false
+    if (!canDropFiles.value || fileDropUploading.value) return
+    const files = [...(event.dataTransfer?.files ?? [])]
+    if (!files.length) {
+        fileDropError.value = 'ドロップされた内容からファイルを取得できませんでした。Explorer に保存したファイルをドロップしてください。'
+        return
+    }
+    uploadDroppedFiles(files)
+}
+
+function openFileDropPicker() {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    fileDropInputEl.value?.click()
+}
+
+function onFileDropInputChange(event) {
+    const files = [...(event.target.files ?? [])]
+    event.target.value = ''
+    if (!files.length) return
+    uploadDroppedFiles(files)
+}
+
+async function uploadSingleDroppedFile(file, sortNum) {
+    const formData = new FormData()
+    formData.append('associatedID', props.record.orderID)
+    formData.append('file', file)
+    formData.append('documentName', file.name || 'untitled')
+    formData.append('documentType', guessDocumentType(file))
+    formData.append('sortNum', String(sortNum))
+
+    const result = await apiFetch(getFilesApiBase(), {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+        },
+        body: formData,
+    })
+
+    if (!result) {
+        throw new Error(`${file.name || 'ファイル'} のアップロードに失敗しました。`)
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(
+            validationMessage
+            || data.message
+            || `${file.name || 'ファイル'} のアップロードに失敗しました。（HTTP ${response.status}）`,
+        )
+    }
+
+    return data.file
+}
+
+async function uploadDroppedFiles(files) {
+    if (!canDropFiles.value) {
+        fileDropError.value = '案件が選択されていません。'
+        return
+    }
+
+    const list = files.filter(file => file && file.size >= 0)
+    if (!list.length) {
+        fileDropError.value = 'アップロード可能なファイルがありません。'
+        return
+    }
+
+    fileDropUploading.value = true
+    fileDropError.value = ''
+    let startSort = nextSortNum()
+
+    try {
+        for (let i = 0; i < list.length; i += 1) {
+            const file = list[i]
+            fileDropProgress.value = `${i + 1}/${list.length}: ${file.name || 'untitled'}`
+            await uploadSingleDroppedFile(file, startSort)
+            startSort += 10
+        }
+        emit('reload-attachments')
+        showFileDropzone.value = false
+        fileDropActive.value = false
+        fileDragDepth.value = 0
+    } catch (e) {
+        fileDropError.value = e.message || 'アップロードに失敗しました。'
+        emit('reload-attachments')
+    } finally {
+        fileDropUploading.value = false
+        fileDropProgress.value = ''
+    }
 }
 
 function openPartCreate() {
@@ -642,6 +1213,16 @@ function formatPrice(value) {
     const num = Number(value)
     if (Number.isNaN(num)) return '—'
     return num.toLocaleString('ja-JP')
+}
+
+function formatSignedAmount(value) {
+    if (value === '' || value == null) return '—'
+    const num = Number(value)
+    if (Number.isNaN(num)) return '—'
+    const formatted = Math.abs(num).toLocaleString('ja-JP')
+    if (num > 0) return `+${formatted}`
+    if (num < 0) return `-${formatted}`
+    return '0'
 }
 
 function formatDateTime(value) {
@@ -765,6 +1346,12 @@ function formatDate(value) {
     padding-right: 4px;
 }
 
+.detail-pane-left-top > .pane-content {
+    gap: 5px;
+    justify-content: flex-start;
+    align-content: flex-start;
+}
+
 .pane-content-scroll {
     overflow: auto;
 }
@@ -777,18 +1364,189 @@ function formatDate(value) {
 }
 
 .detail-top-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
-    align-items: start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.detail-top-grid > .detail-card {
+    box-sizing: border-box;
+}
+
+.detail-top-grid > .detail-card:nth-child(1) {
+    flex: 0 1 500px;
+    width: 500px;
+    max-width: min(500px, 100%);
+}
+
+.detail-top-grid > .detail-card:nth-child(2) {
+    flex: 0 1 350px;
+    width: 350px;
+    max-width: min(350px, 100%);
+}
+
+.detail-top-grid > .detail-card:nth-child(3) {
+    flex: 0 1 480px;
+    width: 480px;
+    max-width: min(480px, 100%);
 }
 
 .detail-bottom-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    align-items: start;
-    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    margin-top: 0;
+}
+
+.price-adjust-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 20px;
+    padding: 10px 14px;
+    border-color: #93c5fd;
+    background: #f8fbff;
+}
+
+.price-adjust-main,
+.price-adjust-actions,
+.price-adjust-delta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.price-adjust-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.price-adjust-value {
+    font-size: 20px;
+    color: #0f172a;
+    min-width: 96px;
+}
+
+.price-adjust-delta strong {
+    font-size: 16px;
+    color: #1d4ed8;
+    min-width: 72px;
+}
+
+.a2la-toggle {
+    min-width: 72px;
+    padding: 6px 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.a2la-toggle.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 420;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.confirm-panel {
+    width: min(440px, 100%);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.confirm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.confirm-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #0f172a;
+}
+
+.close-btn {
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.confirm-body {
+    padding: 14px 16px;
+}
+
+.confirm-current-price {
+    margin: 0 0 12px;
+    color: #475569;
+    font-size: 13px;
+}
+
+.confirm-field {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.confirm-input,
+.confirm-textarea {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 400;
+    box-sizing: border-box;
+}
+
+.confirm-error {
+    margin: 0;
+    color: #b91c1c;
+    font-size: 13px;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px 16px;
+}
+
+.detail-bottom-grid > .detail-card {
+    flex: 0 1 500px;
+    width: 500px;
+    max-width: min(500px, 100%);
+    box-sizing: border-box;
 }
 
 .detail-card {
@@ -796,7 +1554,34 @@ function formatDate(value) {
 }
 
 .detail-card-wide {
-    grid-column: 1 / -1;
+    width: 100%;
+}
+
+.linked-loaner-card {
+    margin-top: 0;
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.linked-loaner-help {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.loaner-period-link {
+    color: #1d4ed8;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.loaner-period-link:hover {
+    text-decoration: underline;
+}
+
+.loaner-period-missing {
+    color: #94a3b8;
+    font-size: 12px;
 }
 
 .section-card h3 {
@@ -850,11 +1635,6 @@ function formatDate(value) {
     display: grid;
     grid-template-columns: 100px 1fr;
     gap: 8px 16px;
-}
-
-.detail-top-grid {
-    /* 例: ①広め / ②狭め / ⑦⑧は標準 */
-    grid-template-columns: 1.4fr 1.1fr 0.9fr ;
 }
 
 .compact-info-grid {
@@ -1035,6 +1815,25 @@ function formatDate(value) {
     word-break: break-word;
 }
 
+.notes-table {
+    table-layout: fixed;
+}
+
+.notes-table .col-note-date,
+.notes-table .col-note-author {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-table .col-note-body {
+    width: auto;
+}
+
 .important-row td {
     background: #fef3c7;
 }
@@ -1099,6 +1898,69 @@ function formatDate(value) {
     flex-direction: column;
     min-height: 0;
     height: 100%;
+}
+
+.file-dropzone {
+    position: relative;
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+    padding: 14px 12px;
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+    background: #f8fafc;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.file-dropzone:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.file-dropzone-active {
+    border-color: #2563eb;
+    background: #dbeafe;
+}
+
+.file-dropzone-disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.file-drop-input {
+    display: none;
+}
+
+.file-dropzone-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.file-dropzone-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.file-dropzone-cancel {
+    flex: 0 0 auto;
+}
+
+.file-dropzone-help {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.file-dropzone-error {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #b91c1c;
 }
 
 .section-card-fill {

@@ -2,7 +2,7 @@
     <div class="intake-page">
         <div class="page-header">
             <div>
-                <h1>未登録PDF一覧</h1>
+                <h1>未登録ファイル一覧</h1>
             </div>
             <div class="header-actions">
                 <a :href="homeUrl" class="btn btn-secondary">Home</a>
@@ -16,7 +16,17 @@
             </div>
 
             <div class="file-scroll">
-                <div v-if="files.length" class="file-grid">
+                <div class="file-grid">
+                    <article class="file-card file-card-empty">
+                        <div class="file-preview-wrap file-preview-empty">
+                            <p class="empty-card-title">添付ファイル無し</p>
+                            <p class="empty-card-help">情報入力のみで新規案件を作成</p>
+                        </div>
+                        <div class="file-card-actions">
+                            <a :href="createWithoutFileUrl" class="btn btn-primary btn-sm">添付なしで新規登録</a>
+                        </div>
+                    </article>
+
                     <article
                         v-for="file in files"
                         :key="file.id"
@@ -28,7 +38,7 @@
                                 v-if="isPdf(file)"
                                 :src="fileUrl(file.id)"
                                 class="file-preview"
-                                :title="`PDF preview ${file.id}`"
+                                :title="`file preview ${file.id}`"
                                 tabindex="-1"
                             />
                             <img
@@ -38,17 +48,23 @@
                                 class="file-preview-image"
                             >
                             <div v-else class="file-preview-fallback">
-                                <p>プレビュー非対応</p>
+                                <p>{{ file.documentName || '（名称なし）' }}</p>
+                                <p class="fallback-type">{{ file.fileType || 'プレビュー非対応' }}</p>
                             </div>
                         </div>
 
+                        <div class="file-card-meta">
+                            <span class="file-card-name">{{ file.documentName || '（名称なし）' }}</span>
+                            <span class="file-card-type">{{ file.fileType || '—' }}</span>
+                        </div>
+
                         <div class="file-card-actions" @click.stop>
-                            <a :href="createUrl(file.id)" class="btn btn-primary btn-sm">このPDFで新規登録</a>
+                            <a :href="createUrl(file.id)" class="btn btn-primary btn-sm">このファイルで新規登録</a>
                         </div>
                     </article>
                 </div>
 
-                <p v-else class="empty-message">未登録PDFはありません。</p>
+                <p v-if="!files.length" class="empty-message">未登録ファイルはありません（添付なしでの新規登録は可能です）。</p>
             </div>
         </section>
 
@@ -82,6 +98,7 @@ const previewCacheBust = ref(Date.now())
 const files = computed(() => props.unregisteredFiles ?? [])
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
+const createWithoutFileUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/create`)
 
 function createUrl(fileId) {
     return `${page.props.appBaseUrl}/servicerecord/intake/${fileId}/create`
@@ -196,6 +213,17 @@ function onPreviewSaved() {
     background: #eff6ff;
 }
 
+.file-card-empty {
+    cursor: default;
+    border-style: dashed;
+    background: #fff;
+}
+
+.file-card-empty:hover {
+    border-color: #64748b;
+    background: #f8fafc;
+}
+
 .file-preview-wrap {
     position: relative;
     width: 100%;
@@ -204,6 +232,31 @@ function onPreviewSaved() {
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     overflow: hidden;
+}
+
+.file-preview-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #f1f5f9;
+    border-style: dashed;
+}
+
+.empty-card-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.empty-card-help {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+    text-align: center;
+    padding: 0 12px;
 }
 
 .file-preview,
@@ -223,10 +276,46 @@ function onPreviewSaved() {
 .file-preview-fallback {
     height: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    padding: 12px;
     color: #64748b;
     font-size: 12px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.fallback-type {
+    margin: 0;
+    word-break: break-all;
+    color: #94a3b8;
+}
+
+.file-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 2px;
+    min-width: 0;
+}
+
+.file-card-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-card-type {
+    font-size: 11px;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .file-card-actions {
@@ -263,7 +352,7 @@ function onPreviewSaved() {
 }
 
 .empty-message {
-    margin: 0;
+    margin: 12px 0 0;
     color: #64748b;
 }
 </style>

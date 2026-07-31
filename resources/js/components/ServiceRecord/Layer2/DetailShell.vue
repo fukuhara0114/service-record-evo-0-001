@@ -32,9 +32,12 @@
                     :notes="notes"
                     :files="files"
                     :parts="parts"
+                    :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
                 />
                 <DetailFormB
                     v-else-if="layout === 'B'"
@@ -46,6 +49,7 @@
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
                 />
                 <DetailFormC
                     v-else-if="layout === 'C'"
@@ -82,6 +86,10 @@ defineProps({
         type: Array,
         default: () => [],
     },
+    loaners: {
+        type: Array,
+        default: () => [],
+    },
     attachmentsLoading: {
         type: Boolean,
         default: false,
@@ -104,7 +112,7 @@ defineProps({
     },
 })
 
-defineEmits(['close', 'switch-layout', 'open-dialog', 'save'])
+defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', 'reload-attachments'])
 </script>
 
 <style scoped>
