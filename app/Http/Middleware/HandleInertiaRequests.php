@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
             'attachmentUrlTemplate' => $root . '/servicerecord/attachments/{orderID}',
             'authUser' => $request->user() ? [
                 'kanji_name' => $request->user()->kanji_name,
+                'laborID' => $request->user()->laborID,
             ] : null,
         ];
     }

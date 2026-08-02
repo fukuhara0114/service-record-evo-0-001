@@ -3,30 +3,80 @@
         <div class="detail-panel">
             <div class="detail-header">
                 <div class="layout-tabs">
-                    <button
-                        v-for="tab in ['A', 'B', 'C']"
-                        :key="tab"
-                        type="button"
-                        class="tab-btn"
-                        :class="{ active: layout === tab }"
-                        @click="$emit('switch-layout', tab)"
-                    >
-                        詳細 {{ tab }}
-                    </button>
+                    <template v-if="mode === 'engineer'">
+                        <span class="engineer-title">Engineer 詳細</span>
+                    </template>
+                    <template v-else-if="layout === 'closing'">
+                        <span class="closing-title">Closing 詳細</span>
+                    </template>
+                    <template v-else>
+                        <button
+                            v-for="tab in ['A', 'B', 'C']"
+                            :key="tab"
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: layout === tab }"
+                            @click="$emit('switch-layout', tab)"
+                        >
+                            詳細 {{ tab }}
+                        </button>
+                    </template>
                 </div>
                 <div class="detail-meta">
                     <span>OrderID: {{ record?.orderID }}</span>
                     <p v-if="saveError" class="save-error">{{ saveError }}</p>
-                    <button type="button" class="save-btn" :disabled="savingRecord" @click="$emit('save')">
+                    <button
+                        v-if="mode !== 'engineer' && layout !== 'closing'"
+                        type="button"
+                        class="save-btn"
+                        :disabled="savingRecord"
+                        @click="$emit('save')"
+                    >
                         {{ savingRecord ? '保存中...' : '保存' }}
                     </button>
                     <button type="button" class="close-btn" @click="$emit('close')">× 閉じる</button>
                 </div>
             </div>
 
-            <div class="detail-body">
+            <div
+                class="detail-body"
+                :class="{
+                    'detail-body-engineer': mode === 'engineer',
+                    'detail-body-closing': layout === 'closing',
+                }"
+            >
+                <DetailFormEngineer
+                    v-if="mode === 'engineer'"
+                    :record="record"
+                    :draft-record="draftRecord"
+                    :notes="notes"
+                    :files="files"
+                    :parts="parts"
+                    :stocked-parts="stockedParts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
+                    @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
+                    @workflow-done="(payload) => $emit('workflow-done', payload)"
+                />
+                <DetailFormClosing
+                    v-else-if="layout === 'closing'"
+                    :record="record"
+                    :draft-record="draftRecord"
+                    :notes="notes"
+                    :files="files"
+                    :parts="parts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
+                    @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
+                    @save="$emit('save')"
+                    @workflow-done="(payload) => $emit('workflow-done', payload)"
+                />
                 <DetailFormA
-                    v-if="layout === 'A'"
+                    v-else-if="layout === 'A'"
                     :record="record"
                     :draft-record="draftRecord"
                     :notes="notes"
@@ -70,6 +120,8 @@
 import DetailFormA from './DetailFormA.vue'
 import DetailFormB from './DetailFormB.vue'
 import DetailFormC from './DetailFormC.vue'
+import DetailFormClosing from './DetailFormClosing.vue'
+import DetailFormEngineer from './DetailFormEngineer.vue'
 
 defineProps({
     record: Object,
@@ -83,6 +135,10 @@ defineProps({
         default: () => [],
     },
     parts: {
+        type: Array,
+        default: () => [],
+    },
+    stockedParts: {
         type: Array,
         default: () => [],
     },
@@ -110,9 +166,13 @@ defineProps({
         type: String,
         default: 'A',
     },
+    mode: {
+        type: String,
+        default: 'admin',
+    },
 })
 
-defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', 'reload-attachments'])
+defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', 'reload-attachments', 'workflow-done'])
 </script>
 
 <style scoped>
@@ -147,7 +207,21 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
 .layout-tabs {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
+
+.engineer-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #99f6e4;
+}
+
+.closing-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #5eead4;
+}
+
 
 .tab-btn {
     padding: 6px 14px;
@@ -203,5 +277,16 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
     min-height: 0;
     overflow: auto;
     padding: 20px;
+    position: relative;
+}
+
+.detail-body-engineer {
+    overflow: hidden;
+    padding: 0;
+}
+
+.detail-body-closing {
+    overflow: hidden;
+    padding: 0;
 }
 </style>

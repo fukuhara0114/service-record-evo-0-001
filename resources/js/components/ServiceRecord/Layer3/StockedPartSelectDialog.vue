@@ -1,6 +1,7 @@
 <template>
-    <BaseDialog title="部品追加" large @close="$emit('close')">
+    <BaseDialog title="stocked Parts 選択" large @close="$emit('close')">
         <p class="order-id">OrderID: {{ record?.orderID }}</p>
+        <p class="help-text">部品を選択したあと、数量入力へ進みます。</p>
 
         <label class="search-field">
             検索
@@ -15,11 +16,9 @@
         <p v-if="error" class="error-message">{{ error }}</p>
 
         <div class="dialog-actions">
-            <button type="button" class="btn-secondary" :disabled="saving" @click="$emit('close')">
-                キャンセル
-            </button>
-            <button type="button" class="btn-primary" :disabled="saving || !selectedItem" @click="save">
-                {{ saving ? '追加中...' : '追加' }}
+            <button type="button" class="btn-secondary" @click="$emit('close')">キャンセル</button>
+            <button type="button" class="btn-primary" :disabled="!selectedItem" @click="goNext">
+                数量入力へ
             </button>
         </div>
 
@@ -30,8 +29,6 @@
                         <th>partID</th>
                         <th>部品名</th>
                         <th>説明</th>
-                        <th>price_discounted</th>
-                        <th>type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -45,8 +42,6 @@
                         <td>{{ item.partID }}</td>
                         <td>{{ item.partName || '—' }}</td>
                         <td>{{ item.description || '—' }}</td>
-                        <td>{{ formatPrice(item.price_discounted) }}</td>
-                        <td>{{ item.type || '—' }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -59,24 +54,21 @@
 import { computed, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import BaseDialog from './BaseDialog.vue'
-import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     record: Object,
     payload: Object,
 })
 
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(['close', 'selected'])
 
 const page = usePage()
 const searchQuery = ref('')
 const selectedPartId = ref(null)
-const saving = ref(false)
 const error = ref('')
 
 const attachedPartIds = computed(() => new Set((props.payload?.attachedPartIds ?? []).map(String)))
-
-const items = computed(() => page.props.partsMaster ?? [])
+const items = computed(() => page.props.stockedPartsMaster ?? [])
 
 const filteredItems = computed(() => {
     const tokens = searchQuery.value
@@ -92,7 +84,6 @@ const filteredItems = computed(() => {
             item?.partID,
             item?.partName,
             item?.description,
-            item?.type,
         ]
             .filter(value => value != null && value !== '')
             .join(' ')
@@ -120,77 +111,36 @@ function selectItem(item) {
     selectedPartId.value = item.partID
 }
 
-function formatPrice(value) {
-    const num = Number(value)
-    if (Number.isNaN(num)) return '—'
-    return num.toLocaleString('ja-JP')
-}
-
-function getApiBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
-}
-
-function getCsrfToken() {
-    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
-}
-
-async function save() {
+function goNext() {
     if (!selectedItem.value) {
         error.value = '部品を選択してください。'
         return
     }
-
     if (isAlreadyAttached(selectedItem.value.partID)) {
         error.value = 'この部品は既に追加されています。'
         return
     }
 
-    saving.value = true
-    error.value = ''
-
-    const basePath = getApiBasePath()
-    const url = `${window.location.origin}${basePath}/parts`
-
-    try {
-        const result = await apiFetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': getCsrfToken(),
-            },
-            body: JSON.stringify({
-                associatedID: props.record?.orderID,
-                partID: selectedItem.value.partID,
-            }),
-        })
-
-        if (!result) {
-            return
-        }
-
-        const { response, data } = result
-
-        if (!response.ok) {
-            const validationMessage = data.errors
-                ? Object.values(data.errors).flat().join(' ')
-                : null
-            throw new Error(validationMessage || data.message || `追加に失敗しました。（HTTP ${response.status}）`)
-        }
-
-        emit('saved', data)
-    } catch (e) {
-        error.value = e.message || '追加に失敗しました。'
-    } finally {
-        saving.value = false
-    }
+    emit('selected', {
+        mode: 'create',
+        partID: selectedItem.value.partID,
+        partName: selectedItem.value.partName,
+        description: selectedItem.value.description,
+    })
 }
 </script>
 
 <style scoped>
 .order-id {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: #475569;
     font-size: 14px;
+}
+
+.help-text {
+    margin: 0 0 12px;
+    color: #64748b;
+    font-size: 13px;
 }
 
 .search-field {
@@ -252,7 +202,6 @@ async function save() {
 }
 
 .table-row {
-    background: transparent;
     cursor: pointer;
 }
 
@@ -267,10 +216,6 @@ async function save() {
 
 .table-row:hover:not(.disabled) {
     background: #eff6ff;
-}
-
-.table-row:last-child td {
-    border-bottom: none;
 }
 
 .error-message {

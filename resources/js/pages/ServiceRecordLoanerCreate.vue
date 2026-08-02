@@ -106,7 +106,7 @@
                         <div class="link-mode-row">
                             <label class="radio-option">
                                 <input v-model="linkMode" type="radio" value="none">
-                                <span>紐づけ無し（service 案件を後から待つ）</span>
+                                <span>service 案件待ち</span>
                             </label>
                             <label class="radio-option">
                                 <input v-model="linkMode" type="radio" value="parent">
@@ -124,7 +124,7 @@
                                 </div>
                                 <button type="button" class="btn btn-secondary btn-sm" @click="clearParent">クリア</button>
                             </div>
-                            <p v-else class="field-hint">service 案件を検索して親として選択してください（parentID に登録）。</p>
+                            <p v-else class="field-hint">service 案件を検索して親として選択</p>
                             <div class="parent-search-row">
                                 <input
                                     v-model="parentSearchQuery"
@@ -1056,17 +1056,34 @@ onBeforeUnmount(() => {
 .link-mode-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 24px 32px;
     margin-bottom: 10px;
+    width: 100%;
 }
 
 .radio-option {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    flex: 0 0 auto;
+    white-space: nowrap;
     font-size: 13px;
     color: #1e293b;
     cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex: 0 0 auto;
+    accent-color: #2563eb;
+}
+
+.radio-option span {
+    white-space: nowrap;
 }
 
 .parent-link-box {

@@ -28,6 +28,46 @@
                     </article>
 
                     <article
+                        class="file-card file-card-empty file-card-upload"
+                        :class="{
+                            'file-card-upload-active': uploadDropActive,
+                            'file-card-upload-busy': uploadBusy,
+                        }"
+                        @dragenter.prevent="onUploadDragEnter"
+                        @dragover.prevent="onUploadDragOver"
+                        @dragleave.prevent="onUploadDragLeave"
+                        @drop.prevent="onUploadDrop"
+                    >
+                        <div class="file-preview-wrap file-preview-empty" @click="openUploadPicker">
+                            <p class="empty-card-title">ファイルを追加して作成</p>
+                            <p class="empty-card-help">
+                                {{ uploadBusy
+                                    ? (uploadProgress || 'アップロード中...')
+                                    : 'クリックまたは D&D でファイルを追加し、新規案件へ進みます' }}
+                            </p>
+                            <p v-if="uploadError" class="upload-card-error">{{ uploadError }}</p>
+                        </div>
+                        <div class="file-card-actions">
+                            <button
+                                type="button"
+                                class="btn btn-primary btn-sm"
+                                :disabled="uploadBusy"
+                                @click="openUploadPicker"
+                            >
+                                {{ uploadBusy ? 'アップロード中...' : 'ファイルを選択' }}
+                            </button>
+                            <input
+                                ref="uploadInputRef"
+                                type="file"
+                                class="upload-input"
+                                multiple
+                                :disabled="uploadBusy"
+                                @change="onUploadInputChange"
+                            >
+                        </div>
+                    </article>
+
+                    <article
                         v-for="file in files"
                         :key="file.id"
                         class="file-card"
@@ -60,10 +100,19 @@
 
                         <div class="file-card-actions" @click.stop>
                             <a :href="createUrl(file.id)" class="btn btn-primary btn-sm">このファイルで新規登録</a>
+                            <button
+                                type="button"
+                                class="btn btn-danger btn-sm btn-delete"
+                                :disabled="deletingFileId === file.id"
+                                @click="deleteFile(file)"
+                            >
+                                {{ deletingFileId === file.id ? '削除中...' : '削除' }}
+                            </button>
                         </div>
                     </article>
                 </div>
 
+                <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
                 <p v-if="!files.length" class="empty-message">未登録ファイルはありません（添付なしでの新規登録は可能です）。</p>
             </div>
         </section>
@@ -80,7 +129,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 
@@ -94,11 +143,27 @@ const props = defineProps({
 const page = usePage()
 const previewFile = ref(null)
 const previewCacheBust = ref(Date.now())
+const uploadInputRef = ref(null)
+const uploadBusy = ref(false)
+const uploadProgress = ref('')
+const uploadError = ref('')
+const uploadDropActive = ref(false)
+const uploadDragDepth = ref(0)
+const files = ref([...(props.unregisteredFiles ?? [])])
+const deletingFileId = ref(null)
+const deleteError = ref('')
 
-const files = computed(() => props.unregisteredFiles ?? [])
+watch(
+    () => props.unregisteredFiles,
+    (value) => {
+        files.value = [...(value ?? [])]
+    },
+)
+
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
 const createWithoutFileUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/create`)
+const uploadUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/upload`)
 
 function createUrl(fileId) {
     return `${page.props.appBaseUrl}/servicerecord/intake/${fileId}/create`
@@ -122,6 +187,194 @@ function openPreview(file) {
 
 function onPreviewSaved() {
     previewCacheBust.value = Date.now()
+}
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+async function deleteFile(file) {
+    if (!file?.id || deletingFileId.value) return
+
+    const name = file.documentName || `ID ${file.id}`
+    if (!window.confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) {
+        return
+    }
+
+    deletingFileId.value = file.id
+    deleteError.value = ''
+
+    try {
+        const response = await fetch(
+            `${page.props.appBaseUrl}/servicerecord/files/${file.id}?mode=delete`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            },
+        )
+
+        let data = {}
+        try {
+            data = await response.json()
+        } catch {
+            // ignore
+        }
+
+        if (!response.ok) {
+            throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        files.value = files.value.filter((item) => Number(item.id) !== Number(file.id))
+        if (previewFile.value && Number(previewFile.value.id) === Number(file.id)) {
+            previewFile.value = null
+        }
+    } catch (e) {
+        deleteError.value = e.message || '削除に失敗しました。'
+    } finally {
+        deletingFileId.value = null
+    }
+}
+
+function guessDocumentType(file) {
+    const name = String(file?.name || '').toLowerCase()
+    const type = String(file?.type || '').toLowerCase()
+    if (name.endsWith('.eml') || name.endsWith('.msg') || type.includes('message') || type.includes('ms-outlook')) {
+        return 'メール'
+    }
+    if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return 'PDF'
+    }
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(name)) {
+        return '画像'
+    }
+    return '添付ファイル'
+}
+
+function openUploadPicker() {
+    if (uploadBusy.value) return
+    uploadError.value = ''
+    uploadInputRef.value?.click()
+}
+
+function onUploadInputChange(event) {
+    const list = [...(event.target.files ?? [])]
+    event.target.value = ''
+    if (!list.length) return
+    uploadThenCreate(list)
+}
+
+function onUploadDragEnter(event) {
+    if (uploadBusy.value) return
+    if (![...(event.dataTransfer?.types ?? [])].includes('Files')) return
+    uploadDragDepth.value += 1
+    uploadDropActive.value = true
+}
+
+function onUploadDragOver(event) {
+    if (uploadBusy.value) return
+    if (![...(event.dataTransfer?.types ?? [])].includes('Files')) return
+    event.dataTransfer.dropEffect = 'copy'
+    uploadDropActive.value = true
+}
+
+function onUploadDragLeave() {
+    if (uploadBusy.value) return
+    uploadDragDepth.value = Math.max(0, uploadDragDepth.value - 1)
+    if (uploadDragDepth.value === 0) {
+        uploadDropActive.value = false
+    }
+}
+
+function onUploadDrop(event) {
+    uploadDragDepth.value = 0
+    uploadDropActive.value = false
+    if (uploadBusy.value) return
+    const list = [...(event.dataTransfer?.files ?? [])]
+    if (!list.length) {
+        uploadError.value = 'アップロード可能なファイルがありません。'
+        return
+    }
+    uploadThenCreate(list)
+}
+
+async function uploadSingleFile(file, sortNum) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('documentName', file.name || 'untitled')
+    formData.append('documentType', guessDocumentType(file))
+    formData.append('sortNum', String(sortNum))
+
+    const response = await fetch(uploadUrl.value, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: formData,
+    })
+
+    let data = {}
+    try {
+        data = await response.json()
+    } catch {
+        // ignore
+    }
+
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(
+            validationMessage
+            || data.message
+            || `${file.name || 'ファイル'} のアップロードに失敗しました。（HTTP ${response.status}）`,
+        )
+    }
+
+    return data.file
+}
+
+async function uploadThenCreate(fileList) {
+    const list = fileList.filter(file => file && file.size >= 0)
+    if (!list.length) {
+        uploadError.value = 'アップロード可能なファイルがありません。'
+        return
+    }
+
+    uploadBusy.value = true
+    uploadError.value = ''
+    uploadProgress.value = ''
+
+    try {
+        let firstFileId = null
+        let sortNum = 10
+        for (let i = 0; i < list.length; i += 1) {
+            const file = list[i]
+            uploadProgress.value = `${i + 1}/${list.length}: ${file.name || 'untitled'}`
+            const saved = await uploadSingleFile(file, sortNum)
+            if (!firstFileId && saved?.id) {
+                firstFileId = saved.id
+            }
+            sortNum += 10
+        }
+
+        if (!firstFileId) {
+            throw new Error('ファイルの登録結果を取得できませんでした。')
+        }
+
+        window.location.href = createUrl(firstFileId)
+    } catch (e) {
+        uploadError.value = e.message || 'アップロードに失敗しました。'
+        uploadBusy.value = false
+        uploadProgress.value = ''
+    }
 }
 </script>
 
@@ -222,6 +475,42 @@ function onPreviewSaved() {
 .file-card-empty:hover {
     border-color: #64748b;
     background: #f8fafc;
+}
+
+.file-card-upload {
+    border-color: #0f766e;
+}
+
+.file-card-upload:hover {
+    border-color: #0f766e;
+    background: #f0fdfa;
+}
+
+.file-card-upload-active {
+    border-color: #0f766e;
+    background: #ccfbf1;
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.25);
+}
+
+.file-card-upload-busy {
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.file-card-upload .file-preview-empty {
+    cursor: pointer;
+}
+
+.upload-card-error {
+    margin: 0;
+    padding: 0 12px;
+    font-size: 12px;
+    color: #b91c1c;
+    text-align: center;
+}
+
+.upload-input {
+    display: none;
 }
 
 .file-preview-wrap {
@@ -338,7 +627,12 @@ function onPreviewSaved() {
 
 .btn-sm {
     padding: 5px 10px;
-    width: 100%;
+    flex: 1;
+}
+
+.btn-delete {
+    flex: 0 0 auto;
+    min-width: 64px;
 }
 
 .btn-primary {
@@ -346,9 +640,26 @@ function onPreviewSaved() {
     color: #fff;
 }
 
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+}
+
+.btn-danger:disabled,
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .btn-secondary {
     background: #64748b;
     color: #fff;
+}
+
+.delete-error {
+    margin: 12px 0 0;
+    color: #b91c1c;
+    font-size: 13px;
 }
 
 .empty-message {

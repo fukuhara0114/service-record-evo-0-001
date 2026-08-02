@@ -42,8 +42,11 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/servicerecord',[ServiceRecordController::class, 'index'])->name('servicerecord.index');
     Route::get('/servicerecord/administrator',[ServiceRecordController::class, 'administrator'])->name('servicerecord.administrator');
+    Route::get('/servicerecord/engineer',[ServiceRecordController::class, 'engineer'])->name('servicerecord.engineer');
     Route::get('/servicerecord/intake', [ServiceRecordController::class, 'intakeList'])->name('servicerecord.intake');
+    Route::get('/servicerecord/camera', [ServiceRecordController::class, 'camera'])->name('servicerecord.camera');
     Route::get('/servicerecord/intake/create', [ServiceRecordController::class, 'createWithoutFile'])->name('servicerecord.intake.create-blank');
+    Route::post('/servicerecord/intake/upload', [ServiceRecordController::class, 'uploadForIntake'])->name('servicerecord.intake.upload');
     Route::get('/servicerecord/intake/{fileId}/create', [ServiceRecordController::class, 'createFromFile'])->name('servicerecord.intake.create');
     Route::get('/servicerecord/search-existing', [ServiceRecordController::class, 'searchExisting'])->name('servicerecord.search-existing');
     Route::post('/servicerecord/intake/link-existing', [ServiceRecordController::class, 'linkToExisting'])->name('servicerecord.intake.link-existing');
@@ -62,15 +65,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
+    Route::get('/servicerecord/shipping-calendar', [ServiceRecordController::class, 'shippingCalendar'])->name('servicerecord.shipping-calendar');
+    Route::get('/servicerecord/shipping-calendar/events', [ServiceRecordController::class, 'shippingCalendarEvents'])->name('servicerecord.shipping-calendar.events');
     Route::post('/servicerecord/notes', [ServiceRecordController::class, 'storeNote'])->name('servicerecord.notes.store');
     Route::put('/servicerecord/notes/{id}', [ServiceRecordController::class, 'updateNote'])->name('servicerecord.notes.update');
     Route::delete('/servicerecord/notes/{id}', [ServiceRecordController::class, 'destroyNote'])->name('servicerecord.notes.destroy');
+    Route::get('/servicerecord/unregistered-email-notes', [ServiceRecordController::class, 'listUnregisteredEmailNotes'])->name('servicerecord.unregistered-email-notes.index');
+    Route::post('/servicerecord/unregistered-email-notes/{id}/link', [ServiceRecordController::class, 'linkUnregisteredEmailNote'])->name('servicerecord.unregistered-email-notes.link');
+    Route::delete('/servicerecord/unregistered-email-notes/{id}', [ServiceRecordController::class, 'destroyUnregisteredEmailNote'])->name('servicerecord.unregistered-email-notes.destroy');
     Route::post('/servicerecord/files', [ServiceRecordController::class, 'storeFile'])->name('servicerecord.files.store');
     Route::put('/servicerecord/files/{id}', [ServiceRecordController::class, 'updateFile'])->name('servicerecord.files.update');
     Route::put('/servicerecord/files/{id}/content', [ServiceRecordController::class, 'updateFileContent'])->name('servicerecord.files.content.update');
     Route::delete('/servicerecord/files/{id}', [ServiceRecordController::class, 'destroyFile'])->name('servicerecord.files.destroy');
     Route::post('/servicerecord/parts', [ServiceRecordController::class, 'storePart'])->name('servicerecord.parts.store');
     Route::delete('/servicerecord/parts/{id}', [ServiceRecordController::class, 'destroyPart'])->name('servicerecord.parts.destroy');
+    Route::post('/servicerecord/stocked-parts', [ServiceRecordController::class, 'storeStockedPart'])->name('servicerecord.stocked-parts.store');
+    Route::put('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'updateStockedPart'])->name('servicerecord.stocked-parts.update');
+    Route::delete('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'destroyStockedPart'])->name('servicerecord.stocked-parts.destroy');
     Route::put('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update');
     Route::post('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update.post');
     Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])->name('servicerecords.detail');

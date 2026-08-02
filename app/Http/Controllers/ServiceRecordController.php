@@ -10,8 +10,14 @@ use App\Models\AttachedNote;
 use App\Models\AttachedFile;
 use App\Models\AttachedPart;
 use App\Models\AttachedLoaner;
+use App\Models\StockedPartMaster;
+use App\Models\AttachedStockedPart;
+use App\Models\UnregisteredEmailNote;
 use App\Services\EmlReplyDraftService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use ZBateson\MailMimeParser\Message;
 
@@ -86,21 +92,58 @@ class ServiceRecordController extends Controller
 
 
     // admin用表示　→　view: servicerecord
-    public function administrator(Request $request){
-        // 添付データだけ欲しい Inertia 部分リロード（一覧2000件は再取得しない）
+    public function administrator(Request $request)
+    {
+        return $this->renderServiceRecordList($request, 'admin');
+    }
+
+    // engineer用表示（自分の laborID の案件のみ）
+    public function engineer(Request $request)
+    {
+        return $this->renderServiceRecordList($request, 'engineer');
+    }
+
+    private function renderServiceRecordList(Request $request, string $mode)
+    {
+        // 添付データだけ欲しい Inertia 部分リロード（一覧は再取得しない）
         if ($request->header('X-Inertia') && $request->header('X-Inertia-Partial-Data') === 'attachmentData') {
+            $attachmentData = null;
+            if ($request->filled('loadOrderID')) {
+                $orderID = $request->input('loadOrderID');
+                if ($mode === 'engineer' && !$this->engineerCanAccessOrder($orderID)) {
+                    abort(403, 'この案件を表示する権限がありません。');
+                }
+                $attachmentData = $this->fetchAttachmentData($orderID);
+            }
+
             return Inertia::render('ServiceRecordList', [
-                'attachmentData' => $request->filled('loadOrderID')
-                    ? $this->fetchAttachmentData($request->input('loadOrderID'))
-                    : null,
+                'attachmentData' => $attachmentData,
+                'mode' => $mode,
             ]);
         }
 
-        $records = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner'])
-            ->where('status', '>=', 0)
-            ->where('status', '<', 399)
-            ->orderBy('receivedDate', 'asc')
-            ->get();
+        $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
+
+        if ($mode === 'engineer') {
+            $query->where('status', '>=', 90)
+                ->where('status', '<=', 170)
+                ->where(function ($typeQuery) {
+                    $typeQuery->whereIn('order_type', ['service', 'loaner'])
+                        ->orWhereNull('order_type');
+                });
+
+            $laborID = auth()->user()?->laborID;
+            if ($laborID === null || $laborID === '') {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('laborID', $laborID);
+            }
+        } else {
+            $query->where('status', '>=', 0)
+                ->where('status', '<', 399);
+        }
+
+        $records = $query->orderBy('receivedDate', 'asc')->get();
 
         $records->each(function (ServiceRecord $record) {
             if ($record->order_type === 'loaner') {
@@ -113,39 +156,81 @@ class ServiceRecordController extends Controller
             }
         });
 
-
         $statuses = \App\Models\Status::orderBy('processID')->get();
         $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get();
-        $returnCodes = \App\Models\ReturnCode::all(); 
+        $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
         $services = ServiceMaster::query()
-            ->select(['serviceID', 'productName', 'entityID'])
-            ->where('productName', 'NOT LIKE', '*%') // *から始まらない条件を追加
+            ->select(['serviceID', 'productName', 'entityID', 'price_a2la'])
+            ->where('productName', 'NOT LIKE', '*%')
             ->orderBy('productName')
             ->get();
         $partsMaster = PartMaster::query()
             ->select(['partID', 'partName', 'description', 'price_discounted', 'type'])
             ->orderBy('partName')
             ->get();
+        $stockedPartsMaster = StockedPartMaster::query()
+            ->select(['partID', 'partName', 'description'])
+            ->orderBy('partName')
+            ->get();
 
         $attachmentData = null;
         if ($request->filled('loadOrderID')) {
-            $attachmentData = $this->fetchAttachmentData($request->input('loadOrderID'));
+            $orderID = $request->input('loadOrderID');
+            if ($mode === 'engineer' && !$this->engineerCanAccessOrder($orderID)) {
+                abort(403, 'この案件を表示する権限がありません。');
+            }
+            $attachmentData = $this->fetchAttachmentData($orderID);
         }
-        
+
         return Inertia::render('ServiceRecordList', [
-                    'initialRecords' => $records,
-                    'statuses'       => $statuses,
-                    'statusesLoaner' => $statusesLoaner,
-                    'returnCodes'    => $returnCodes,
-                    'labors'         => $labors,
-                    'dealersMaster'  => $dealers,
-                    'servicesMaster' => $services,
-                    'partsMaster'    => $partsMaster,
-                    'mode'           => 'admin',
-                    'attachmentData' => $attachmentData,
-                ]);
+            'initialRecords' => $records,
+            'statuses' => $statuses,
+            'statusesLoaner' => $statusesLoaner,
+            'returnCodes' => $returnCodes,
+            'labors' => $labors,
+            'dealersMaster' => $dealers,
+            'servicesMaster' => $services,
+            'partsMaster' => $partsMaster,
+            'stockedPartsMaster' => $stockedPartsMaster,
+            'mode' => $mode,
+            'attachmentData' => $attachmentData,
+        ]);
+    }
+
+    private function engineerCanAccessOrder($orderID): bool
+    {
+        $laborID = auth()->user()?->laborID;
+        if ($laborID === null || $laborID === '') {
+            return false;
+        }
+
+        return ServiceRecord::query()
+            ->where('orderID', $orderID)
+            ->where('laborID', $laborID)
+            ->exists();
+    }
+
+    private function isEngineerRequest(Request $request): bool
+    {
+        if ($request->header('X-List-Mode') === 'engineer' || $request->input('listMode') === 'engineer') {
+            return true;
+        }
+
+        $referer = (string) $request->headers->get('referer', '');
+        return str_contains($referer, '/servicerecord/engineer');
+    }
+
+    private function assertEngineerAccessIfNeeded(Request $request, $orderID): void
+    {
+        if (!$this->isEngineerRequest($request)) {
+            return;
+        }
+
+        if (!$this->engineerCanAccessOrder($orderID)) {
+            abort(403, 'この案件を表示する権限がありません。');
+        }
     }
 
     public function detail($orderID) {
@@ -199,8 +284,10 @@ class ServiceRecordController extends Controller
                 ]);
     }   
 
-    public function record($orderID)
+    public function record(Request $request, $orderID)
     {
+        $this->assertEngineerAccessIfNeeded($request, $orderID);
+
         $record = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner'])
             ->where('orderID', $orderID)
             ->first();
@@ -221,8 +308,10 @@ class ServiceRecordController extends Controller
         return response()->json($record);
     }
 
-    public function attachments($orderID)
+    public function attachments(Request $request, $orderID)
     {
+        $this->assertEngineerAccessIfNeeded($request, $orderID);
+
         $data = $this->fetchAttachmentData($orderID);
 
         if ($data === null) {
@@ -579,9 +668,58 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function camera()
+    {
+        return Inertia::render('CameraCapture');
+    }
+
     public function createWithoutFile()
     {
         return $this->renderCreateFromFilePage(null);
+    }
+
+    public function uploadForIntake(Request $request)
+    {
+        $validated = $request->validate([
+            'file' => 'required|file|max:10240',
+            'documentType' => 'nullable|string|max:255',
+            'documentName' => 'nullable|string|max:255',
+            'sortNum' => 'nullable|integer',
+        ]);
+
+        $uploaded = $request->file('file');
+        if (!$uploaded->isValid()) {
+            return response()->json([
+                'message' => 'ファイルのアップロードに失敗しました。',
+            ], 422);
+        }
+
+        $content = base64_encode($uploaded->get());
+        $fileType = $uploaded->getMimeType() ?: 'application/octet-stream';
+        $documentName = $validated['documentName'] ?? $uploaded->getClientOriginalName();
+        $originalName = strtolower((string) $uploaded->getClientOriginalName());
+        if (str_ends_with($originalName, '.eml') && !str_contains(strtolower($fileType), 'rfc822')) {
+            $fileType = 'message/rfc822';
+        }
+        if (str_ends_with($originalName, '.msg') && $fileType === 'application/octet-stream') {
+            $fileType = 'application/vnd.ms-outlook';
+        }
+
+        $documentType = $validated['documentType'] ?? $this->guessDocumentType($originalName, $fileType);
+
+        $file = AttachedFile::create([
+            'associatedID' => -1,
+            'content' => $content,
+            'documentType' => $documentType,
+            'documentName' => $documentName,
+            'fileType' => $fileType,
+            'sortNum' => $validated['sortNum'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'ファイルを登録しました。',
+            'file' => $file->only(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum']),
+        ], 201);
     }
 
     public function createFromFile($fileId)
@@ -592,6 +730,25 @@ class ServiceRecordController extends Controller
             ->findOrFail($fileId);
 
         return $this->renderCreateFromFilePage($sourceFile);
+    }
+
+    private function guessDocumentType(string $originalName, string $fileType): string
+    {
+        $name = strtolower($originalName);
+        $type = strtolower($fileType);
+
+        if (str_ends_with($name, '.eml') || str_ends_with($name, '.msg')
+            || str_contains($type, 'message') || str_contains($type, 'ms-outlook')) {
+            return 'メール';
+        }
+        if ($type === 'application/pdf' || str_ends_with($name, '.pdf')) {
+            return 'PDF';
+        }
+        if (str_starts_with($type, 'image/') || preg_match('/\.(png|jpe?g|gif|webp|bmp|tiff?)$/i', $name)) {
+            return '画像';
+        }
+
+        return '添付ファイル';
     }
 
     private function renderCreateFromFilePage($sourceFile)
@@ -669,6 +826,10 @@ class ServiceRecordController extends Controller
                     ->with('partMaster')
                     ->orderBy('id')
                     ->get(),
+                'stockedParts' => AttachedStockedPart::where('associatedID', $orderID)
+                    ->with('stockedPartMaster')
+                    ->orderBy('id')
+                    ->get(),
                 'loaner' => $linkedLoaners->first(),
                 'loaners' => $linkedLoaners,
             ];
@@ -679,6 +840,7 @@ class ServiceRecordController extends Controller
                 'notes' => [],
                 'files' => [],
                 'parts' => [],
+                'stockedParts' => [],
                 'loaner' => null,
                 'loaners' => [],
                 'error' => $e->getMessage(),
@@ -695,12 +857,77 @@ class ServiceRecordController extends Controller
             ->get();
     }
 
+    private function fetchUnregisteredEmailNotes()
+    {
+        return UnregisteredEmailNote::query()
+            ->orderByDesc('whenWrote')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    public function listUnregisteredEmailNotes()
+    {
+        return response()->json([
+            'notes' => $this->fetchUnregisteredEmailNotes(),
+        ]);
+    }
+
+    public function linkUnregisteredEmailNote(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'orderID' => 'required|integer',
+        ]);
+
+        $emailNote = UnregisteredEmailNote::findOrFail($id);
+
+        if (!ServiceRecord::where('orderID', $validated['orderID'])->exists()) {
+            return response()->json(['message' => '案件が見つかりません。'], 404);
+        }
+
+        $whoWrote = Str::limit((string) ($request->user()?->kanji_name ?: 'unknown'), 100, '');
+
+        $notePayload = [
+            'associatedID' => $validated['orderID'],
+            'note' => $emailNote->mailLink,
+            'whoWrote' => $whoWrote,
+            'whenWrote' => $emailNote->whenWrote ?? now(),
+            'important' => false,
+        ];
+
+        if (Schema::hasColumn('attachednotes', 'personal')) {
+            $notePayload['personal'] = false;
+        }
+
+        $attachedNote = DB::transaction(function () use ($emailNote, $notePayload) {
+            $created = AttachedNote::create($notePayload);
+            $emailNote->delete();
+
+            return $created;
+        });
+
+        return response()->json([
+            'message' => '案件の Notes にメールリンクを紐づけました。',
+            'note' => $attachedNote,
+        ]);
+    }
+
+    public function destroyUnregisteredEmailNote($id)
+    {
+        $emailNote = UnregisteredEmailNote::findOrFail($id);
+        $emailNote->delete();
+
+        return response()->json([
+            'message' => '未登録メール Note を削除しました。',
+        ]);
+    }
+
     public function storeNote(Request $request)
     {
         $validated = $request->validate([
             'associatedID' => 'required|integer',
             'note' => 'required|string',
             'important' => 'nullable|boolean',
+            'personal' => 'nullable|boolean',
         ]);
 
         if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
@@ -716,7 +943,7 @@ class ServiceRecordController extends Controller
             'whoWrote' => $whoWrote,
             'whenWrote' => now(),
             'important' => $request->boolean('important'),
-            'personal' => false,
+            'personal' => $request->boolean('personal'),
         ]);
 
         return response()->json([
@@ -963,6 +1190,76 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function storeStockedPart(Request $request)
+    {
+        $validated = $request->validate([
+            'associatedID' => 'required|integer',
+            'partID' => 'required|integer',
+            'quantity' => 'required|integer|min:1',
+        ]);
+
+        if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
+            return response()->json(['message' => '案件が見つかりません。'], 404);
+        }
+
+        if (!StockedPartMaster::where('partID', $validated['partID'])->exists()) {
+            return response()->json(['message' => '指定された在庫部品が見つかりません。'], 404);
+        }
+
+        if (AttachedStockedPart::where('associatedID', $validated['associatedID'])
+            ->where('partID', $validated['partID'])
+            ->exists()) {
+            return response()->json(['message' => 'この在庫部品は既に追加されています。'], 422);
+        }
+
+        $this->assertEngineerAccessIfNeeded($request, $validated['associatedID']);
+
+        $part = AttachedStockedPart::create([
+            'associatedID' => $validated['associatedID'],
+            'partID' => $validated['partID'],
+            'quantity' => $validated['quantity'],
+        ]);
+
+        $part->load('stockedPartMaster');
+
+        return response()->json([
+            'message' => '在庫部品を追加しました。',
+            'stockedPart' => $part,
+        ], 201);
+    }
+
+    public function updateStockedPart(Request $request, $id)
+    {
+        $part = AttachedStockedPart::findOrFail($id);
+        $this->assertEngineerAccessIfNeeded($request, $part->associatedID);
+
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1',
+        ]);
+
+        $part->update([
+            'quantity' => $validated['quantity'],
+        ]);
+
+        $part->load('stockedPartMaster');
+
+        return response()->json([
+            'message' => '使用数を更新しました。',
+            'stockedPart' => $part,
+        ]);
+    }
+
+    public function destroyStockedPart(Request $request, $id)
+    {
+        $part = AttachedStockedPart::findOrFail($id);
+        $this->assertEngineerAccessIfNeeded($request, $part->associatedID);
+        $part->delete();
+
+        return response()->json([
+            'message' => '在庫部品を削除しました。',
+        ]);
+    }
+
     public function storeFromIntake(Request $request)
     {
         $validated = $request->validate([
@@ -1171,9 +1468,12 @@ class ServiceRecordController extends Controller
     // 5. 更新（全カラム対応）
     public function update(Request $request, $orderID)
     {
+        $this->assertEngineerAccessIfNeeded($request, $orderID);
+
         $record = ServiceRecord::findOrFail($orderID);
-        
-        $data = $request->except(['_token', '_method']);
+
+        $data = $request->except(['_token', '_method', 'allow_over_capacity']);
+
         $record->update($data);
 
         if ($request->expectsJson()) {
@@ -1191,6 +1491,129 @@ class ServiceRecordController extends Controller
         }
 
         return redirect()->route('servicerecord.index')->with('success', '更新しました。');
+    }
+
+    /**
+     * 出荷予定カレンダー画面
+     */
+    public function shippingCalendar()
+    {
+        $returnCodes = \App\Models\ReturnCode::all();
+        $labors = \App\Models\Labor::all();
+
+        return Inertia::render('ShippingCalendar', [
+            'returnCodes' => $returnCodes,
+            'labors' => $labors,
+        ]);
+    }
+
+    /**
+     * 出荷予定カレンダー用イベント（status >= 300 かつ shippingOut_requiredDate あり）
+     */
+    public function shippingCalendarEvents(Request $request)
+    {
+        $validated = $request->validate([
+            'start' => 'required|date',
+            'end' => 'required|date',
+        ]);
+
+        $capacity = $this->shippingDailyCapacity();
+
+        $records = ServiceRecord::query()
+            ->whereNotNull('shippingOut_requiredDate')
+            ->where('shippingOut_requiredDate', '!=', '')
+            ->where('status', '>=', 300)
+            ->whereDate('shippingOut_requiredDate', '>=', $validated['start'])
+            ->whereDate('shippingOut_requiredDate', '<', $validated['end'])
+            ->orderBy('shippingOut_requiredDate')
+            ->orderBy('orderID')
+            ->limit(2000)
+            ->get([
+                'orderID',
+                'SN',
+                'productName',
+                'dealer',
+                'dealer_depart',
+                'contactPerson',
+                'returnCode',
+                'a2la',
+                'status',
+                'shippingOut_requiredDate',
+            ]);
+
+        $counts = [];
+        $events = $records->map(function (ServiceRecord $row) use (&$counts) {
+            $date = $this->normalizeDateString($row->shippingOut_requiredDate);
+            if (!$date) {
+                return null;
+            }
+
+            $counts[$date] = ($counts[$date] ?? 0) + 1;
+
+            $titleParts = array_filter([
+                (string) $row->orderID,
+                $row->SN,
+                $row->productName,
+                $row->dealer,
+                $row->dealer_depart,
+                $row->contactPerson,
+            ], fn ($part) => $part !== null && $part !== '');
+
+            return [
+                'id' => (string) $row->orderID,
+                'title' => implode(' / ', $titleParts) ?: ('Order ' . $row->orderID),
+                'start' => $date,
+                'allDay' => true,
+                'editable' => true,
+                'extendedProps' => [
+                    'orderID' => $row->orderID,
+                    'SN' => $row->SN,
+                    'productName' => $row->productName,
+                    'dealer' => $row->dealer,
+                    'dealer_depart' => $row->dealer_depart,
+                    'contactPerson' => $row->contactPerson,
+                    'returnCode' => $row->returnCode,
+                    'a2la' => $row->a2la,
+                    'status' => $row->status,
+                    'shippingOut_requiredDate' => $date,
+                    'pending' => false,
+                ],
+            ];
+        })->filter()->values();
+
+        return response()->json([
+            'events' => $events,
+            'counts' => $counts,
+            'capacity' => $capacity,
+        ]);
+    }
+
+    /**
+     * 1日あたりの出荷予定台数上限（目安）。config/shipping.php で変更する。
+     */
+    private function shippingDailyCapacity(): int
+    {
+        $value = (int) config('shipping.daily_capacity', 8);
+        return $value > 0 ? $value : 8;
+    }
+
+    private function normalizeDateString($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+        $raw = substr((string) $value, 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            try {
+                return (new \DateTimeImmutable((string) $value))->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        return $raw;
     }
 
     // 6. 削除

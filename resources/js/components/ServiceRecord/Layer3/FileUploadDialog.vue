@@ -106,7 +106,7 @@ function onFileChange(event) {
 }
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/administrator\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
 }
 
 function getCsrfToken() {

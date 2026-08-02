@@ -101,12 +101,16 @@ watch(
 const isDeleteNote = computed(() => props.payload?.action === 'delete-note')
 const isDeleteFile = computed(() => props.payload?.action === 'delete-file')
 const isDeletePart = computed(() => props.payload?.action === 'delete-part')
-const isDestructive = computed(() => isDeleteNote.value || isDeleteFile.value || isDeletePart.value)
+const isDeleteStockedPart = computed(() => props.payload?.action === 'delete-stocked-part')
+const isDestructive = computed(() =>
+    isDeleteNote.value || isDeleteFile.value || isDeletePart.value || isDeleteStockedPart.value,
+)
 
 const title = computed(() => {
     if (isDeleteNote.value) return 'Note 削除確認'
     if (isDeleteFile.value) return 'ファイル削除確認'
     if (isDeletePart.value) return '部品削除確認'
+    if (isDeleteStockedPart.value) return 'stocked Parts 削除確認'
     return '確認'
 })
 
@@ -120,13 +124,16 @@ const message = computed(() => {
     if (isDeletePart.value) {
         return '選択した部品を削除してよろしいですか？'
     }
+    if (isDeleteStockedPart.value) {
+        return '選択した在庫部品を削除してよろしいですか？'
+    }
     return 'この内容で保存してよろしいですか？'
 })
 
 const confirmLabel = computed(() => (isDestructive.value ? '削除' : '保存'))
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/administrator\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
 }
 
 function getCsrfToken() {
@@ -146,6 +153,11 @@ async function confirm() {
 
     if (isDeletePart.value) {
         await deletePart()
+        return
+    }
+
+    if (isDeleteStockedPart.value) {
+        await deleteStockedPart()
         return
     }
 
@@ -247,6 +259,45 @@ async function deletePart() {
 
     const basePath = getApiBasePath()
     const url = `${window.location.origin}${basePath}/parts/${partId}`
+
+    try {
+        const result = await apiFetch(url, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+        })
+
+        if (!result) {
+            return
+        }
+
+        const { response, data } = result
+
+        if (!response.ok) {
+            throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        emit('saved', data)
+    } catch (e) {
+        error.value = e.message || '削除に失敗しました。'
+    } finally {
+        processing.value = false
+    }
+}
+
+async function deleteStockedPart() {
+    const partId = props.payload?.partId ?? props.payload?.part?.id
+    if (!partId) {
+        error.value = '削除対象の在庫部品が見つかりません。'
+        return
+    }
+
+    processing.value = true
+    error.value = ''
+
+    const basePath = getApiBasePath()
+    const url = `${window.location.origin}${basePath}/stocked-parts/${partId}`
 
     try {
         const result = await apiFetch(url, {

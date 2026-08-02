@@ -7,10 +7,11 @@
             <textarea v-model="noteText" rows="6" class="form-textarea" />
         </label>
 
-        <label class="form-checkbox">
+        <label v-if="!payload?.remand" class="form-checkbox">
             <input v-model="important" type="checkbox">
             重要
         </label>
+        <p v-else class="remand-important-hint">差戻理由は重要 Note として登録されます。</p>
 
         <p v-if="error" class="error-message">{{ error }}</p>
 
@@ -43,7 +44,11 @@ const saving = ref(false)
 const error = ref('')
 
 const isEdit = computed(() => props.payload?.mode === 'edit')
-const title = computed(() => (isEdit.value ? 'Note 編集' : 'Note 新規追加'))
+const title = computed(() => {
+    if (isEdit.value) return 'Note 編集'
+    if (props.payload?.remand) return '差戻理由'
+    return props.payload?.personal ? 'Personal Note 新規追加' : 'Note 新規追加'
+})
 
 watch(
     () => props.payload,
@@ -53,7 +58,7 @@ watch(
             important.value = !!payload.note.important
         } else {
             noteText.value = ''
-            important.value = false
+            important.value = !!payload?.remand
         }
         error.value = ''
     },
@@ -61,7 +66,7 @@ watch(
 )
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/administrator\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
 }
 
 function getCsrfToken() {
@@ -82,12 +87,21 @@ async function save() {
         ? `${window.location.origin}${basePath}/notes/${props.payload.note.id}`
         : `${window.location.origin}${basePath}/notes`
 
+    const noteBody = (() => {
+        const text = noteText.value.trim()
+        if (props.payload?.remand) {
+            return text.startsWith('[差戻理由]') ? text : `[差戻理由]\n${text}`
+        }
+        return text
+    })()
+
     const body = isEdit.value
-        ? { note: noteText.value.trim(), important: important.value }
+        ? { note: noteBody, important: important.value }
         : {
             associatedID: props.record?.orderID,
-            note: noteText.value.trim(),
-            important: important.value,
+            note: noteBody,
+            important: props.payload?.remand ? true : important.value,
+            personal: !!props.payload?.personal,
         }
 
     try {
@@ -110,7 +124,10 @@ async function save() {
             throw new Error(data.message || `保存に失敗しました。（HTTP ${response.status}）`)
         }
 
-        emit('saved', data)
+        emit('saved', {
+            ...data,
+            remand: !!props.payload?.remand,
+        })
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
     } finally {
@@ -151,6 +168,13 @@ async function save() {
     gap: 8px;
     font-size: 14px;
     margin-bottom: 8px;
+}
+
+.remand-important-hint {
+    margin: 0 0 8px;
+    color: #9a3412;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .error-message {

@@ -15,57 +15,61 @@
 
         <p v-if="error" class="global-error">{{ error }}</p>
 
-        <div ref="createLayoutEl" class="create-layout">
-            <section class="panel panel-pdf" :style="pdfPanelStyle">
-                <div ref="pdfPanelHeaderEl" class="panel-header">
-                    <div>
-                        <h2>{{ hasSourceFile ? '申請フォーム' : '添付ファイル無し' }}</h2>
-                        <div v-if="hasSourceFile" class="panel-meta">
-                            <span>ID: {{ sourceFile?.id }}</span>
-                            <span>{{ sourceFile?.documentName || '（名称なし）' }}</span>
-                            <span>{{ sourceFile?.fileType || '' }}</span>
+        <div class="create-layout">
+            <Splitpanes class="default-theme create-splitpanes" @resized="syncPaneSizes">
+                <Pane class="create-pane create-pane-pdf" :size="leftPaneSize" :min-size="28">
+                    <section class="panel panel-pdf">
+                        <div class="panel-header">
+                            <div>
+                                <h2>{{ hasSourceFile ? '申請フォーム' : '添付ファイル無し' }}</h2>
+                                <div v-if="hasSourceFile" class="panel-meta">
+                                    <span>ID: {{ sourceFile?.id }}</span>
+                                    <span>{{ sourceFile?.documentName || '（名称なし）' }}</span>
+                                    <span>{{ sourceFile?.fileType || '' }}</span>
+                                </div>
+                                <div v-else class="panel-meta">
+                                    <span>情報入力のみで新規案件を作成します</span>
+                                </div>
+                            </div>
+                            <button
+                                v-if="hasSourceFile"
+                                type="button"
+                                class="btn btn-secondary"
+                                @click="openPreview(sourceFile)"
+                            >
+                                拡大・回転
+                            </button>
                         </div>
-                        <div v-else class="panel-meta">
-                            <span>情報入力のみで新規案件を作成します</span>
+                        <div v-if="hasSourceFile" class="pdf-preview-shell">
+                            <iframe
+                                v-if="isSourcePdf"
+                                :src="sourceFileUrl"
+                                class="pdf-frame"
+                                title="申請フォーム"
+                            />
+                            <img
+                                v-else-if="isSourceImage"
+                                :src="sourceFileUrl"
+                                :alt="sourceFile?.documentName || '画像'"
+                                class="pdf-frame image-frame"
+                            >
+                            <div v-else class="no-preview-panel">
+                                <p>{{ sourceFile?.documentName || '（名称なし）' }}</p>
+                                <p>{{ sourceFile?.fileType || 'この形式はプレビュー非対応です' }}</p>
+                                <a :href="sourceFileUrl" target="_blank" rel="noopener" class="btn btn-secondary">別タブで開く</a>
+                            </div>
                         </div>
-                    </div>
-                    <button
-                        v-if="hasSourceFile"
-                        type="button"
-                        class="btn btn-secondary"
-                        @click="openPreview(sourceFile)"
-                    >
-                        拡大・回転
-                    </button>
-                </div>
-                <div v-if="hasSourceFile" class="pdf-preview-shell">
-                    <iframe
-                        v-if="isSourcePdf"
-                        :src="sourceFileUrl"
-                        class="pdf-frame"
-                        title="申請フォーム"
-                    />
-                    <img
-                        v-else-if="isSourceImage"
-                        :src="sourceFileUrl"
-                        :alt="sourceFile?.documentName || '画像'"
-                        class="pdf-frame image-frame"
-                    >
-                    <div v-else class="no-preview-panel">
-                        <p>{{ sourceFile?.documentName || '（名称なし）' }}</p>
-                        <p>{{ sourceFile?.fileType || 'この形式はプレビュー非対応です' }}</p>
-                        <a :href="sourceFileUrl" target="_blank" rel="noopener" class="btn btn-secondary">別タブで開く</a>
-                    </div>
-                </div>
-                <div v-else class="pdf-preview-shell no-file-shell">
-                    <div class="no-preview-panel">
-                        <p class="no-file-title">添付ファイル無し</p>
-                        <p>必要なら「関連する未登録書類」からファイルを選択できます。</p>
-                    </div>
-                </div>
-            </section>
+                        <div v-else class="pdf-preview-shell no-file-shell">
+                            <div class="no-preview-panel">
+                                <p class="no-file-title">添付ファイル無し</p>
+                                <p>必要なら「関連する未登録書類」からファイルを選択できます。</p>
+                            </div>
+                        </div>
+                    </section>
+                </Pane>
 
-            <section class="panel panel-form">
+                <Pane class="create-pane create-pane-form" :size="rightPaneSize" :min-size="35">
+                    <section class="panel panel-form">
                 <div class="tab-bar" role="tablist">
                     <button
                         type="button"
@@ -341,7 +345,9 @@
                         @loaner-selected="onLoanerSelected"
                     />
                 </div>
-            </section>
+                    </section>
+                </Pane>
+            </Splitpanes>
         </div>
 
         <div v-if="showLoanerRequirementDialog" class="confirm-overlay" @click.self="cancelLoanerRequirementDialog">
@@ -393,8 +399,10 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import { Pane, Splitpanes } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
@@ -448,44 +456,13 @@ const selectedLoaners = ref([])
 const showLoanerRequirementDialog = ref(false)
 const pendingLoanerRecord = ref(null)
 const loanerRequirementContext = ref(null) // 'select' | 'save'
-const createLayoutEl = ref(null)
-const pdfPanelHeaderEl = ref(null)
-const pdfPanelStyle = ref({})
+const leftPaneSize = ref(42)
+const rightPaneSize = ref(58)
 
-const A4_WIDTH_OVER_HEIGHT = 210 / 297
-const PDF_PANEL_PADDING_X = 24
-const PDF_PANEL_BORDER_X = 2
-const PDF_PANEL_MIN_WIDTH = 280
-const PDF_PANEL_MAX_RATIO = 0.52
-
-let resizeObserver = null
-
-function updatePdfPanelSize() {
-    const layout = createLayoutEl.value
-    if (!layout) return
-
-    const layoutHeight = layout.clientHeight
-    const layoutWidth = layout.clientWidth
-    if (!layoutHeight || !layoutWidth) return
-
-    const headerHeight = pdfPanelHeaderEl.value?.offsetHeight ?? 56
-    const panelPaddingY = 24
-    const previewGap = 12
-    const availablePreviewHeight = Math.max(
-        120,
-        layoutHeight - headerHeight - panelPaddingY - previewGap,
-    )
-
-    const previewWidth = availablePreviewHeight * A4_WIDTH_OVER_HEIGHT
-    const panelWidth = Math.min(
-        Math.max(PDF_PANEL_MIN_WIDTH, Math.ceil(previewWidth + PDF_PANEL_PADDING_X + PDF_PANEL_BORDER_X)),
-        Math.floor(layoutWidth * PDF_PANEL_MAX_RATIO),
-    )
-
-    pdfPanelStyle.value = {
-        width: `${panelWidth}px`,
-        flex: '0 0 auto',
-    }
+function syncPaneSizes({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    leftPaneSize.value = panes[0].size
+    rightPaneSize.value = panes[1].size
 }
 
 const form = reactive({
@@ -945,23 +922,7 @@ async function linkToExistingRecord(payload) {
     }
 }
 
-onMounted(() => {
-    updatePdfPanelSize()
-    window.addEventListener('resize', updatePdfPanelSize)
-
-    if (typeof ResizeObserver !== 'undefined' && createLayoutEl.value) {
-        resizeObserver = new ResizeObserver(() => updatePdfPanelSize())
-        resizeObserver.observe(createLayoutEl.value)
-        if (pdfPanelHeaderEl.value) {
-            resizeObserver.observe(pdfPanelHeaderEl.value)
-        }
-    }
-})
-
 onBeforeUnmount(() => {
-    window.removeEventListener('resize', updatePdfPanelSize)
-    resizeObserver?.disconnect()
-    resizeObserver = null
     Object.keys(zipLookupTimers).forEach((key) => {
         if (zipLookupTimers[key]) {
             clearTimeout(zipLookupTimers[key])
@@ -1097,11 +1058,28 @@ async function save() {
 }
 
 .create-layout {
-    display: flex;
-    gap: 12px;
     flex: 1;
     min-height: 0;
-    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+}
+
+.create-splitpanes {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+.create-pane {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    height: 100%;
+}
+
+.create-pane-pdf,
+.create-pane-form {
+    flex-direction: column;
 }
 
 .panel {
@@ -1113,7 +1091,9 @@ async function save() {
     flex-direction: column;
     min-height: 0;
     height: 100%;
+    width: 100%;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .panel-pdf {
@@ -1121,11 +1101,19 @@ async function save() {
 }
 
 .panel-form {
-    flex: 1 1 auto;
     min-width: 0;
     gap: 0;
     overflow: hidden;
     padding-top: 8px;
+}
+
+:deep(.splitpanes__splitter) {
+    background: #cbd5e1;
+    min-width: 8px;
+}
+
+:deep(.splitpanes__splitter:hover) {
+    background: #94a3b8;
 }
 
 .tab-bar {
@@ -1468,8 +1456,9 @@ async function save() {
 .pdf-preview-shell {
     flex: 1;
     min-height: 0;
+    width: 100%;
     display: flex;
-    justify-content: center;
+    justify-content: stretch;
     align-items: stretch;
     overflow: hidden;
 }
@@ -1511,13 +1500,13 @@ async function save() {
 }
 
 .pdf-frame {
+    width: 100%;
     height: 100%;
-    width: auto;
-    aspect-ratio: 210 / 297;
-    max-width: 100%;
+    max-width: none;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     background: #fff;
+    display: block;
 }
 
 .section-help {
@@ -1647,19 +1636,16 @@ async function save() {
     }
 
     .create-layout {
-        flex-direction: column;
         flex: none;
+        min-height: 70vh;
     }
 
-    .panel-pdf {
-        width: 100% !important;
-        height: auto;
-        max-height: none;
+    .create-splitpanes {
+        min-height: 70vh;
     }
 
     .panel-form {
         overflow: visible;
-        height: auto;
     }
 
     .tab-panel {
@@ -1667,13 +1653,12 @@ async function save() {
     }
 
     .pdf-preview-shell {
-        height: min(70vh, calc(70vw * 297 / 210));
+        min-height: 360px;
     }
 
     .pdf-frame {
+        width: 100%;
         height: 100%;
-        width: auto;
-        max-width: 100%;
     }
 
     .row-product,

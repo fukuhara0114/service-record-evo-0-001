@@ -2,7 +2,7 @@
     <div class="list-page-container">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
-            <div class="order-type-filters">
+            <div v-if="mode !== 'engineer'" class="order-type-filters">
                 <button
                     type="button"
                     class="order-type-btn"
@@ -10,6 +10,22 @@
                     @click="orderTypeFilter = 'service'"
                 >
                     service
+                </button>
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'closing' }"
+                    @click="orderTypeFilter = 'closing'"
+                >
+                    closing
+                </button>
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'invoice' }"
+                    @click="orderTypeFilter = 'invoice'"
+                >
+                    invoice
                 </button>
                 <button
                     type="button"
@@ -39,6 +55,8 @@
                 <button type="button" @click="clearSearch">Clear</button>
             </div>
             <div class="home-link-area">
+                <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
+                <a v-if="mode !== 'engineer'" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
                 <a :href="homeUrl">Home</a>
             </div>
         </div>
@@ -101,18 +119,21 @@
             :notes="activeNotes"
             :files="activeFiles"
             :parts="activeParts"
+            :stocked-parts="activeStockedParts"
             :loaners="activeLoaners"
             :attachments-loading="attachmentsLoading"
             :attachments-error="attachmentsError"
             :saving-record="isSavingRecord"
             :save-error="saveError"
             :layout="detailLayout"
+            :mode="mode"
             @close="closeDetail"
             @switch-layout="switchDetailLayout"
             @open-dialog="openDialog"
             @save="saveRecord"
             @files-updated="onFilesUpdated"
             @reload-attachments="onReloadAttachments"
+            @workflow-done="onEngineerWorkflowDone"
         />
 
         <!-- 第3階層: 入力・確認ダイアログ -->
@@ -172,6 +193,27 @@
             @close="closeDialog"
             @saved="onDialogSaved"
         />
+        <StockedPartSelectDialog
+            v-if="activeDialog === 'STOCKED_PART'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @selected="onStockedPartSelected"
+        />
+        <StockedPartQuantityDialog
+            v-if="activeDialog === 'STOCKED_PART_QTY'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
+        <UnregisteredEmailNoteLinkDialog
+            v-if="activeDialog === 'EMAIL_NOTE_LINK'"
+            :record="activeRecord"
+            :payload="dialogPayload"
+            @close="closeDialog"
+            @saved="onDialogSaved"
+        />
     </div>
 </template>
 
@@ -189,6 +231,9 @@ import NoteEditDialog from '@/components/ServiceRecord/Layer3/NoteEditDialog.vue
 import FileUploadDialog from '@/components/ServiceRecord/Layer3/FileUploadDialog.vue'
 import ServiceMasterSelectDialog from '@/components/ServiceRecord/Layer3/ServiceMasterSelectDialog.vue'
 import PartSelectDialog from '@/components/ServiceRecord/Layer3/PartSelectDialog.vue'
+import StockedPartSelectDialog from '@/components/ServiceRecord/Layer3/StockedPartSelectDialog.vue'
+import StockedPartQuantityDialog from '@/components/ServiceRecord/Layer3/StockedPartQuantityDialog.vue'
+import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/UnregisteredEmailNoteLinkDialog.vue'
 
 const props = defineProps({
     initialRecords: Array,
@@ -202,6 +247,10 @@ const props = defineProps({
 const page = usePage()
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
+const shippingCalendarUrl = computed(() => {
+    const base = getBasePath()
+    return `${window.location.origin}${base}/shipping-calendar`
+})
 
 onMounted(() => {
     if (!page.props.authUser) {
@@ -223,7 +272,14 @@ const selectedOrderId = ref(null)
 const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
-    records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+    if (props.mode === 'engineer') {
+        records = records.filter((r) => {
+            const orderType = r?.order_type ?? 'service'
+            return orderType === 'service' || orderType === 'loaner'
+        })
+    } else {
+        records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+    }
 
     if (!searchQuery.value) return records
 
@@ -262,9 +318,20 @@ const filteredRecords = computed(() => {
 
 function matchesOrderTypeFilter(record, filter) {
     const orderType = record?.order_type ?? null
+    const status = Number(record?.status)
 
     if (filter === 'service') {
         return orderType === 'service' || orderType == null || orderType === ''
+    }
+    if (filter === 'closing') {
+        const isServiceOrLoaner = orderType === 'service'
+            || orderType === 'loaner'
+            || orderType == null
+            || orderType === ''
+        return isServiceOrLoaner && status === 200
+    }
+    if (filter === 'invoice') {
+        return Number.isFinite(status) && status >= 300 && status <= 385
     }
     if (filter === 'loaner') {
         return orderType === 'loaner'
@@ -298,6 +365,7 @@ const detailLayout = ref('A')
 const activeNotes = ref([])
 const activeFiles = ref([])
 const activeParts = ref([])
+const activeStockedParts = ref([])
 const activeLoaners = ref([])
 const attachmentsLoading = ref(false)
 const attachmentsError = ref('')
@@ -307,7 +375,7 @@ const detailLoading = ref(false)
 const detailOpenError = ref('')
 
 function getBasePath() {
-    return window.location.pathname.replace(/\/administrator\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
 }
 
 function applyAttachmentData(data) {
@@ -316,6 +384,7 @@ function applyAttachmentData(data) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeStockedParts.value = []
         activeLoaners.value = []
         return
     }
@@ -325,6 +394,7 @@ function applyAttachmentData(data) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeStockedParts.value = []
         activeLoaners.value = []
         return
     }
@@ -333,6 +403,7 @@ function applyAttachmentData(data) {
     activeNotes.value = data.notes ?? []
     activeFiles.value = data.files ?? []
     activeParts.value = data.parts ?? []
+    activeStockedParts.value = data.stockedParts ?? []
     activeLoaners.value = data.loaners ?? (data.loaner ? [data.loaner] : [])
 }
 
@@ -352,6 +423,7 @@ function loadAttachments(orderID) {
         activeNotes.value = []
         activeFiles.value = []
         activeParts.value = []
+        activeStockedParts.value = []
         activeLoaners.value = []
 
         router.get(
@@ -404,7 +476,7 @@ async function openSecondLayer(record) {
     attachmentsError.value = ''
     activeRecord.value = record
     draftRecord.value = { ...record }
-    detailLayout.value = 'A'
+    detailLayout.value = orderTypeFilter.value === 'closing' ? 'closing' : 'A'
     closeDialog()
     isDetailOpen.value = true
     detailLoading.value = true
@@ -433,6 +505,7 @@ function closeDetail() {
     activeNotes.value = []
     activeFiles.value = []
     activeParts.value = []
+    activeStockedParts.value = []
     activeLoaners.value = []
     attachmentsLoading.value = false
     attachmentsError.value = ''
@@ -457,6 +530,13 @@ function closeDialog() {
     dialogPayload.value = null
 }
 
+function onStockedPartSelected(payload) {
+    openDialog('STOCKED_PART_QTY', {
+        mode: 'create',
+        ...payload,
+    })
+}
+
 async function onDialogSaved(result) {
     if (activeDialog.value === 'MASTER_SELECT' && result && draftRecord.value) {
         Object.assign(draftRecord.value, result)
@@ -464,8 +544,25 @@ async function onDialogSaved(result) {
         return
     }
 
+    const isRemandNote = activeDialog.value === 'NOTE' && (dialogPayload.value?.remand || result?.remand)
+
     if (result && activeRecord.value) {
         Object.assign(activeRecord.value, result)
+    }
+
+    if (isRemandNote) {
+        try {
+            await updateActiveRecordStatus(40)
+            closeDialog()
+            await finishEngineerWorkflow()
+        } catch (e) {
+            saveError.value = e.message || '差戻処理に失敗しました。'
+            if (activeRecord.value?.orderID) {
+                await loadAttachments(activeRecord.value.orderID)
+            }
+            closeDialog()
+        }
+        return
     }
 
     if (activeRecord.value?.orderID) {
@@ -473,6 +570,63 @@ async function onDialogSaved(result) {
     }
 
     closeDialog()
+}
+
+async function updateActiveRecordStatus(status) {
+    if (!activeRecord.value?.orderID) {
+        throw new Error('案件が選択されていません。')
+    }
+
+    const url = `${window.location.origin}${getBasePath()}/${activeRecord.value.orderID}`
+    const result = await apiFetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+        },
+        body: JSON.stringify({ status }),
+    })
+
+    if (!result?.response?.ok) {
+        throw new Error(result?.data?.message || `status の更新に失敗しました。（HTTP ${result?.response?.status ?? ''}）`)
+    }
+
+    if (draftRecord.value) draftRecord.value.status = status
+    activeRecord.value.status = status
+    return result.data
+}
+
+async function onEngineerWorkflowDone() {
+    await finishListWorkflow()
+}
+
+async function finishListWorkflow() {
+    closeDetail()
+    await reloadListRecords()
+}
+
+async function finishEngineerWorkflow() {
+    await finishListWorkflow()
+}
+
+function reloadListRecords() {
+    return new Promise((resolve) => {
+        router.get(
+            window.location.pathname,
+            {},
+            {
+                only: ['initialRecords'],
+                preserveState: false,
+                preserveScroll: true,
+                replace: true,
+                onFinish: () => resolve(),
+            },
+        )
+    })
+}
+
+function reloadEngineerList() {
+    return reloadListRecords()
 }
 
 async function saveRecord() {
@@ -654,14 +808,30 @@ async function saveRecord() {
     flex: 1;
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+}
+
+.mode-badge {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: #0f766e;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .home-link-area a {
-    padding: 8px 16px;
-    background: #2563eb;
-    color: white;
-    border-radius: 6px;
+    color: #1e3a8a;
+    font-weight: 700;
     text-decoration: none;
+}
+
+.home-link-area a.calendar-link {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #fff;
 }
 
 .scrollable-table-zone {

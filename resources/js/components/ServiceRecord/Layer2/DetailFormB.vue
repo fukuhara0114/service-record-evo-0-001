@@ -261,7 +261,7 @@ function getCsrfToken() {
 }
 
 function getFilesApiBase() {
-    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
     return `${window.location.origin}${basePath}/files`
 }
 

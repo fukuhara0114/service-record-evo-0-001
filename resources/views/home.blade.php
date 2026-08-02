@@ -58,9 +58,11 @@
         <!-- 各ボタンに min-width: 160px; と中央揃えを追加 -->
         <a href="{{ url('/servicerecord_q') }}" class="btn" style="min-width: 160px; text-align: center;">ServiceRecord</a>
         <a href="{{ url('/servicerecord/administrator') }}" class="btn" style="min-width: 160px; text-align: center;">Admin</a>
+        <a href="{{ url('/servicerecord/engineer') }}" class="btn" style="min-width: 160px; text-align: center;">Engineer</a>
         <a href="{{ url('/servicerecord/intake') }}" class="btn" style="min-width: 160px; text-align: center;">案件登録</a>
         <a href="{{ url('/servicerecord/loaner/create') }}" class="btn" style="min-width: 160px; text-align: center;">貸出機登録</a>
         <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn" style="min-width: 160px; text-align: center;">貸出カレンダー</a>
+        <a href="{{ url('/servicerecord/camera') }}" class="btn" style="min-width: 160px; text-align: center;">カメラ</a>
     </div>
 
 

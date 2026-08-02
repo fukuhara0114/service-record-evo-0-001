@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'power_automate' => [
+        'api_key' => env('POWER_AUTOMATE_API_KEY'),
+    ],
+
 ];

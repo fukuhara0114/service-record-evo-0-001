@@ -380,14 +380,15 @@
                                 <div class="pane-content pane-content-scroll">
                                     <section class="section-card section-card-compact section-card-fill">
                                         <div class="section-header">
-                                            <h3>Notes（{{ notes.length }}件）</h3>
+                                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
                                             <div class="section-actions">
                                                 <button type="button" class="action-btn" :disabled="!canModifySelectedNote" :title="noteEditDeleteTitle" @click="openNoteEdit">編集</button>
                                                 <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedNote" :title="noteEditDeleteTitle" @click="openNoteDelete">削除</button>
+                                                <button type="button" class="action-btn" @click="openEmailNoteLink">メール紐づけ</button>
                                                 <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
                                             </div>
                                         </div>
-                                        <div v-if="notes.length" class="attachment-table-wrap">
+                                        <div v-if="sharedNotes.length" class="attachment-table-wrap">
                                             <table class="data-table notes-table">
                                                 <thead>
                                                     <tr>
@@ -398,7 +399,7 @@
                                                 </thead>
                                                 <tbody>
                                                     <tr
-                                                        v-for="note in notes"
+                                                        v-for="note in sharedNotes"
                                                         :key="note.id"
                                                         class="table-row"
                                                         :class="{ 'important-row': note.important, 'active-row': selectedNoteId === note.id }"
@@ -406,7 +407,11 @@
                                                     >
                                                         <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
                                                         <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                                        <td class="text-cell col-note-body">{{ note.note || '—' }}</td>
+                                                        <td
+                                                            class="text-cell col-note-body"
+                                                            @click.stop
+                                                            v-html="linkifyNote(note.note)"
+                                                        />
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -584,6 +589,7 @@ import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { linkifyText } from '@/utils/linkifyText'
 
 const page = usePage()
 
@@ -627,7 +633,19 @@ const fileDropProgress = ref('')
 const fileDragDepth = ref(0)
 
 const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
-const selectedNote = computed(() => props.notes.find(n => n.id === selectedNoteId.value))
+const sharedNotes = computed(() =>
+    (props.notes ?? []).filter(note => !isPersonalNote(note)),
+)
+const selectedNote = computed(() => sharedNotes.value.find(n => n.id === selectedNoteId.value))
+
+function isPersonalNote(note) {
+    return note?.personal === true || note?.personal === 1 || note?.personal === '1'
+}
+
+function linkifyNote(value) {
+    const html = linkifyText(value)
+    return html || '—'
+}
 
 const recordOrderType = computed(() =>
     props.draftRecord?.order_type ?? props.record?.order_type ?? null,
@@ -719,8 +737,8 @@ onMounted(() => {
     applyDefaultPaneSizes()
 })
 
-watch(() => props.notes, (newNotes) => {
-    if (selectedNoteId.value && !newNotes.some(n => n.id === selectedNoteId.value)) {
+watch(() => props.notes, () => {
+    if (selectedNoteId.value && !sharedNotes.value.some(n => n.id === selectedNoteId.value)) {
         selectedNoteId.value = null
     }
 })
@@ -751,7 +769,11 @@ function openNoteEdit() {
 }
 
 function openNoteCreate() {
-    emit('open-dialog', 'NOTE', { mode: 'create' })
+    emit('open-dialog', 'NOTE', { mode: 'create', personal: false })
+}
+
+function openEmailNoteLink() {
+    emit('open-dialog', 'EMAIL_NOTE_LINK')
 }
 
 function openServiceMasterSelect() {
@@ -822,7 +844,7 @@ function closePriceAdjustDialog() {
 }
 
 function getNotesApiBase() {
-    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
     return `${window.location.origin}${basePath}/notes`
 }
 
@@ -944,7 +966,7 @@ function getCsrfToken() {
 }
 
 function getFilesApiBase() {
-    const basePath = window.location.pathname.replace(/\/administrator\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
     return `${window.location.origin}${basePath}/files`
 }
 
@@ -1813,6 +1835,16 @@ function formatDate(value) {
 .text-cell {
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+:deep(.note-autolink) {
+    color: #1d4ed8;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+:deep(.active-row .note-autolink) {
+    color: #fff;
 }
 
 .notes-table {
