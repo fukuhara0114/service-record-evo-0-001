@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
             'homeUrl' => route('home'),
             'attachmentUrlTemplate' => $root . '/servicerecord/attachments/{orderID}',
             'authUser' => $request->user() ? [
+                'name' => $request->user()->name,
                 'kanji_name' => $request->user()->kanji_name,
                 'laborID' => $request->user()->laborID,
             ] : null,

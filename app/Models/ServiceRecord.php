@@ -80,6 +80,7 @@ class ServiceRecord extends Model
         'shippedDate',
         'shipTo',
         'sentOut',
+        'incident',
         'sm_workorder',
         'sm_quote',
         'coNum',

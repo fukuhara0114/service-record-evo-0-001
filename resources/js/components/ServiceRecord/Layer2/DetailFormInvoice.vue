@@ -1,120 +1,174 @@
 <template>
-    <div class="closing-form">
-        <header class="closing-topbar">
-            <span class="closing-meta">{{ draftRecord?.productName || record?.productName || '—' }}</span>
-            <span class="closing-meta">{{ draftRecord?.dealer || record?.dealer || '—' }}</span>
-            <span class="closing-meta">{{ returnCodeLabel }}</span>
+    <div class="invoice-form">
+        <header class="invoice-topbar">
+            <span class="invoice-badge">起伝</span>
+            <span class="invoice-meta">{{ draftRecord?.productName || record?.productName || '—' }}</span>
+            <span class="invoice-meta">S/N: {{ draftRecord?.SN || record?.SN || '—' }}</span>
+            <span class="invoice-meta invoice-meta-right">{{ returnCodeLabel }}</span>
         </header>
+
+        <section class="invoice-id-bar">
+            <span>RMA#: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
+            <span>Loaner: {{ loanerLabel }}</span>
+            <span>受注#: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
+            <span>注文#: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
+            <span>Col: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
+        </section>
+
+        <section class="invoice-toolbar">
+            <label class="toolbar-field">
+                <span>券生 Inv:</span>
+                <input
+                    type="text"
+                    class="toolbar-input"
+                    :value="draftRecord?.invNum ?? record?.invNum ?? ''"
+                    :disabled="statusActionSaving"
+                    @input="updateDraftValue('invNum', $event.target.value)"
+                >
+            </label>
+            <label class="toolbar-field">
+                <span>Mapics Inv:</span>
+                <input
+                    type="text"
+                    class="toolbar-input"
+                    :value="draftRecord?.mapics_inv ?? record?.mapics_inv ?? ''"
+                    :disabled="statusActionSaving"
+                    @input="updateDraftValue('mapics_inv', $event.target.value)"
+                >
+            </label>
+            <button
+                type="button"
+                class="action-btn action-btn-mapics"
+                :disabled="statusActionSaving"
+                @click="toggleMapics47"
+            >
+                Mapics47{{ isMapics47On ? ' ON' : '' }}
+            </button>
+            <label class="toolbar-field">
+                <span>出荷予定</span>
+                <input
+                    type="date"
+                    class="toolbar-input toolbar-input-date"
+                    :value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
+                    :disabled="statusActionSaving"
+                    @input="updateDraftDateValue('shippingOut_requiredDate', $event.target.value)"
+                >
+            </label>
+            <div class="toolbar-actions">
+                <span class="files-count">
+                    {{ sortedFiles.length }} File(s)
+                    ／ 撮影画像 {{ capturedImages.length }}件
+                </span>
+                <button type="button" class="action-btn" :disabled="statusActionSaving" @click="showGalleryDialog = true">
+                    Gallery
+                </button>
+                <button type="button" class="action-btn action-btn-primary" :disabled="statusActionSaving" @click="$emit('save')">
+                    保存
+                </button>
+                <button
+                    type="button"
+                    class="action-btn action-btn-primary"
+                    :disabled="statusActionSaving"
+                    @click="onComplete"
+                >
+                    {{ statusActionSaving ? '処理中...' : '完了' }}
+                </button>
+                <button type="button" class="action-btn" :disabled="statusActionSaving" @click="onBack">
+                    戻る
+                </button>
+            </div>
+        </section>
+        <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
         <p v-if="attachmentsLoading" class="status-message">添付データを読み込み中...</p>
         <p v-else-if="attachmentsError" class="status-message error">{{ attachmentsError }}</p>
 
-        <Splitpanes v-else class="default-theme closing-splitpanes" @resized="onSplitResized">
-            <Pane class="closing-pane closing-pane-left" :size="leftPaneSize" :min-size="28">
+        <Splitpanes v-else class="default-theme invoice-splitpanes" @resized="onSplitResized">
+            <Pane class="invoice-pane invoice-pane-left" :size="leftPaneSize" :min-size="28">
                 <div class="left-scroll">
-                    <section class="id-bar">
-                        <span>RMA: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
-                        <span>Quote: {{ draftRecord?.quoteNum || draftRecord?.sm_quote || record?.quoteNum || record?.sm_quote || '—' }}</span>
-                        <span>受注番号: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
-                        <span>注文番号: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
-                    </section>
-
-                    <div class="action-row">
-                        <input
-                            v-model="actionComment"
-                            type="text"
-                            class="action-input action-input-conum"
-                            placeholder="Co Num"
-                            :disabled="statusActionSaving"
-                        >
-                        <button type="button" class="action-btn action-btn-wide" :disabled="statusActionSaving" @click="$emit('save')">
-                            保存
-                        </button>
-                        <button type="button" class="action-btn" :disabled="statusActionSaving" @click="showGalleryDialog = true">
-                            Gallery
-                        </button>
-                        <button
-                            type="button"
-                            class="action-btn action-btn-primary action-btn-wide"
-                            :disabled="statusActionSaving"
-                            @click="onComplete"
-                        >
-                            {{ statusActionSaving ? '処理中...' : '完了' }}
-                        </button>
-                        <button
-                            type="button"
-                            class="action-btn action-btn-danger action-btn-wide"
-                            :disabled="statusActionSaving"
-                            @click="onRemand"
-                        >
-                            差戻
-                        </button>
-                    </div>
-                    <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
-
                     <section class="panel">
                         <table class="price-table">
                             <thead>
                                 <tr>
-                                    <th>項目</th>
-                                    <th class="col-amount">金額</th>
+                                    <th>Item</th>
+                                    <th class="col-amount">Price</th>
+                                    <th>Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>作業内容（{{ returnCodeLabel }}）</td>
+                                    <td>{{ returnCodeLabel }}</td>
                                     <td class="col-amount">{{ formatPrice(workPrice) }}</td>
+                                    <td>作業内容</td>
                                 </tr>
                                 <tr>
                                     <td>a2la{{ isA2laOn ? '' : '（OFF）' }}</td>
                                     <td class="col-amount">{{ formatPrice(a2laPrice) }}</td>
+                                    <td>添付書類</td>
                                 </tr>
-                                <tr>
+                                <tr v-if="loanerPrice > 0">
+                                    <td>貸出機</td>
+                                    <td class="col-amount">{{ formatPrice(loanerPrice) }}</td>
+                                    <td>{{ loanerLabel }}</td>
+                                </tr>
+                                <tr v-if="partsPriceTotal > 0">
                                     <td>Parts</td>
                                     <td class="col-amount">{{ formatPrice(partsPriceTotal) }}</td>
+                                    <td>部品</td>
                                 </tr>
                                 <tr class="row-summary">
                                     <td>小計</td>
                                     <td class="col-amount">{{ formatPrice(subtotal) }}</td>
+                                    <td />
                                 </tr>
                                 <tr class="row-summary">
-                                    <td>価格調整</td>
+                                    <td>調整</td>
                                     <td class="col-amount">{{ formatSignedAmount(adjustmentAmount) }}</td>
+                                    <td />
                                 </tr>
                                 <tr class="row-total">
-                                    <td>合計</td>
+                                    <td>計</td>
                                     <td class="col-amount">{{ formatPrice(grandTotal) }}</td>
+                                    <td />
                                 </tr>
                             </tbody>
                         </table>
                     </section>
 
                     <section class="panel panel-info">
-                        <h3>Dealer / E/U / Delivery</h3>
                         <div class="info-grid">
                             <div>
-                                <h4>Dealer</h4>
+                                <h4>依頼者</h4>
                                 <p>{{ draftRecord?.dealer || record?.dealer || '—' }}</p>
                                 <p>{{ draftRecord?.dealer_depart || record?.dealer_depart || '—' }}</p>
                                 <p>{{ draftRecord?.contactPerson || record?.contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.email || record?.email || '—' }}</p>
-                                <p>{{ draftRecord?.phone || record?.phone || '—' }}</p>
+                                <p>〒 {{ draftRecord?.zipcode || record?.zipcode || '—' }}</p>
+                                <p>{{ draftRecord?.address1 || record?.address1 || '—' }}</p>
+                                <p>{{ draftRecord?.address2 || record?.address2 || '—' }}</p>
+                                <p>Phone: {{ draftRecord?.phone || record?.phone || '—' }}</p>
+                                <p>E-mail: {{ draftRecord?.email || record?.email || '—' }}</p>
                             </div>
                             <div>
                                 <h4>E/U</h4>
                                 <p>{{ draftRecord?.endUser || record?.endUser || '—' }}</p>
                                 <p>{{ draftRecord?.endUser_depart || record?.endUser_depart || '—' }}</p>
                                 <p>{{ draftRecord?.endUser_contactPerson || record?.endUser_contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_email || record?.endUser_email || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_phone || record?.endUser_phone || '—' }}</p>
+                                <p>〒 {{ draftRecord?.endUser_zipcode || record?.endUser_zipcode || '—' }}</p>
+                                <p>{{ draftRecord?.endUser_address1 || record?.endUser_address1 || '—' }}</p>
+                                <p>{{ draftRecord?.endUser_address2 || record?.endUser_address2 || '—' }}</p>
+                                <p>Phone: {{ draftRecord?.endUser_phone || record?.endUser_phone || '—' }}</p>
+                                <p>E-mail: {{ draftRecord?.endUser_email || record?.endUser_email || '—' }}</p>
                             </div>
                             <div>
-                                <h4>Delivery</h4>
+                                <h4>納品先</h4>
                                 <p>{{ draftRecord?.deliveryDestination_company || record?.deliveryDestination_company || '—' }}</p>
                                 <p>{{ draftRecord?.deliveryDestination_depart || record?.deliveryDestination_depart || '—' }}</p>
                                 <p>{{ draftRecord?.deliveryDestination_contactPerson || record?.deliveryDestination_contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_email || record?.deliveryDestination_email || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_phone || record?.deliveryDestination_phone || '—' }}</p>
+                                <p>〒 {{ draftRecord?.deliveryDestination_zipcode || record?.deliveryDestination_zipcode || '—' }}</p>
+                                <p>{{ draftRecord?.deliveryDestination_address1 || record?.deliveryDestination_address1 || '—' }}</p>
+                                <p>{{ draftRecord?.deliveryDestination_address2 || record?.deliveryDestination_address2 || '—' }}</p>
+                                <p>Phone: {{ draftRecord?.deliveryDestination_phone || record?.deliveryDestination_phone || '—' }}</p>
+                                <p>E-mail: {{ draftRecord?.deliveryDestination_email || record?.deliveryDestination_email || '—' }}</p>
                             </div>
                         </div>
                     </section>
@@ -122,7 +176,25 @@
                     <section class="panel panel-notes">
                         <div class="panel-header">
                             <h3>Notes（{{ sharedNotes.length }}件）</h3>
-                            <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
+                            <div class="notes-actions">
+                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">追加</button>
+                                <button
+                                    type="button"
+                                    class="action-btn"
+                                    :disabled="!canModifySelectedNote"
+                                    @click="openNoteEdit"
+                                >
+                                    編集
+                                </button>
+                                <button
+                                    type="button"
+                                    class="action-btn action-btn-danger"
+                                    :disabled="!canModifySelectedNote"
+                                    @click="openNoteDelete"
+                                >
+                                    削除
+                                </button>
+                            </div>
                         </div>
                         <div v-if="sharedNotes.length" class="notes-wrap">
                             <table class="data-table">
@@ -134,7 +206,12 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="note in sharedNotes" :key="note.id">
+                                    <tr
+                                        v-for="note in sharedNotes"
+                                        :key="note.id"
+                                        :class="{ 'active-note-row': selectedNoteId === note.id }"
+                                        @click="selectedNoteId = note.id"
+                                    >
                                         <td class="col-date">{{ formatDate(note.whenWrote) }}</td>
                                         <td class="col-author">{{ note.whoWrote || '—' }}</td>
                                         <td class="text-cell" v-html="linkifyNote(note.note)" />
@@ -147,7 +224,7 @@
                 </div>
             </Pane>
 
-            <Pane class="closing-pane closing-pane-right" :size="rightPaneSize" :min-size="30">
+            <Pane class="invoice-pane invoice-pane-right" :size="rightPaneSize" :min-size="30">
                 <div class="right-stack">
                     <section class="files-panel">
                         <div class="files-header">
@@ -237,19 +314,6 @@
             </Pane>
         </Splitpanes>
 
-        <ShippingOutDateDialog
-            v-if="showShippingDialog"
-            :order-id="record?.orderID"
-            :product-name="draftRecord?.productName || record?.productName || ''"
-            :serial-number="draftRecord?.SN || record?.SN || ''"
-            :dealer="draftRecord?.dealer || record?.dealer || ''"
-            :contact-person="draftRecord?.contactPerson || record?.contactPerson || ''"
-            :preview-record="draftRecord || record"
-            :confirming="statusActionSaving"
-            @close="showShippingDialog = false"
-            @confirm="onShippingConfirm"
-        />
-
         <CapturedImageGalleryDialog
             v-if="showGalleryDialog"
             title="Gallery"
@@ -268,7 +332,6 @@ import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
-import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
@@ -281,6 +344,7 @@ const props = defineProps({
     files: { type: Array, default: () => [] },
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
+    loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
@@ -288,13 +352,12 @@ const props = defineProps({
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'save', 'workflow-done'])
 
 const page = usePage()
-const leftPaneSize = ref(48)
-const rightPaneSize = ref(52)
+const leftPaneSize = ref(40)
+const rightPaneSize = ref(60)
 const selectedFileId = ref(null)
-const actionComment = ref('')
+const selectedNoteId = ref(null)
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
-const showShippingDialog = ref(false)
 const showGalleryDialog = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const fileSortSaving = ref(false)
@@ -306,9 +369,19 @@ const fileDropError = ref('')
 const fileDropProgress = ref('')
 const fileDragDepth = ref(0)
 
+const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
+
 const sharedNotes = computed(() =>
     (props.notes ?? []).filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
 )
+
+const selectedNote = computed(() => sharedNotes.value.find(n => n.id === selectedNoteId.value))
+
+function isNoteOwner(note) {
+    return Boolean(note?.whoWrote) && note.whoWrote === authUserName.value
+}
+
+const canModifySelectedNote = computed(() => !!selectedNote.value && isNoteOwner(selectedNote.value))
 
 function compareFilesBySortNum(a, b) {
     const aNull = a?.sortNum == null
@@ -326,8 +399,6 @@ const sortedFiles = computed(() =>
     [...(props.files ?? [])].sort(compareFilesBySortNum),
 )
 
-const selectedFile = computed(() => props.files.find(f => f.id === selectedFileId.value))
-
 const canDropFiles = computed(() => Boolean(props.record?.orderID))
 
 const returnCodeLabel = computed(() => {
@@ -340,6 +411,11 @@ const returnCodeLabel = computed(() => {
 
 const isA2laOn = computed(() => {
     const value = props.draftRecord?.a2la ?? props.record?.a2la
+    return value === 1 || value === '1' || value === true
+})
+
+const isMapics47On = computed(() => {
+    const value = props.draftRecord?.mapics47 ?? props.record?.mapics47
     return value === 1 || value === '1' || value === true
 })
 
@@ -374,12 +450,27 @@ const partsPriceTotal = computed(() =>
     }, 0),
 )
 
+const loanerLabel = computed(() => {
+    const first = (props.loaners ?? [])[0]
+    if (!first) return props.draftRecord?.loanerID || props.record?.loanerID || '—'
+    return first.loanerID || first.productName || first.SN || first.orderID || '—'
+})
+
+const loanerPrice = computed(() => {
+    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
+    if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+    return (props.loaners ?? []).reduce((sum, loaner) => {
+        const value = Number(loaner?.price ?? loaner?.loaner_master?.price ?? 0)
+        return sum + (Number.isFinite(value) ? value : 0)
+    }, 0)
+})
+
 const adjustmentAmount = computed(() => {
     const value = Number(props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
     return Number.isFinite(value) ? value : 0
 })
 
-const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value)
+const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
 const grandTotal = computed(() => subtotal.value - adjustmentAmount.value)
 
 function formatPrice(value) {
@@ -403,9 +494,36 @@ function formatDate(value) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+function toDateInputValue(value) {
+    if (!value) return ''
+    const normalized = String(value).trim().replace(' ', 'T')
+    const date = new Date(normalized)
+    if (Number.isNaN(date.getTime())) {
+        const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/)
+        return match ? match[1] : ''
+    }
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
 function linkifyNote(value) {
     const html = linkifyText(value)
     return html || '—'
+}
+
+function updateDraftValue(field, value) {
+    if (!props.draftRecord) return
+    props.draftRecord[field] = value
+}
+
+function updateDraftDateValue(field, value) {
+    if (!props.draftRecord) return
+    props.draftRecord[field] = value || null
+}
+
+function toggleMapics47() {
+    if (!props.draftRecord) return
+    props.draftRecord.mapics47 = isMapics47On.value ? 0 : 1
 }
 
 function getApiBasePath() {
@@ -432,6 +550,18 @@ function onSplitResized(panes) {
 
 function openNoteCreate() {
     emit('open-dialog', 'NOTE', { mode: 'create', personal: false })
+}
+
+function openNoteEdit() {
+    const note = selectedNote.value
+    if (!note || !isNoteOwner(note)) return
+    emit('open-dialog', 'NOTE', { mode: 'edit', note })
+}
+
+function openNoteDelete() {
+    const note = selectedNote.value
+    if (!note || !isNoteOwner(note)) return
+    emit('open-dialog', 'D', { action: 'delete-note', note, noteId: note.id })
 }
 
 async function persistFileSortNum(fileId, sortNum) {
@@ -721,28 +851,22 @@ async function updateRecordFields(payload) {
     return result.data
 }
 
-function onComplete() {
-    if (statusActionSaving.value) return
-    actionMessage.value = ''
-    showShippingDialog.value = true
-}
-
-async function onShippingConfirm({ shippingOut_requiredDate }) {
-    if (statusActionSaving.value) return
+async function onComplete() {
+    if (statusActionSaving.value || !props.draftRecord) return
 
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
         await updateRecordFields({
-            status: 300,
-            shippingOut_requiredDate,
+            invNum: props.draftRecord.invNum,
+            mapics_inv: props.draftRecord.mapics_inv,
+            mapics47: props.draftRecord.mapics47,
+            shippingOut_requiredDate: props.draftRecord.shippingOut_requiredDate,
+            coNum: props.draftRecord.coNum,
+            price: props.draftRecord.price,
+            discount_service: props.draftRecord.discount_service,
         })
-        showShippingDialog.value = false
-        emit('workflow-done', {
-            action: 'complete',
-            status: 300,
-            shippingOut_requiredDate,
-        })
+        emit('workflow-done', { action: 'complete' })
     } catch (e) {
         if (!e.cancelled) {
             actionMessage.value = e.message || '完了処理に失敗しました。'
@@ -752,13 +876,9 @@ async function onShippingConfirm({ shippingOut_requiredDate }) {
     }
 }
 
-function onRemand() {
+function onBack() {
     if (statusActionSaving.value) return
-    emit('open-dialog', 'NOTE', {
-        mode: 'create',
-        personal: false,
-        remand: true,
-    })
+    emit('workflow-done', { action: 'back' })
 }
 
 watch(() => props.files, (newFiles) => {
@@ -767,19 +887,25 @@ watch(() => props.files, (newFiles) => {
     }
 })
 
+watch(() => props.notes, () => {
+    if (selectedNoteId.value && !sharedNotes.value.some(n => n.id === selectedNoteId.value)) {
+        selectedNoteId.value = null
+    }
+})
+
 watch(
     () => props.record?.orderID,
     () => {
-        actionComment.value = ''
         actionMessage.value = ''
         selectedFileId.value = null
+        selectedNoteId.value = null
         closeFileDropzone()
     },
 )
 </script>
 
 <style scoped>
-.closing-form {
+.invoice-form {
     height: 100%;
     min-height: 0;
     display: flex;
@@ -787,7 +913,7 @@ watch(
     background: #f1f5f9;
 }
 
-.closing-topbar {
+.invoice-topbar {
     display: flex;
     flex-wrap: wrap;
     gap: 12px 18px;
@@ -795,23 +921,121 @@ watch(
     padding: 10px 14px;
     background: #e2e8f0;
     border-bottom: 1px solid #94a3b8;
-    font-size: 18px;
+    font-size: 16px;
     color: #1e293b;
     flex-shrink: 0;
 }
 
-.closing-meta {
+.invoice-badge {
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #1e40af;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.invoice-meta {
     font-weight: 700;
 }
 
-.closing-splitpanes {
+.invoice-meta-right {
+    margin-left: auto;
+}
+
+.invoice-id-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding: 8px 14px;
+    background: #bfdbfe;
+    border-bottom: 1px solid #60a5fa;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e3a8a;
+    flex-shrink: 0;
+}
+
+.invoice-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 8px 14px;
+    background: #fff;
+    border-bottom: 1px solid #94a3b8;
+    flex-shrink: 0;
+}
+
+.toolbar-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.toolbar-input {
+    width: 120px;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-weight: 700;
+    box-sizing: border-box;
+}
+
+.toolbar-input-date {
+    width: 140px;
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.files-count {
+    font-size: 12px;
+    color: #64748b;
+    margin-right: 4px;
+}
+
+.action-btn-mapics {
+    background: #16a34a;
+    color: #fff;
+}
+
+.action-btn-mapics:hover {
+    background: #15803d;
+}
+
+.invoice-splitpanes {
     flex: 1;
     min-height: 0;
 }
 
-.closing-pane {
+.invoice-pane {
     min-height: 0;
     overflow: hidden;
+}
+
+.notes-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.active-note-row {
+    background: #dbeafe;
+}
+
+.action-message {
+    margin: 0;
+    padding: 6px 14px;
+    color: #b91c1c;
+    font-size: 13px;
+    flex-shrink: 0;
 }
 
 .left-scroll {

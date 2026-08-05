@@ -26,11 +26,17 @@
             <Pane class="engineer-pane engineer-pane-files" :size="leftPaneSize" :min-size="30">
                 <section class="panel panel-files">
                     <div class="panel-header">
-                        <h3>Files（{{ sortedFiles.length }}件）</h3>
+                        <h3>
+                            Files（書類 {{ sortedFiles.length }}件
+                            ／ 撮影画像 {{ capturedImages.length }}件）
+                        </h3>
                         <div class="panel-actions">
                             <button type="button" class="action-btn" :disabled="!selectedFileId" @click="openFileDelete">削除</button>
                             <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                         </div>
+                    </div>
+                    <div class="files-type-label">
+                        <span class="type-badge type-badge-doc">書類ファイル</span>
                     </div>
                     <div class="files-list">
                         <AttachedFileItem
@@ -46,7 +52,12 @@
                             @move="(direction) => moveFile(file.id, direction)"
                             @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                         />
-                        <p v-if="!sortedFiles.length" class="empty-message">Files がありません。</p>
+                        <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
+
+                        <AssociatedCapturedImages
+                            :images="capturedImages"
+                            @changed="emit('reload-attachments')"
+                        />
                     </div>
                 </section>
             </Pane>
@@ -54,7 +65,7 @@
             <Pane class="engineer-pane engineer-pane-right" :size="rightPaneSize" :min-size="35">
                 <div class="right-stack">
                     <div class="action-bar">
-                        <button type="button" class="action-btn" @click="openGallery">Gallery</button>
+                        <button type="button" class="action-btn" @click="showGalleryDialog = true">Gallery</button>
                         <div class="action-bar-spacer" />
                         <div class="action-status-group">
                             <button
@@ -277,6 +288,15 @@
         </Splitpanes>
 
         <p v-if="actionMessage" class="action-toast">{{ actionMessage }}</p>
+
+        <CapturedImageGalleryDialog
+            v-if="showGalleryDialog"
+            title="Gallery"
+            :associatedID="galleryAssociatedId"
+            :associated-id="galleryAssociatedId"
+            @close="showGalleryDialog = false"
+            @associated="emit('reload-attachments')"
+        />
     </div>
 </template>
 
@@ -285,7 +305,9 @@ import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
 
@@ -294,6 +316,7 @@ const props = defineProps({
     draftRecord: Object,
     notes: { type: Array, default: () => [] },
     files: { type: Array, default: () => [] },
+    capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     stockedParts: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
@@ -313,6 +336,8 @@ const selectedPersonalNoteId = ref(null)
 const fileSortSaving = ref(false)
 const flagSaving = ref(false)
 const statusActionSaving = ref(false)
+const showGalleryDialog = ref(false)
+const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const actionMessage = ref('')
 
 const currentUserName = computed(() => page.props.authUser?.kanji_name || '')
@@ -443,16 +468,6 @@ async function toggleFlag(field) {
     } finally {
         flagSaving.value = false
     }
-}
-
-function openGallery() {
-    const images = sortedFiles.value.filter(file => String(file.fileType || '').startsWith('image/'))
-    if (!images.length) {
-        actionMessage.value = '画像ファイルがありません。（Gallery 機能は今後拡張予定）'
-        return
-    }
-    selectedFileId.value = images[0].id
-    actionMessage.value = `画像 ${images.length} 件あります。左の Files からプレビューできます。`
 }
 
 async function updateRecordStatus(status) {
@@ -735,6 +750,25 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     flex: 1;
     min-height: 0;
     overflow: auto;
+}
+
+.files-type-label {
+    margin: 0 0 8px;
+}
+
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.type-badge-doc {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
 }
 
 .right-stack {

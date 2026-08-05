@@ -3,10 +3,11 @@
         <header class="page-header">
             <div>
                 <h1>カメラ</h1>
-                <p class="subtitle">モバイルではカメラが起動します。撮影画像は JPEG 品質 90% に圧縮します。</p>
+                <p class="subtitle">{{ pageSubtitle }}</p>
             </div>
             <div class="header-actions">
                 <a :href="homeUrl" class="btn btn-secondary">Home</a>
+                <a :href="galleryUrl" class="btn btn-secondary">Gallery</a>
                 <a :href="intakeUrl" class="btn btn-secondary">未登録一覧</a>
             </div>
         </header>
@@ -20,6 +21,18 @@
                 capture="environment"
                 @change="onFileChange"
             >
+
+            <label class="title-field">
+                タイトル
+                <input
+                    v-model="title"
+                    type="text"
+                    class="title-input"
+                    maxlength="255"
+                    placeholder="例: 外観写真"
+                    :disabled="busy"
+                >
+            </label>
 
             <div class="preview-wrap">
                 <img
@@ -51,9 +64,9 @@
                     type="button"
                     class="btn btn-primary"
                     :disabled="busy || !selectedFile"
-                    @click="uploadAsUnregistered"
+                    @click="uploadCapturedImage"
                 >
-                    {{ busy ? 'アップロード中...' : '未登録ファイルとして保存' }}
+                    {{ busy ? 'アップロード中...' : '撮影画像を保存' }}
                 </button>
             </div>
         </section>
@@ -64,6 +77,17 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 
+const props = defineProps({
+    imageMaxEdge: {
+        type: Number,
+        default: 1024,
+    },
+    jpegQuality: {
+        type: Number,
+        default: 90,
+    },
+})
+
 const page = usePage()
 const inputRef = ref(null)
 const selectedFile = ref(null)
@@ -72,12 +96,29 @@ const busy = ref(false)
 const error = ref('')
 const success = ref('')
 const compressInfo = ref('')
+const title = ref('')
 
-const JPEG_QUALITY = 0.9
+const maxEdge = computed(() => {
+    const value = Number(props.imageMaxEdge)
+    return Number.isFinite(value) && value > 0 ? value : 1024
+})
+
+const jpegQualityPercent = computed(() => {
+    const value = Number(props.jpegQuality)
+    if (!Number.isFinite(value)) return 90
+    return Math.min(100, Math.max(1, Math.round(value)))
+})
+
+const jpegQualityRatio = computed(() => jpegQualityPercent.value / 100)
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const intakeUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake`)
-const uploadUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/upload`)
+const galleryUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/gallery`)
+const uploadUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/camera/upload`)
+
+const pageSubtitle = computed(() =>
+    `モバイルではカメラが起動します。撮影画像は最大 ${maxEdge.value}px・JPEG 品質 ${jpegQualityPercent.value}% に圧縮してプレビューします。`,
+)
 
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
@@ -136,15 +177,35 @@ function canvasToJpegBlob(canvas, quality) {
     })
 }
 
-async function compressImageToJpeg(file, quality = JPEG_QUALITY) {
-    const image = await loadImageFromFile(file)
-    const canvas = document.createElement('canvas')
-    canvas.width = image.naturalWidth || image.width
-    canvas.height = image.naturalHeight || image.height
+function calcFitSize(width, height, maxEdge) {
+    const w = Number(width) || 0
+    const h = Number(height) || 0
+    if (!w || !h) return { width: 0, height: 0, scaled: false }
+    const longest = Math.max(w, h)
+    if (longest <= maxEdge) {
+        return { width: w, height: h, scaled: false }
+    }
+    const scale = maxEdge / longest
+    return {
+        width: Math.max(1, Math.round(w * scale)),
+        height: Math.max(1, Math.round(h * scale)),
+        scaled: true,
+    }
+}
 
-    if (!canvas.width || !canvas.height) {
+async function compressImageToJpeg(file, quality = jpegQualityRatio.value, edge = maxEdge.value) {
+    const image = await loadImageFromFile(file)
+    const srcW = image.naturalWidth || image.width
+    const srcH = image.naturalHeight || image.height
+    const fitted = calcFitSize(srcW, srcH, edge)
+
+    if (!fitted.width || !fitted.height) {
         throw new Error('画像サイズを取得できませんでした。')
     }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = fitted.width
+    canvas.height = fitted.height
 
     const ctx = canvas.getContext('2d')
     if (!ctx) {
@@ -156,11 +217,16 @@ async function compressImageToJpeg(file, quality = JPEG_QUALITY) {
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
 
     const blob = await canvasToJpegBlob(canvas, quality)
-    const baseName = String(file.name || 'camera').replace(/\.[^.]+$/, '') || 'camera'
-    return new File([blob], `${baseName}.jpg`, {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
-    })
+    return {
+        file: new File([blob], 'preview.jpg', {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+        }),
+        width: fitted.width,
+        height: fitted.height,
+        sourceWidth: srcW,
+        sourceHeight: srcH,
+    }
 }
 
 async function onFileChange(event) {
@@ -181,10 +247,10 @@ async function onFileChange(event) {
 
     busy.value = true
     try {
-        const compressed = await compressImageToJpeg(file, JPEG_QUALITY)
-        selectedFile.value = compressed
-        previewUrl.value = URL.createObjectURL(compressed)
-        compressInfo.value = `JPEG 90%: ${formatBytes(file.size)} → ${formatBytes(compressed.size)}`
+        const compressed = await compressImageToJpeg(file, jpegQualityRatio.value, maxEdge.value)
+        selectedFile.value = compressed.file
+        previewUrl.value = URL.createObjectURL(compressed.file)
+        compressInfo.value = `最大 ${maxEdge.value}px / JPEG ${jpegQualityPercent.value}%: ${compressed.sourceWidth}×${compressed.sourceHeight} → ${compressed.width}×${compressed.height}（${formatBytes(file.size)} → ${formatBytes(compressed.file.size)}）`
     } catch (e) {
         error.value = e.message || '画像の圧縮に失敗しました。'
     } finally {
@@ -200,7 +266,7 @@ function clearPreview() {
     revokePreview()
 }
 
-async function uploadAsUnregistered() {
+async function uploadCapturedImage() {
     if (!selectedFile.value || busy.value) return
 
     busy.value = true
@@ -210,8 +276,8 @@ async function uploadAsUnregistered() {
     try {
         const formData = new FormData()
         formData.append('file', selectedFile.value)
-        formData.append('documentName', selectedFile.value.name || `camera-${Date.now()}.jpg`)
-        formData.append('documentType', '画像')
+        formData.append('title', title.value.trim())
+        formData.append('associatedID', '-1')
 
         const response = await fetch(uploadUrl.value, {
             method: 'POST',
@@ -224,21 +290,30 @@ async function uploadAsUnregistered() {
             body: formData,
         })
 
+        const rawText = await response.text()
         let data = {}
         try {
-            data = await response.json()
+            data = rawText ? JSON.parse(rawText) : {}
         } catch {
-            // ignore
+            throw new Error(
+                `アップロードに失敗しました。（HTTP ${response.status}） ${rawText.slice(0, 240)}`,
+            )
         }
 
         if (!response.ok) {
             const validationMessage = data.errors
                 ? Object.values(data.errors).flat().join(' ')
                 : null
-            throw new Error(validationMessage || data.message || `アップロードに失敗しました。（HTTP ${response.status}）`)
+            const detail = data.error ? ` ${data.error}` : ''
+            throw new Error(
+                validationMessage
+                || `${data.message || `アップロードに失敗しました。（HTTP ${response.status}）`}${detail}`
+                || `アップロードに失敗しました。（HTTP ${response.status}）`,
+            )
         }
 
-        success.value = data.message || '未登録ファイルとして保存しました。'
+        const savedName = data.image?.file_name ? `（${data.image.file_name}）` : ''
+        success.value = `${data.message || '撮影画像を保存しました。'}${savedName}`
         compressInfo.value = ''
         selectedFile.value = null
         revokePreview()
@@ -298,6 +373,25 @@ onBeforeUnmount(() => {
 
 .camera-input {
     display: none;
+}
+
+.title-field {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.title-input {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 14px;
 }
 
 .preview-wrap {

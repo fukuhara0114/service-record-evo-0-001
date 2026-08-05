@@ -590,7 +590,13 @@ const activeSelectItems = computed(() => {
 })
 
 const activeSelectInitialValue = computed(() => {
-    if (activeSelectKind.value === 'serviceMaster') return form.serviceID || null
+    if (activeSelectKind.value === 'serviceMaster') {
+        const matched = services.value.find(item =>
+            form.productName
+            && String(item.productName) === String(form.productName),
+        )
+        return matched?.id ?? null
+    }
     if (activeSelectKind.value === 'dealer') {
         const matched = dealers.value.find(item => item.dealerName === form.dealer)
         return matched?.id ?? null

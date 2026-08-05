@@ -9,6 +9,9 @@
                     <template v-else-if="layout === 'closing'">
                         <span class="closing-title">Closing 詳細</span>
                     </template>
+                    <template v-else-if="layout === 'invoice'">
+                        <span class="closing-title">Invoice 詳細</span>
+                    </template>
                     <template v-else>
                         <button
                             v-for="tab in ['A', 'B', 'C']"
@@ -26,7 +29,7 @@
                     <span>OrderID: {{ record?.orderID }}</span>
                     <p v-if="saveError" class="save-error">{{ saveError }}</p>
                     <button
-                        v-if="mode !== 'engineer' && layout !== 'closing'"
+                        v-if="mode !== 'engineer' && layout !== 'closing' && layout !== 'invoice'"
                         type="button"
                         class="save-btn"
                         :disabled="savingRecord"
@@ -42,7 +45,7 @@
                 class="detail-body"
                 :class="{
                     'detail-body-engineer': mode === 'engineer',
-                    'detail-body-closing': layout === 'closing',
+                    'detail-body-closing': layout === 'closing' || layout === 'invoice',
                 }"
             >
                 <DetailFormEngineer
@@ -51,6 +54,7 @@
                     :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
+                    :captured-images="capturedImages"
                     :parts="parts"
                     :stocked-parts="stockedParts"
                     :attachments-loading="attachmentsLoading"
@@ -66,7 +70,25 @@
                     :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
+                    :captured-images="capturedImages"
                     :parts="parts"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
+                    @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
+                    @save="$emit('save')"
+                    @workflow-done="(payload) => $emit('workflow-done', payload)"
+                />
+                <DetailFormInvoice
+                    v-else-if="layout === 'invoice'"
+                    :record="record"
+                    :draft-record="draftRecord"
+                    :notes="notes"
+                    :files="files"
+                    :captured-images="capturedImages"
+                    :parts="parts"
+                    :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
@@ -81,6 +103,7 @@
                     :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
+                    :captured-images="capturedImages"
                     :parts="parts"
                     :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
@@ -95,11 +118,13 @@
                     :draft-record="draftRecord"
                     :notes="notes"
                     :files="files"
+                    :captured-images="capturedImages"
                     :parts="parts"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                     @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
                 />
                 <DetailFormC
                     v-else-if="layout === 'C'"
@@ -121,6 +146,7 @@ import DetailFormA from './DetailFormA.vue'
 import DetailFormB from './DetailFormB.vue'
 import DetailFormC from './DetailFormC.vue'
 import DetailFormClosing from './DetailFormClosing.vue'
+import DetailFormInvoice from './DetailFormInvoice.vue'
 import DetailFormEngineer from './DetailFormEngineer.vue'
 
 defineProps({
@@ -131,6 +157,10 @@ defineProps({
         default: () => [],
     },
     files: {
+        type: Array,
+        default: () => [],
+    },
+    capturedImages: {
         type: Array,
         default: () => [],
     },

@@ -13,6 +13,7 @@ use App\Models\AttachedLoaner;
 use App\Models\StockedPartMaster;
 use App\Models\AttachedStockedPart;
 use App\Models\UnregisteredEmailNote;
+use App\Models\CapturedImage;
 use App\Services\EmlReplyDraftService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -162,7 +163,7 @@ class ServiceRecordController extends Controller
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
         $services = ServiceMaster::query()
-            ->select(['serviceID', 'productName', 'entityID', 'price_a2la'])
+            ->select(['id', 'serviceID', 'productName', 'entityID', 'priceC_0', 'priceR_0', 'priceR_onSite', 'price_a2la'])
             ->where('productName', 'NOT LIKE', '*%')
             ->orderBy('productName')
             ->get();
@@ -670,7 +671,653 @@ class ServiceRecordController extends Controller
 
     public function camera()
     {
-        return Inertia::render('CameraCapture');
+        return Inertia::render('CameraCapture', [
+            'imageMaxEdge' => (int) config('captured_image.max_edge', 1024),
+            'jpegQuality' => (int) config('captured_image.jpeg_quality', 90),
+        ]);
+    }
+
+    public function gallery()
+    {
+        return Inertia::render('ImageGallery');
+    }
+
+    public function listCapturedImages(Request $request)
+    {
+        $validated = $request->validate([
+            'associatedID' => 'nullable|integer',
+            'captured_by' => 'nullable|string|max:64',
+            'period' => 'nullable|string|in:today,1d,3d,7d,1m,3m,all,custom',
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 48);
+        $query = CapturedImage::query()->orderByDesc('captured_at')->orderByDesc('id');
+
+        if (array_key_exists('associatedID', $validated) && $validated['associatedID'] !== null) {
+            $query->where('associatedID', (int) $validated['associatedID']);
+        }
+
+        $capturedBy = trim((string) ($validated['captured_by'] ?? ''));
+        if ($capturedBy !== '') {
+            $query->where('captured_by', $capturedBy);
+        }
+
+        [$dateFrom, $dateTo] = $this->resolveCapturedImageDateRange(
+            $validated['period'] ?? null,
+            $validated['date_from'] ?? null,
+            $validated['date_to'] ?? null,
+        );
+
+        if ($dateFrom !== null) {
+            $query->where('captured_at', '>=', $dateFrom);
+        }
+        if ($dateTo !== null) {
+            $query->where('captured_at', '<=', $dateTo);
+        }
+
+        $paginator = $query->paginate($perPage);
+
+        $data = collect($paginator->items())
+            ->map(fn (CapturedImage $item) => $this->serializeCapturedImage($item))
+            ->values();
+
+        $capturedByOptions = CapturedImage::query()
+            ->whereNotNull('captured_by')
+            ->where('captured_by', '!=', '')
+            ->distinct()
+            ->orderBy('captured_by')
+            ->pluck('captured_by')
+            ->values();
+
+        return response()->json([
+            'data' => $data,
+            'captured_by_options' => $capturedByOptions,
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ]);
+    }
+
+    public function uploadCameraImage(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'file' => 'required|file|mimes:jpeg,jpg,png,webp|max:15360',
+                'title' => 'nullable|string|max:255',
+                'associatedID' => 'nullable|integer',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::warning('camera upload validation failed', [
+                'errors' => $e->errors(),
+                'has_file' => $request->hasFile('file'),
+                'content_type' => $request->header('Content-Type'),
+                'gd' => extension_loaded('gd'),
+            ]);
+
+            return response()->json([
+                'message' => '入力内容を確認してください。',
+                'errors' => $e->errors(),
+                'error' => collect($e->errors())->flatten()->implode(' '),
+            ], 422);
+        }
+
+        $uploaded = $request->file('file');
+        if (!$uploaded || !$uploaded->isValid()) {
+            \Log::warning('camera upload file invalid', [
+                'error_code' => $uploaded?->getError(),
+            ]);
+
+            return response()->json([
+                'message' => 'ファイルのアップロードに失敗しました。',
+                'error' => 'upload_error_code=' . ($uploaded?->getError() ?? 'null'),
+            ], 422);
+        }
+
+        $binary = file_get_contents($uploaded->getRealPath());
+        if ($binary === false || $binary === '') {
+            return response()->json([
+                'message' => '画像データの読み込みに失敗しました。',
+            ], 422);
+        }
+
+        // クライアント側で既に縮小・JPEG化済み。GD がある場合のみサーバーでも再正規化する。
+        try {
+            if ($this->supportsCapturedImageGd()) {
+                $binary = $this->normalizeCapturedImageJpeg(
+                    $binary,
+                    (int) config('captured_image.max_edge', 1024),
+                    (int) config('captured_image.jpeg_quality', 90),
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('camera upload normalize failed, saving original binary', [
+                'error' => $e->getMessage(),
+            ]);
+            // 再圧縮に失敗しても、クライアント圧縮済みバイナリのまま保存を続ける
+        }
+
+        $fileName = $this->makeCapturedImageFileName($request->user());
+        $imageDir = $this->capturedImageDir('image');
+        $thumbDir = $this->capturedImageDir('thumbnail');
+
+        if (!is_dir($imageDir) && !mkdir($imageDir, 0775, true) && !is_dir($imageDir)) {
+            return response()->json(['message' => '画像保存先ディレクトリを作成できませんでした。'], 500);
+        }
+        if (!is_dir($thumbDir) && !mkdir($thumbDir, 0775, true) && !is_dir($thumbDir)) {
+            return response()->json(['message' => 'サムネイル保存先ディレクトリを作成できませんでした。'], 500);
+        }
+
+        $imagePath = $imageDir . DIRECTORY_SEPARATOR . $fileName;
+        $thumbPath = $thumbDir . DIRECTORY_SEPARATOR . $fileName;
+
+        if (file_put_contents($imagePath, $binary) === false) {
+            return response()->json(['message' => '画像ファイルの保存に失敗しました。'], 500);
+        }
+
+        try {
+            if ($this->supportsCapturedImageGd()) {
+                $this->createCapturedImageThumbnail(
+                    $binary,
+                    $thumbPath,
+                    (int) config('captured_image.thumbnail_max_edge', 320),
+                );
+            } else {
+                // GD が無い場合は本体をサムネとしてもコピー（クライアント側で既に縮小済み）
+                if (file_put_contents($thumbPath, $binary) === false) {
+                    throw new \RuntimeException('サムネイルのコピーに失敗しました。');
+                }
+            }
+        } catch (\Throwable $e) {
+            @unlink($imagePath);
+            return response()->json([
+                'message' => 'サムネイルの作成に失敗しました。',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $title = trim((string) ($validated['title'] ?? ''));
+        if ($title === '') {
+            $title = 'camera-' . now()->format('Ymd-His');
+        }
+
+        $capturedBy = Str::limit((string) ($request->user()?->kanji_name ?: 'unknown'), 8, '');
+        $associatedID = array_key_exists('associatedID', $validated)
+            ? (int) $validated['associatedID']
+            : -1;
+
+        $record = CapturedImage::create([
+            'title' => $title,
+            'file_name' => $fileName,
+            'captured_at' => now(),
+            'associatedID' => $associatedID,
+            'captured_by' => $capturedBy,
+        ]);
+
+        return response()->json([
+            'message' => '撮影画像を保存しました。',
+            'image' => [
+                'id' => $record->id,
+                'title' => $record->title,
+                'file_name' => $record->file_name,
+                'captured_at' => optional($record->captured_at)?->format('Y-m-d H:i:s'),
+                'associatedID' => $record->associatedID,
+                'captured_by' => $record->captured_by,
+                'image_url' => route('servicerecord.camera.image', ['fileName' => $record->file_name]),
+                'thumbnail_url' => route('servicerecord.camera.thumbnail', ['fileName' => $record->file_name]),
+            ],
+        ], 201);
+    }
+
+    public function editCapturedImage(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'file' => 'required|file|mimes:jpeg,jpg,png,webp|max:15360',
+                'source_id' => 'nullable|integer|exists:captured_image,id',
+                'title' => 'nullable|string|max:255',
+                'associatedID' => 'nullable|integer',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::warning('camera edit validation failed', [
+                'errors' => $e->errors(),
+                'has_file' => $request->hasFile('file'),
+                'content_type' => $request->header('Content-Type'),
+                'gd' => extension_loaded('gd'),
+            ]);
+
+            return response()->json([
+                'message' => '入力内容を確認してください。',
+                'errors' => $e->errors(),
+                'error' => collect($e->errors())->flatten()->implode(' '),
+            ], 422);
+        }
+
+        $uploaded = $request->file('file');
+        if (!$uploaded || !$uploaded->isValid()) {
+            \Log::warning('camera edit file invalid', [
+                'error_code' => $uploaded?->getError(),
+            ]);
+
+            return response()->json([
+                'message' => 'ファイルのアップロードに失敗しました。',
+                'error' => 'upload_error_code=' . ($uploaded?->getError() ?? 'null'),
+            ], 422);
+        }
+
+        $binary = file_get_contents($uploaded->getRealPath());
+        if ($binary === false || $binary === '') {
+            return response()->json([
+                'message' => '画像データの読み込みに失敗しました。',
+            ], 422);
+        }
+
+        try {
+            if ($this->supportsCapturedImageGd()) {
+                $binary = $this->normalizeCapturedImageJpeg(
+                    $binary,
+                    (int) config('captured_image.max_edge', 1024),
+                    (int) config('captured_image.jpeg_quality', 90),
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('camera edit normalize failed, saving original binary', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $fileName = $this->makeCapturedImageFileName($request->user(), '_edit');
+        $imageDir = $this->capturedImageDir('image');
+        $thumbDir = $this->capturedImageDir('thumbnail');
+
+        if (!is_dir($imageDir) && !mkdir($imageDir, 0775, true) && !is_dir($imageDir)) {
+            return response()->json(['message' => '画像保存先ディレクトリを作成できませんでした。'], 500);
+        }
+        if (!is_dir($thumbDir) && !mkdir($thumbDir, 0775, true) && !is_dir($thumbDir)) {
+            return response()->json(['message' => 'サムネイル保存先ディレクトリを作成できませんでした。'], 500);
+        }
+
+        $imagePath = $imageDir . DIRECTORY_SEPARATOR . $fileName;
+        $thumbPath = $thumbDir . DIRECTORY_SEPARATOR . $fileName;
+
+        if (file_put_contents($imagePath, $binary) === false) {
+            return response()->json(['message' => '画像ファイルの保存に失敗しました。'], 500);
+        }
+
+        try {
+            if ($this->supportsCapturedImageGd()) {
+                $this->createCapturedImageThumbnail(
+                    $binary,
+                    $thumbPath,
+                    (int) config('captured_image.thumbnail_max_edge', 320),
+                );
+            } else {
+                if (file_put_contents($thumbPath, $binary) === false) {
+                    throw new \RuntimeException('サムネイルのコピーに失敗しました。');
+                }
+            }
+        } catch (\Throwable $e) {
+            @unlink($imagePath);
+            return response()->json([
+                'message' => 'サムネイルの作成に失敗しました。',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $source = null;
+        if (!empty($validated['source_id'])) {
+            $source = CapturedImage::find((int) $validated['source_id']);
+        }
+
+        $title = trim((string) ($validated['title'] ?? ''));
+        if ($title === '') {
+            if ($source) {
+                $sourceTitle = trim((string) $source->title);
+                $title = ($sourceTitle !== '' ? $sourceTitle : 'camera-' . now()->format('Ymd-His')) . ' (編集)';
+            } else {
+                $title = 'camera-' . now()->format('Ymd-His') . ' (編集)';
+            }
+        }
+
+        if ($source) {
+            $associatedID = (int) $source->associatedID;
+            $capturedBy = (string) $source->captured_by;
+        } else {
+            $capturedBy = Str::limit((string) ($request->user()?->kanji_name ?: 'unknown'), 8, '');
+            $associatedID = array_key_exists('associatedID', $validated)
+                ? (int) $validated['associatedID']
+                : -1;
+        }
+
+        $record = CapturedImage::create([
+            'title' => $title,
+            'file_name' => $fileName,
+            'captured_at' => now(),
+            'associatedID' => $associatedID,
+            'captured_by' => $capturedBy,
+        ]);
+
+        return response()->json([
+            'message' => '編集画像を保存しました。',
+            'image' => [
+                'id' => $record->id,
+                'title' => $record->title,
+                'file_name' => $record->file_name,
+                'captured_at' => optional($record->captured_at)?->format('Y-m-d H:i:s'),
+                'associatedID' => $record->associatedID,
+                'captured_by' => $record->captured_by,
+                'image_url' => route('servicerecord.camera.image', ['fileName' => $record->file_name]),
+                'thumbnail_url' => route('servicerecord.camera.thumbnail', ['fileName' => $record->file_name]),
+            ],
+        ], 201);
+    }
+
+    public function associateCapturedImages(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:captured_image,id',
+            'associatedID' => 'required|integer',
+        ]);
+
+        $associatedID = (int) $validated['associatedID'];
+        $ids = array_values(array_unique(array_map('intval', $validated['ids'])));
+
+        if ($associatedID === -1) {
+            $updated = CapturedImage::query()
+                ->whereIn('id', $ids)
+                ->update(['associatedID' => -1]);
+
+            return response()->json([
+                'message' => "{$updated} 件の撮影画像の紐づけを解除しました。",
+                'updated' => $updated,
+                'associatedID' => -1,
+            ]);
+        }
+
+        if (!ServiceRecord::where('orderID', $associatedID)->exists()) {
+            return response()->json(['message' => '指定された案件は存在しません。'], 404);
+        }
+
+        $this->assertEngineerAccessIfNeeded($request, $associatedID);
+
+        $updated = CapturedImage::query()
+            ->whereIn('id', $ids)
+            ->update(['associatedID' => $associatedID]);
+
+        return response()->json([
+            'message' => "{$updated} 件の撮影画像を案件に紐づけました。",
+            'updated' => $updated,
+            'associatedID' => $associatedID,
+        ]);
+    }
+
+    public function disassociateCapturedImages(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:captured_image,id',
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $validated['ids'])));
+        $images = CapturedImage::query()->whereIn('id', $ids)->get(['id', 'associatedID']);
+
+        foreach ($images as $image) {
+            $orderID = (int) $image->associatedID;
+            if ($orderID > 0) {
+                $this->assertEngineerAccessIfNeeded($request, $orderID);
+            }
+        }
+
+        $updated = CapturedImage::query()
+            ->whereIn('id', $ids)
+            ->update(['associatedID' => -1]);
+
+        return response()->json([
+            'message' => "{$updated} 件の撮影画像の紐づけを解除しました。",
+            'updated' => $updated,
+            'associatedID' => -1,
+        ]);
+    }
+
+    public function showCapturedImage(string $fileName)
+    {
+        return $this->serveCapturedImageFile($fileName, 'image');
+    }
+
+    public function showCapturedThumbnail(string $fileName)
+    {
+        return $this->serveCapturedImageFile($fileName, 'thumbnail');
+    }
+
+    private function serializeCapturedImage(CapturedImage $item): array
+    {
+        return [
+            'id' => $item->id,
+            'title' => $item->title,
+            'file_name' => $item->file_name,
+            'captured_at' => optional($item->captured_at)?->format('Y-m-d H:i:s'),
+            'associatedID' => $item->associatedID,
+            'captured_by' => $item->captured_by,
+            'image_url' => route('servicerecord.camera.image', ['fileName' => $item->file_name]),
+            'thumbnail_url' => route('servicerecord.camera.thumbnail', ['fileName' => $item->file_name]),
+        ];
+    }
+
+    private function serveCapturedImageFile(string $fileName, string $subdir)
+    {
+        if (!preg_match('/^[A-Za-z0-9._-]+$/', $fileName)) {
+            abort(404);
+        }
+
+        if (!CapturedImage::where('file_name', $fileName)->exists()) {
+            abort(404);
+        }
+
+        $path = $this->capturedImageDir($subdir) . DIRECTORY_SEPARATOR . $fileName;
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    private function capturedImageRoot(): string
+    {
+        return (string) config('captured_image.root', storage_path('app/uploadedImage'));
+    }
+
+    private function capturedImageDir(string $subdir): string
+    {
+        return $this->capturedImageRoot() . DIRECTORY_SEPARATOR . $subdir;
+    }
+
+    /**
+     * Resolve Asia/Tokyo calendar-day bounds for captured_at filtering.
+     * Custom date_from/date_to take precedence; otherwise period (default: today).
+     *
+     * @return array{0: \Illuminate\Support\Carbon|null, 1: \Illuminate\Support\Carbon|null}
+     */
+    private function resolveCapturedImageDateRange(?string $period, ?string $dateFrom, ?string $dateTo): array
+    {
+        $tz = 'Asia/Tokyo';
+        $now = now($tz);
+
+        $hasCustomFrom = is_string($dateFrom) && $dateFrom !== '';
+        $hasCustomTo = is_string($dateTo) && $dateTo !== '';
+
+        if ($hasCustomFrom || $hasCustomTo) {
+            $from = $hasCustomFrom
+                ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $dateFrom, $tz)->startOfDay()
+                : null;
+            $to = $hasCustomTo
+                ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $dateTo, $tz)->endOfDay()
+                : null;
+
+            if ($from !== null && $to !== null && $from->gt($to)) {
+                [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+            }
+
+            return [
+                $from?->copy()->utc(),
+                $to?->copy()->utc(),
+            ];
+        }
+
+        $period = $period ?: 'today';
+
+        if ($period === 'all') {
+            return [null, null];
+        }
+
+        $to = $now->copy()->endOfDay();
+
+        $from = match ($period) {
+            '1d' => $now->copy()->subDay()->startOfDay(),
+            '3d' => $now->copy()->subDays(3)->startOfDay(),
+            '7d' => $now->copy()->subDays(7)->startOfDay(),
+            '1m' => $now->copy()->subMonth()->startOfDay(),
+            '3m' => $now->copy()->subMonths(3)->startOfDay(),
+            default => $now->copy()->startOfDay(), // today
+        };
+
+        return [$from->utc(), $to->utc()];
+    }
+
+    private function supportsCapturedImageGd(): bool
+    {
+        return extension_loaded('gd')
+            && function_exists('imagecreatefromstring')
+            && function_exists('imagejpeg')
+            && function_exists('imagecreatetruecolor');
+    }
+
+    private function makeCapturedImageFileName(?\App\Models\User $user, string $nameSuffix = ''): string
+    {
+        $safeUser = $this->resolveCapturedImageUserName($user);
+        // ファイル名の日時は日本時間で統一（例: 2026-08-05-08-24-05_hfukuhara.jpg）
+        // $nameSuffix 例: '_edit' → 2026-08-05-08-24-05_hfukuhara_edit.jpg
+        $base = now('Asia/Tokyo')->format('Y-m-d-H-i-s') . '_' . $safeUser;
+        $fileName = $base . $nameSuffix . '.jpg';
+        $suffix = 1;
+
+        while (
+            CapturedImage::where('file_name', $fileName)->exists()
+            || file_exists($this->capturedImageDir('image') . DIRECTORY_SEPARATOR . $fileName)
+            || file_exists($this->capturedImageDir('thumbnail') . DIRECTORY_SEPARATOR . $fileName)
+        ) {
+            $fileName = $base . '-' . $suffix . $nameSuffix . '.jpg';
+            $suffix++;
+        }
+
+        return $fileName;
+    }
+
+    private function resolveCapturedImageUserName(?\App\Models\User $user): string
+    {
+        if (!$user) {
+            return 'user';
+        }
+
+        $candidates = [
+            (string) ($user->name ?? ''),
+            $user->email ? (string) Str::before((string) $user->email, '@') : '',
+            (isset($user->laborID) && (int) $user->laborID > 0) ? ('labor' . (int) $user->laborID) : '',
+        ];
+
+        foreach ($candidates as $candidate) {
+            $safe = preg_replace('/[^A-Za-z0-9_-]/', '', $candidate) ?? '';
+            if ($safe !== '') {
+                return $safe;
+            }
+        }
+
+        return 'user';
+    }
+
+    private function normalizeCapturedImageJpeg(string $binary, int $maxEdge = 1024, int $quality = 90): string
+    {
+        $source = @imagecreatefromstring($binary);
+        if ($source === false) {
+            throw new \RuntimeException('画像ファイルとして認識できませんでした。');
+        }
+
+        $srcW = imagesx($source);
+        $srcH = imagesy($source);
+        if ($srcW < 1 || $srcH < 1) {
+            imagedestroy($source);
+            throw new \RuntimeException('画像サイズが不正です。');
+        }
+
+        $scale = min(1, $maxEdge / max($srcW, $srcH));
+        $dstW = max(1, (int) round($srcW * $scale));
+        $dstH = max(1, (int) round($srcH * $scale));
+
+        $canvas = imagecreatetruecolor($dstW, $dstH);
+        if ($canvas === false) {
+            imagedestroy($source);
+            throw new \RuntimeException('画像キャンバスを作成できませんでした。');
+        }
+
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        imagefill($canvas, 0, 0, $white);
+        imagecopyresampled($canvas, $source, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
+        imagedestroy($source);
+
+        ob_start();
+        $ok = imagejpeg($canvas, null, $quality);
+        $jpeg = ob_get_clean();
+        imagedestroy($canvas);
+
+        if (!$ok || $jpeg === false || $jpeg === '') {
+            throw new \RuntimeException('JPEG 圧縮に失敗しました。');
+        }
+
+        return $jpeg;
+    }
+
+    private function createCapturedImageThumbnail(string $binary, string $destination, int $maxSize = 320): void
+    {
+        $source = @imagecreatefromstring($binary);
+        if ($source === false) {
+            throw new \RuntimeException('画像リソースを作成できませんでした。');
+        }
+
+        $srcW = imagesx($source);
+        $srcH = imagesy($source);
+        if ($srcW < 1 || $srcH < 1) {
+            imagedestroy($source);
+            throw new \RuntimeException('画像サイズが不正です。');
+        }
+
+        $scale = min(1, $maxSize / max($srcW, $srcH));
+        $dstW = max(1, (int) round($srcW * $scale));
+        $dstH = max(1, (int) round($srcH * $scale));
+
+        $thumb = imagecreatetruecolor($dstW, $dstH);
+        if ($thumb === false) {
+            imagedestroy($source);
+            throw new \RuntimeException('サムネイルキャンバスを作成できませんでした。');
+        }
+
+        $white = imagecolorallocate($thumb, 255, 255, 255);
+        imagefill($thumb, 0, 0, $white);
+        imagecopyresampled($thumb, $source, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
+
+        $saved = imagejpeg($thumb, $destination, 85);
+        imagedestroy($source);
+        imagedestroy($thumb);
+
+        if (!$saved) {
+            throw new \RuntimeException('サムネイル JPEG の書き込みに失敗しました。');
+        }
     }
 
     public function createWithoutFile()
@@ -758,7 +1405,7 @@ class ServiceRecordController extends Controller
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
         $services = ServiceMaster::query()
-            ->select(['serviceID', 'productName', 'entityID'])
+            ->select(['id', 'serviceID', 'productName', 'entityID'])
             ->where('productName', 'NOT LIKE', '*%')
             ->orderBy('productName')
             ->get();
@@ -814,6 +1461,14 @@ class ServiceRecordController extends Controller
                 })
                 ->values();
 
+            $capturedImages = CapturedImage::query()
+                ->where('associatedID', $orderID)
+                ->orderByDesc('captured_at')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (CapturedImage $item) => $this->serializeCapturedImage($item))
+                ->values();
+
             return [
                 'notes' => AttachedNote::where('associatedID', $orderID)->get(),
                 'files' => AttachedFile::where('associatedID', $orderID)
@@ -822,6 +1477,7 @@ class ServiceRecordController extends Controller
                     ->orderBy('sortNum')
                     ->orderBy('id')
                     ->get(),
+                'capturedImages' => $capturedImages,
                 'parts' => AttachedPart::where('associatedID', $orderID)
                     ->with('partMaster')
                     ->orderBy('id')
@@ -839,6 +1495,7 @@ class ServiceRecordController extends Controller
             return [
                 'notes' => [],
                 'files' => [],
+                'capturedImages' => [],
                 'parts' => [],
                 'stockedParts' => [],
                 'loaner' => null,

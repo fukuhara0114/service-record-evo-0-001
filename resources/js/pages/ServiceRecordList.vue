@@ -118,6 +118,7 @@
             :draft-record="draftRecord"
             :notes="activeNotes"
             :files="activeFiles"
+            :captured-images="activeCapturedImages"
             :parts="activeParts"
             :stocked-parts="activeStockedParts"
             :loaners="activeLoaners"
@@ -222,6 +223,7 @@ import { ref, computed, onMounted } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import { redirectToLogin } from '@/utils/auth'
 import { apiFetch } from '@/utils/apiFetch'
+import { findServiceMaster } from '@/utils/resolveServiceWorkPrice'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
 import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
@@ -364,6 +366,7 @@ const draftRecord = ref(null)
 const detailLayout = ref('A')
 const activeNotes = ref([])
 const activeFiles = ref([])
+const activeCapturedImages = ref([])
 const activeParts = ref([])
 const activeStockedParts = ref([])
 const activeLoaners = ref([])
@@ -383,6 +386,7 @@ function applyAttachmentData(data) {
         attachmentsError.value = '添付データが見つかりません。'
         activeNotes.value = []
         activeFiles.value = []
+        activeCapturedImages.value = []
         activeParts.value = []
         activeStockedParts.value = []
         activeLoaners.value = []
@@ -393,6 +397,7 @@ function applyAttachmentData(data) {
         attachmentsError.value = data.error
         activeNotes.value = []
         activeFiles.value = []
+        activeCapturedImages.value = []
         activeParts.value = []
         activeStockedParts.value = []
         activeLoaners.value = []
@@ -402,6 +407,7 @@ function applyAttachmentData(data) {
     attachmentsError.value = ''
     activeNotes.value = data.notes ?? []
     activeFiles.value = data.files ?? []
+    activeCapturedImages.value = data.capturedImages ?? []
     activeParts.value = data.parts ?? []
     activeStockedParts.value = data.stockedParts ?? []
     activeLoaners.value = data.loaners ?? (data.loaner ? [data.loaner] : [])
@@ -422,6 +428,7 @@ function loadAttachments(orderID) {
         attachmentsError.value = ''
         activeNotes.value = []
         activeFiles.value = []
+        activeCapturedImages.value = []
         activeParts.value = []
         activeStockedParts.value = []
         activeLoaners.value = []
@@ -476,7 +483,11 @@ async function openSecondLayer(record) {
     attachmentsError.value = ''
     activeRecord.value = record
     draftRecord.value = { ...record }
-    detailLayout.value = orderTypeFilter.value === 'closing' ? 'closing' : 'A'
+    detailLayout.value = orderTypeFilter.value === 'closing'
+        ? 'closing'
+        : orderTypeFilter.value === 'invoice'
+            ? 'invoice'
+            : 'A'
     closeDialog()
     isDetailOpen.value = true
     detailLoading.value = true
@@ -504,6 +515,7 @@ function closeDetail() {
     draftRecord.value = null
     activeNotes.value = []
     activeFiles.value = []
+    activeCapturedImages.value = []
     activeParts.value = []
     activeStockedParts.value = []
     activeLoaners.value = []
@@ -680,6 +692,10 @@ async function saveRecord() {
                 sentOut: draftRecord.value.sentOut,
                 shipTo: draftRecord.value.shipTo,
                 rmaNumOverSea: draftRecord.value.rmaNumOverSea,
+                shippingOut_requiredDate: draftRecord.value.shippingOut_requiredDate,
+                incident: draftRecord.value.incident,
+                mapics_inv: draftRecord.value.mapics_inv,
+                mapics47: draftRecord.value.mapics47,
                 preData: draftRecord.value.preData,
                 postData: draftRecord.value.postData,
             }),
@@ -713,7 +729,11 @@ async function saveRecord() {
         }
         activeRecord.value.return_code_master = page.props.returnCodes?.find(code => String(code.id) === String(draftRecord.value.returnCode)) ?? null
         activeRecord.value.labor_master = page.props.labors?.find(labor => String(labor.laborID) === String(draftRecord.value.laborID)) ?? null
-        activeRecord.value.serviceMaster = page.props.servicesMaster?.find(service => String(service.serviceID) === String(draftRecord.value.serviceID)) ?? null
+        activeRecord.value.serviceMaster = findServiceMaster(page.props.servicesMaster, {
+            productName: draftRecord.value.productName,
+            entityID: draftRecord.value.entityID,
+            serviceID: draftRecord.value.serviceID,
+        })
     } catch (e) {
         saveError.value = e.message || '保存に失敗しました。'
     } finally {

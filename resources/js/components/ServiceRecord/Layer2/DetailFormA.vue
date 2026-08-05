@@ -113,8 +113,8 @@
                                     </dl>
                                 </section>
 
-                                <section class="section-card detail-card">
-                                    <dl class="info-grid compact-info-grid">
+                                <section class="section-card detail-card detail-card-rma-order">
+                                    <dl class="info-grid compact-info-grid rma-order-grid">
                                         <dt>RMA</dt>
                                         <dd>
                                             <input type="text" class="field-input" :value="draftRecord?.RMA ?? record?.RMA ?? ''" @input="updateDraftValue('RMA', $event.target.value)">
@@ -131,9 +131,14 @@
                                         <dd>
                                             <input type="text" class="field-input" :value="draftRecord?.coNum ?? record?.coNum ?? ''" @input="updateDraftValue('coNum', $event.target.value)">
                                         </dd>
-                                        <dt>見積番号</dt>
-                                        <dd class="dd-inline-fields">
-                                            <input type="text" class="field-input" :value="draftRecord?.quoteNum ?? record?.quoteNum ?? ''" @input="updateDraftValue('quoteNum', $event.target.value)">
+                                        <dt>見積 #</dt>
+                                        <dd class="dd-inline-fields dd-order-num">
+                                            <input
+                                                type="text"
+                                                class="field-input"
+                                                :value="draftRecord?.quoteNum ?? record?.quoteNum ?? ''"
+                                                @input="updateDraftValue('quoteNum', $event.target.value)"
+                                            >
                                             <input
                                                 type="date"
                                                 class="field-input field-date"
@@ -142,9 +147,14 @@
                                                 @input="updateDraftDateValue('quoteDate', $event.target.value)"
                                             >
                                         </dd>
-                                        <dt>受注番号</dt>
-                                        <dd class="dd-inline-fields">
-                                            <input type="text" class="field-input" :value="draftRecord?.orderNum ?? record?.orderNum ?? ''" @input="updateDraftValue('orderNum', $event.target.value)">
+                                        <dt>受注 #</dt>
+                                        <dd class="dd-inline-fields dd-order-num">
+                                            <input
+                                                type="text"
+                                                class="field-input"
+                                                :value="draftRecord?.orderNum ?? record?.orderNum ?? ''"
+                                                @input="updateDraftValue('orderNum', $event.target.value)"
+                                            >
                                             <input
                                                 type="date"
                                                 class="field-input field-date"
@@ -153,23 +163,61 @@
                                                 @input="updateDraftDateValue('orderDate', $event.target.value)"
                                             >
                                         </dd>
-                                        <dt>発注番号</dt>
+                                        <dt>注文 #</dt>
                                         <dd>
-                                            <input type="text" class="field-input" :value="draftRecord?.poNum ?? record?.poNum ?? ''" @input="updateDraftValue('poNum', $event.target.value)">
+                                            <input
+                                                type="text"
+                                                class="field-input"
+                                                :value="draftRecord?.poNum ?? record?.poNum ?? ''"
+                                                @input="updateDraftValue('poNum', $event.target.value)"
+                                            >
                                         </dd>
                                     </dl>
                                 </section>
 
-                                <section class="section-card detail-card detail-card-input">
-                                    <div class="input-grid">
-                                        <label class="input-field">
-                                            <span>sentOut</span>
-                                            <input type="text" :value="draftRecord?.sentOut ?? record?.sentOut ?? ''" @input="updateDraftValue('sentOut', $event.target.value)">
+                                <section class="section-card detail-card detail-card-misc">
+                                    <div class="misc-block">
+                                        <label class="misc-field">
+                                            <span>海外RMA：</span>
+                                            <input
+                                                type="text"
+                                                class="field-input"
+                                                :value="draftRecord?.rmaNumOverSea ?? record?.rmaNumOverSea ?? ''"
+                                                @input="updateDraftValue('rmaNumOverSea', $event.target.value)"
+                                            >
                                         </label>
-                                        <label class="input-field input-field-span2">
-                                            <span>rmaNumOverSea</span>
-                                            <input type="text" :value="draftRecord?.rmaNumOverSea ?? record?.rmaNumOverSea ?? ''" @input="updateDraftValue('rmaNumOverSea', $event.target.value)">
+                                        <label class="misc-field">
+                                            <span>海外発送日：</span>
+                                            <input
+                                                type="date"
+                                                class="field-input"
+                                                :value="toDateInputValue(draftRecord?.sentOut ?? record?.sentOut)"
+                                                @input="updateDraftDateValue('sentOut', $event.target.value)"
+                                            >
                                         </label>
+                                    </div>
+
+                                    <div class="misc-block">
+                                        <label class="misc-field">
+                                            <span>出荷日：</span>
+                                            <input
+                                                type="date"
+                                                class="field-input"
+                                                :value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
+                                                @input="updateDraftDateValue('shippingOut_requiredDate', $event.target.value)"
+                                            >
+                                        </label>
+                                        <button type="button" class="yayoi-search-btn">弥生検索</button>
+                                    </div>
+
+                                    <div class="misc-block misc-block-incidents">
+                                        <div class="incidents-header">Incidents</div>
+                                        <input
+                                            type="text"
+                                            class="field-input incidents-input"
+                                            :value="draftRecord?.incident ?? record?.incident ?? ''"
+                                            @input="updateNumericDraftValue('incident', $event.target.value)"
+                                        >
                                     </div>
                                 </section>
 
@@ -189,11 +237,82 @@
                                     >
                                         価格調整
                                     </button>
+                                    <button
+                                        type="button"
+                                        class="action-btn"
+                                        @click="showGalleryDialog = true"
+                                    >
+                                        Gallery
+                                    </button>
                                     <div class="price-adjust-delta">
                                         <span class="price-adjust-label">調整額</span>
                                         <strong>{{ formatSignedAmount(displayAdjustmentAmount) }}</strong>
                                     </div>
                                 </div>
+                            </section>
+
+                            <section
+                                v-if="showLinkedLoaners"
+                                class="section-card detail-card linked-loaner-card"
+                            >
+                                <div class="section-header">
+                                    <h3>loaner案件（{{ loaners.length }}件）</h3>
+                                </div>
+                                <!-- <p class="linked-loaner-help">
+                                    parentID = この service 案件の orderID（{{ record?.orderID }}）の loaner / waiting_list
+                                </p> -->
+                                <div v-if="loaners.length" class="attachment-table-wrap">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>orderID</th>
+                                                <th>order_type</th>
+                                                <th>status</th>
+                                                <th>productName</th>
+                                                <th>SN</th>
+                                                <th>loanerID</th>
+                                                <th>dealer</th>
+                                                <th>期間</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="loaner in loaners" :key="loaner.orderID">
+                                                <td>{{ loaner.orderID }}</td>
+                                                <td>{{ loaner.order_type || '—' }}</td>
+                                                <td>
+                                                    <template v-if="loaner.order_type === 'waiting_list'">—</template>
+                                                    <template v-else>{{ loaner.status_label || loaner.status || '—' }}</template>
+                                                </td>
+                                                <td>{{ loaner.productName || '—' }}</td>
+                                                <td>{{ loaner.SN || '—' }}</td>
+                                                <td>{{ loaner.loanerID || '—' }}</td>
+                                                <td>{{ loaner.dealer || '—' }}</td>
+                                                <td>
+                                                    <template v-if="loaner.plannedSentDate || loaner.plannedReturnedDate">
+                                                        {{ loaner.plannedSentDate || '—' }}
+                                                        〜
+                                                        {{ loaner.plannedReturnedDate || '—' }}
+                                                    </template>
+                                                    <template v-else>—</template>
+                                                </td>
+                                                <td>
+                                                    <a
+                                                        v-if="loaner.attachedLoanerId"
+                                                        class="loaner-period-link"
+                                                        :href="periodEditUrl(loaner.attachedLoanerId)"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        期間編集
+                                                    </a>
+                                                    <span v-else class="loaner-period-missing">期間なし</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p v-else class="empty-message">関連loaner案件はありません。</p>
                             </section>
 
                             <div class="detail-bottom-grid">
@@ -307,70 +426,6 @@
                                     </div>
                                 </section>
                             </div>
-
-                            <section
-                                v-if="showLinkedLoaners"
-                                class="section-card detail-card linked-loaner-card"
-                            >
-                                <div class="section-header">
-                                    <h3>loaner案件（{{ loaners.length }}件）</h3>
-                                </div>
-                                <!-- <p class="linked-loaner-help">
-                                    parentID = この service 案件の orderID（{{ record?.orderID }}）の loaner / waiting_list
-                                </p> -->
-                                <div v-if="loaners.length" class="attachment-table-wrap">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>orderID</th>
-                                                <th>order_type</th>
-                                                <th>status</th>
-                                                <th>productName</th>
-                                                <th>SN</th>
-                                                <th>loanerID</th>
-                                                <th>dealer</th>
-                                                <th>期間</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="loaner in loaners" :key="loaner.orderID">
-                                                <td>{{ loaner.orderID }}</td>
-                                                <td>{{ loaner.order_type || '—' }}</td>
-                                                <td>
-                                                    <template v-if="loaner.order_type === 'waiting_list'">—</template>
-                                                    <template v-else>{{ loaner.status_label || loaner.status || '—' }}</template>
-                                                </td>
-                                                <td>{{ loaner.productName || '—' }}</td>
-                                                <td>{{ loaner.SN || '—' }}</td>
-                                                <td>{{ loaner.loanerID || '—' }}</td>
-                                                <td>{{ loaner.dealer || '—' }}</td>
-                                                <td>
-                                                    <template v-if="loaner.plannedSentDate || loaner.plannedReturnedDate">
-                                                        {{ loaner.plannedSentDate || '—' }}
-                                                        〜
-                                                        {{ loaner.plannedReturnedDate || '—' }}
-                                                    </template>
-                                                    <template v-else>—</template>
-                                                </td>
-                                                <td>
-                                                    <a
-                                                        v-if="loaner.attachedLoanerId"
-                                                        class="loaner-period-link"
-                                                        :href="periodEditUrl(loaner.attachedLoanerId)"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        期間編集
-                                                    </a>
-                                                    <span v-else class="loaner-period-missing">期間なし</span>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <p v-else class="empty-message">関連loaner案件はありません。</p>
-                            </section>
                         </div>
                     </Pane>
 
@@ -471,11 +526,17 @@
                 <div class="pane-content">
                     <section class="section-card section-card-files">
                         <div class="section-header">
-                            <h3>Files（{{ sortedFiles.length }}件）</h3>
+                            <h3>
+                                Files（書類 {{ sortedFiles.length }}件
+                                ／ 撮影画像 {{ capturedImages.length }}件）
+                            </h3>
                             <div class="section-actions">
                                 <button type="button" class="action-btn action-btn-danger" :disabled="!selectedFileId" :title="selectedFileId ? '' : 'ファイルを選択してください'" @click="openFileDelete">削除</button>
                                 <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                             </div>
+                        </div>
+                        <div class="files-type-label">
+                            <span class="type-badge type-badge-doc">書類ファイル</span>
                         </div>
 
                         <div
@@ -517,7 +578,7 @@
                             <p v-if="fileDropError" class="file-dropzone-error" @click.stop>{{ fileDropError }}</p>
                         </div>
 
-                        <div v-if="sortedFiles.length" class="files-list-wrap">
+                        <div class="files-list-wrap">
                             <AttachedFileItem
                                 v-for="(file, index) in sortedFiles"
                                 :key="file.id"
@@ -531,8 +592,13 @@
                                 @move="(direction) => moveFile(file.id, direction)"
                                 @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
+                            <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
+
+                            <AssociatedCapturedImages
+                                :images="capturedImages"
+                                @changed="emit('reload-attachments')"
+                            />
                         </div>
-                        <p v-else class="empty-message">Files がありません。</p>
                     </section>
                 </div>
             </Pane>
@@ -555,7 +621,7 @@
                             v-model="priceAdjustForm.amount"
                             type="number"
                             class="confirm-input"
-                            placeholder="例: 5000（表示は price - 調整額）"
+                            placeholder="例: 5000（表示は 元価格 - 調整額）"
                         >
                     </label>
                     <label class="confirm-field">
@@ -579,6 +645,15 @@
                 </div>
             </div>
         </div>
+
+        <CapturedImageGalleryDialog
+            v-if="showGalleryDialog"
+            title="Gallery"
+            :associatedID="galleryAssociatedId"
+            :associated-id="galleryAssociatedId"
+            @close="showGalleryDialog = false"
+            @associated="emit('reload-attachments')"
+        />
     </div>
 </template>
 
@@ -587,9 +662,12 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
+import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -598,6 +676,7 @@ const props = defineProps({
     draftRecord: Object,
     notes: { type: Array, default: () => [] },
     files: { type: Array, default: () => [] },
+    capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
@@ -617,6 +696,8 @@ const selectedPartId = ref(null)
 const selectedFileId = ref(null)
 const fileSortSaving = ref(false)
 const showPriceAdjustDialog = ref(false)
+const showGalleryDialog = ref(false)
+const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const priceAdjustSaving = ref(false)
 const priceAdjustError = ref('')
 const priceAdjustForm = reactive({
@@ -687,8 +768,11 @@ const displayEntityId = computed(() => {
         return entityId
     }
 
-    const serviceId = props.draftRecord?.serviceID ?? props.record?.serviceID
-    const service = page.props.servicesMaster?.find(item => String(item.serviceID) === String(serviceId))
+    const service = findServiceMaster(page.props.servicesMaster, {
+        productName: props.draftRecord?.productName ?? props.record?.productName,
+        entityID: props.draftRecord?.entityID ?? props.record?.entityID,
+        serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
+    })
     return service?.entityID ?? '—'
 })
 
@@ -806,10 +890,33 @@ const isA2laOn = computed(() => {
     return value === 1 || value === '1' || value === true
 })
 
-const basePrice = computed(() => {
-    const value = Number(props.draftRecord?.price ?? props.record?.price ?? 0)
+const selectedServiceMaster = computed(() => {
+    return findServiceMaster(page.props.servicesMaster, {
+        productName: props.draftRecord?.productName ?? props.record?.productName,
+        entityID: props.draftRecord?.entityID ?? props.record?.entityID,
+        serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
+    })
+})
+
+const workPrice = computed(() => {
+    const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
+    return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+})
+
+const a2laPrice = computed(() => {
+    if (!isA2laOn.value) return 0
+    const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
     return Number.isFinite(value) ? value : 0
 })
+
+const partsPriceTotal = computed(() =>
+    (props.parts ?? []).reduce((sum, part) => {
+        const value = Number(part.part_master?.price_discounted)
+        return sum + (Number.isNaN(value) ? 0 : value)
+    }, 0),
+)
+
+const basePrice = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value)
 
 const displayAdjustmentAmount = computed(() => {
     if (sessionAdjustmentAmount.value != null && sessionAdjustmentAmount.value !== '') {
@@ -823,6 +930,11 @@ const displayPrice = computed(() => {
     const discountValue = Number.isFinite(discount) ? discount : 0
     return basePrice.value - discountValue
 })
+
+watch(workPrice, (value) => {
+    if (!props.draftRecord) return
+    props.draftRecord.price = value
+}, { immediate: true })
 
 function toggleA2la() {
     if (!props.draftRecord) return
@@ -937,13 +1049,6 @@ function openNoteDelete() {
 
 const selectedFile = computed(() => props.files.find(f => f.id === selectedFileId.value))
 const selectedPart = computed(() => props.parts.find(p => p.id === selectedPartId.value))
-
-const partsPriceTotal = computed(() =>
-    props.parts.reduce((sum, part) => {
-        const value = Number(part.part_master?.price_discounted)
-        return sum + (Number.isNaN(value) ? 0 : value)
-    }, 0),
-)
 
 function compareFilesBySortNum(a, b) {
     const aNull = a?.sortNum == null
@@ -1271,6 +1376,7 @@ function formatDate(value) {
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    font-size: 14px;
 }
 
 .detail-form-header {
@@ -1291,7 +1397,7 @@ function formatDate(value) {
     border-radius: 4px;
     background: #fff;
     color: #1e293b;
-    font-size: 13px;
+    font-size: 14px;
     cursor: pointer;
 }
 
@@ -1333,7 +1439,7 @@ function formatDate(value) {
 }
 
 .detail-pane-left-top {
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .detail-pane-left-top .info-grid dt,
@@ -1348,11 +1454,12 @@ function formatDate(value) {
 .detail-pane-left-top .section-card h3,
 .detail-pane-left-top .entity-id-label,
 .detail-pane-left-top .entity-id-value {
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .detail-pane-left-top .info-grid dd input:not(.field-input) {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 .pane-content {
@@ -1389,12 +1496,14 @@ function formatDate(value) {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: flex-start;
 }
 
 .detail-top-grid > .detail-card {
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
 .detail-top-grid > .detail-card:nth-child(1) {
@@ -1410,9 +1519,9 @@ function formatDate(value) {
 }
 
 .detail-top-grid > .detail-card:nth-child(3) {
-    flex: 0 1 480px;
-    width: 480px;
-    max-width: min(480px, 100%);
+    flex: 0 1 350px;
+    width: 350px;
+    max-width: min(350px, 100%);
 }
 
 .detail-bottom-grid {
@@ -1444,7 +1553,7 @@ function formatDate(value) {
 }
 
 .price-adjust-label {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: #475569;
 }
@@ -1468,7 +1577,7 @@ function formatDate(value) {
     border-radius: 8px;
     background: #e2e8f0;
     color: #475569;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
 }
@@ -1527,13 +1636,13 @@ function formatDate(value) {
 .confirm-current-price {
     margin: 0 0 12px;
     color: #475569;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .confirm-field {
     display: block;
     margin-bottom: 12px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: #334155;
 }
@@ -1554,7 +1663,7 @@ function formatDate(value) {
 .confirm-error {
     margin: 0;
     color: #b91c1c;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .confirm-actions {
@@ -1587,7 +1696,7 @@ function formatDate(value) {
 
 .linked-loaner-help {
     margin: 0 0 8px;
-    font-size: 12px;
+    font-size: 13px;
     color: #64748b;
 }
 
@@ -1603,7 +1712,7 @@ function formatDate(value) {
 
 .loaner-period-missing {
     color: #94a3b8;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .section-card h3 {
@@ -1632,7 +1741,7 @@ function formatDate(value) {
     border: 1px solid #94a3b8;
     border-radius: 4px;
     background: #fff;
-    font-size: 13px;
+    font-size: 14px;
     cursor: pointer;
 }
 
@@ -1682,6 +1791,7 @@ function formatDate(value) {
     box-sizing: border-box;
     background: #fff;
     color: #1e293b;
+    font-weight: bold;
 }
 
 .dd-inline-fields {
@@ -1698,6 +1808,146 @@ function formatDate(value) {
 .dd-inline-fields .field-date {
     flex: 0 0 140px;
     width: 140px;
+}
+
+.detail-card-rma-order .rma-order-grid {
+    /* compact 80px の半分 + 列ギャップ 12px の半分 */
+    grid-template-columns: 40px 1fr;
+    gap: 6px 6px;
+}
+
+.detail-card-rma-order .rma-order-grid dt {
+    white-space: nowrap;
+}
+
+.detail-card-rma-order .rma-order-grid dt:nth-of-type(n + 5) {
+    color: #1e3a8a;
+}
+
+.dd-order-num {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.dd-order-num .field-input:not(.field-date) {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.dd-order-num .field-date {
+    flex: 0 0 132px;
+    width: 132px;
+}
+
+.dots-btn {
+    flex: 0 0 auto;
+    min-width: 36px;
+    height: 28px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 4px;
+    background: #4b5563;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+
+.dots-btn:hover {
+    background: #374151;
+}
+
+.detail-card-misc {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.misc-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.misc-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #1e293b;
+}
+
+.misc-field > span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-width: 5.5em;
+}
+
+.misc-field .field-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #1e293b;
+    font-weight: bold;
+}
+
+.yayoi-search-btn {
+    align-self: stretch;
+    margin-top: 2px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    background: #4b5563;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.yayoi-search-btn:hover {
+    background: #374151;
+}
+
+.misc-block-incidents {
+    gap: 0;
+}
+
+.incidents-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 4px 8px;
+    border-top: 3px solid #3b82f6;
+    background: #4b5563;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.incidents-input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 1px solid #111827;
+    border-radius: 4px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: left;
 }
 
 .dd-product-name {
@@ -1717,7 +1967,7 @@ function formatDate(value) {
     gap: 2px;
     flex: 0 0 auto;
     min-width: 72px;
-    font-size: 12px;
+    font-size: 13px;
     color: #475569;
 }
 
@@ -1746,7 +1996,7 @@ function formatDate(value) {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 13px;
+    font-size: 14px;
     color: #475569;
 }
 
@@ -1758,6 +2008,7 @@ function formatDate(value) {
     box-sizing: border-box;
     color: #1e293b;
     background: white;
+    font-weight: bold;
 }
 
 .input-field input::placeholder {
@@ -1776,11 +2027,17 @@ function formatDate(value) {
     background: #fff;
     color: #1e293b;
     box-sizing: border-box;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.field-select option {
+    font-weight: bold;
 }
 
 .status-empty {
     color: #64748b;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .field-button {
@@ -1878,7 +2135,7 @@ function formatDate(value) {
 
 .section-card-compact h3 {
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .section-card-compact .section-header {
@@ -1887,21 +2144,21 @@ function formatDate(value) {
 
 .section-card-compact .data-table th,
 .section-card-compact .data-table td {
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 6px;
 }
 
 .section-card-compact .empty-message {
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .section-card-compact .action-btn {
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 10px;
 }
 
 .parts-total-inline {
-    font-size: 12px;
+    font-size: 13px;
     color: #334155;
     white-space: nowrap;
 }
@@ -1966,7 +2223,7 @@ function formatDate(value) {
 
 .file-dropzone-title {
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: #1e293b;
 }
@@ -1985,13 +2242,13 @@ function formatDate(value) {
 
 .file-dropzone-help {
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
     color: #64748b;
 }
 
 .file-dropzone-error {
     margin: 8px 0 0;
-    font-size: 12px;
+    font-size: 13px;
     color: #b91c1c;
 }
 
@@ -2012,6 +2269,25 @@ function formatDate(value) {
     flex: 1;
     min-height: 0;
     overflow: auto;
+}
+
+.files-type-label {
+    margin: 0 0 8px;
+}
+
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.type-badge-doc {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
 }
 
 :deep(.splitpanes__splitter) {

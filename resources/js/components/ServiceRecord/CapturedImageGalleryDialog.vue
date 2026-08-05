@@ -1,0 +1,61 @@
+<template>
+    <BaseDialog :title="dialogTitle" large @close="$emit('close')">
+        <CapturedImageGallery
+            ref="galleryRef"
+            :associatedID="resolvedAssociatedId"
+            :associated-id="resolvedAssociatedId"
+            :filter-by-associated="filterByAssociated"
+            :initial-captured-by="initialCapturedBy"
+            @select="(item) => $emit('select', item)"
+            @selection-change="(items) => $emit('selection-change', items)"
+            @associated="(payload) => $emit('associated', payload)"
+        />
+    </BaseDialog>
+</template>
+
+<script setup>
+import { computed, ref } from 'vue'
+import BaseDialog from '@/components/ServiceRecord/Layer3/BaseDialog.vue'
+import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
+
+const props = defineProps({
+    title: {
+        type: String,
+        default: 'Gallery',
+    },
+    // Vue kebab `associated-id` binds to associatedId, not associatedID — accept both.
+    associatedID: {
+        type: [Number, String],
+        default: null,
+    },
+    associatedId: {
+        type: [Number, String],
+        default: null,
+    },
+    filterByAssociated: {
+        type: Boolean,
+        default: false,
+    },
+    initialCapturedBy: {
+        type: String,
+        default: '',
+    },
+})
+
+defineEmits(['close', 'select', 'selection-change', 'associated'])
+
+const galleryRef = ref(null)
+const dialogTitle = computed(() => props.title || 'Gallery')
+const resolvedAssociatedId = computed(() => {
+    const raw = props.associatedID ?? props.associatedId
+    if (raw == null || raw === '') return null
+    return raw
+})
+
+defineExpose({
+    getSelectedImages: () => galleryRef.value?.getSelectedImages?.() ?? [],
+    clearSelection: () => galleryRef.value?.clearSelection?.(),
+    selectAllVisible: () => galleryRef.value?.selectAllVisible?.(),
+    reload: (...args) => galleryRef.value?.reload?.(...args),
+})
+</script>

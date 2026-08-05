@@ -5,6 +5,7 @@
                 <h1>貸出カレンダー（サンプル）</h1>
                 <p class="subtitle">
                     attachedloaners の予約期間を表示します。loaner status 35=赤 / 40以上=青。
+                    予定をドラッグで移動、端をドラッグして期間を変更できます。
                 </p>
             </div>
             <div class="header-actions">
@@ -15,6 +16,7 @@
         </div>
 
         <p v-if="error" class="global-error">{{ error }}</p>
+        <p v-if="success" class="global-success">{{ success }}</p>
 
         <div class="toolbar">
             <label class="filter-field">
@@ -108,6 +110,8 @@ const calendarRef = ref(null)
 const selectedLoanerId = ref('')
 const selectedEvent = ref(null)
 const error = ref('')
+const success = ref('')
+const periodSaving = ref(false)
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
@@ -209,12 +213,17 @@ const calendarOptions = {
         week: '週',
         list: 'リスト',
     },
-    editable: false,
+    editable: true,
+    eventStartEditable: true,
+    eventDurationEditable: true,
+    eventResizableFromStart: true,
     selectable: false,
     dayMaxEvents: true,
     eventDisplay: 'block',
     events: fetchEvents,
     eventClick: handleEventClick,
+    eventDrop: handleEventDropOrResize,
+    eventResize: handleEventDropOrResize,
     eventDidMount: applyEventColors,
     eventContent(arg) {
         const colors = resolveColors(
@@ -262,7 +271,129 @@ function handleEventClick(clickInfo) {
     selectedEvent.value = {
         id: clickInfo.event.id,
         title: clickInfo.event.title,
-        extendedProps: clickInfo.event.extendedProps,
+        extendedProps: { ...clickInfo.event.extendedProps },
+    }
+}
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function toYmd(value) {
+    if (!value) return null
+    if (typeof value === 'string') return value.slice(0, 10)
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        const y = value.getFullYear()
+        const m = String(value.getMonth() + 1).padStart(2, '0')
+        const d = String(value.getDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+    }
+    return null
+}
+
+function addDaysYmd(ymd, days) {
+    const base = toYmd(ymd)
+    if (!base) return null
+    const date = new Date(`${base}T12:00:00`)
+    date.setDate(date.getDate() + days)
+    return toYmd(date)
+}
+
+/** FullCalendar allDay の end は exclusive → DB の inclusive 終了日へ変換 */
+function resolvePlannedDatesFromEvent(event) {
+    const plannedSentDate = toYmd(event.startStr || event.start)
+    if (!plannedSentDate) {
+        return null
+    }
+
+    const exclusiveEnd = toYmd(event.endStr || event.end)
+    const plannedReturnedDate = exclusiveEnd
+        ? addDaysYmd(exclusiveEnd, -1)
+        : plannedSentDate
+
+    if (!plannedReturnedDate || plannedReturnedDate < plannedSentDate) {
+        return null
+    }
+
+    return { plannedSentDate, plannedReturnedDate }
+}
+
+async function handleEventDropOrResize(changeInfo) {
+    const event = changeInfo.event
+    const attachedId = event.id
+    if (!attachedId) {
+        changeInfo.revert()
+        error.value = 'この予定は更新できません。'
+        return
+    }
+
+    const dates = resolvePlannedDatesFromEvent(event)
+    if (!dates) {
+        changeInfo.revert()
+        error.value = '移動後の期間が不正です。'
+        return
+    }
+
+    periodSaving.value = true
+    error.value = ''
+    success.value = ''
+
+    try {
+        const url = `${page.props.appBaseUrl}/servicerecord/loaner/period/${attachedId}`
+        const result = await apiFetch(url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                // 実日付は維持し、予定期間のみ更新
+                sentDate: event.extendedProps?.sentDate || null,
+                returnedDate: event.extendedProps?.returnedDate || null,
+                comment: event.extendedProps?.comment || null,
+                plannedSentDate: dates.plannedSentDate,
+                plannedReturnedDate: dates.plannedReturnedDate,
+            }),
+        })
+
+        if (!result) {
+            changeInfo.revert()
+            return
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(
+                validationMessage || data.message || `期間の更新に失敗しました。（HTTP ${response.status}）`,
+            )
+        }
+
+        const nextSent = data.attached?.plannedSentDate || dates.plannedSentDate
+        const nextReturned = data.attached?.plannedReturnedDate || dates.plannedReturnedDate
+
+        event.setExtendedProp('plannedSentDate', nextSent)
+        event.setExtendedProp('plannedReturnedDate', nextReturned)
+
+        if (selectedEvent.value?.id === attachedId) {
+            selectedEvent.value = {
+                ...selectedEvent.value,
+                extendedProps: {
+                    ...selectedEvent.value.extendedProps,
+                    plannedSentDate: nextSent,
+                    plannedReturnedDate: nextReturned,
+                },
+            }
+        }
+
+        success.value = data.message || `期間を更新しました。（${nextSent} 〜 ${nextReturned}）`
+    } catch (e) {
+        changeInfo.revert()
+        error.value = e.message || '期間の更新に失敗しました。'
+    } finally {
+        periodSaving.value = false
     }
 }
 
@@ -272,6 +403,7 @@ function periodEditUrl(id) {
 
 function reloadEvents() {
     selectedEvent.value = null
+    success.value = ''
     const api = calendarRef.value?.getApi?.()
     api?.refetchEvents()
 }
@@ -342,6 +474,16 @@ function reloadEvents() {
     border-radius: 6px;
     background: #fef2f2;
     color: #b91c1c;
+    flex-shrink: 0;
+}
+
+.global-success {
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid #86efac;
+    border-radius: 6px;
+    background: #f0fdf4;
+    color: #166534;
     flex-shrink: 0;
 }
 

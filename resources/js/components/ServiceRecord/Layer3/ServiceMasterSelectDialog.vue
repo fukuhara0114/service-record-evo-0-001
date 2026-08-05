@@ -87,13 +87,14 @@ const configs = {
         searchPlaceholder: 'productName / entityID で検索',
         items: propsValue => propsValue.servicesMaster ?? [],
         columns: [
-            { label: 'serviceID', getter: item => item?.serviceID ?? '—' },
+            { label: 'id', getter: item => item?.id ?? '—' },
             { label: 'productName', getter: item => item?.productName ?? '—' },
             { label: 'entityID', getter: item => item?.entityID ?? '—' },
         ],
-        valueGetter: item => item?.serviceID,
-        initialValue: payload => payload?.serviceID ?? props.record?.serviceID ?? null,
-        searchFields: item => [item?.serviceID, item?.productName, item?.entityID],
+        // serviceID はマスタ上で重複し得るため、一意キーは id を使う
+        valueGetter: item => item?.id,
+        initialValue: () => null,
+        searchFields: item => [item?.id, item?.serviceID, item?.productName, item?.entityID],
         buildResult: item => ({
             serviceID: item?.serviceID,
             productName: String(item?.productName ?? item?.entityID ?? item?.serviceID ?? ''),
@@ -216,6 +217,17 @@ watch(
                 || String(item?.companyName ?? '') === String(desiredDealer),
             )
             selectedValue.value = matchedDealer?.id ?? null
+            return
+        }
+
+        if (kind.value === 'serviceMaster') {
+            const desiredName = props.payload?.productName ?? props.record?.productName ?? ''
+            const desiredEntity = props.payload?.entityID ?? props.record?.entityID ?? ''
+            const matched = items.value.find(item =>
+                (desiredName !== '' && String(item?.productName ?? '') === String(desiredName))
+                || (desiredEntity !== '' && String(item?.entityID ?? '') === String(desiredEntity)),
+            )
+            selectedValue.value = matched?.id ?? null
             return
         }
 

@@ -45,6 +45,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/engineer',[ServiceRecordController::class, 'engineer'])->name('servicerecord.engineer');
     Route::get('/servicerecord/intake', [ServiceRecordController::class, 'intakeList'])->name('servicerecord.intake');
     Route::get('/servicerecord/camera', [ServiceRecordController::class, 'camera'])->name('servicerecord.camera');
+    Route::get('/servicerecord/gallery', [ServiceRecordController::class, 'gallery'])->name('servicerecord.gallery');
+    Route::get('/servicerecord/camera/images', [ServiceRecordController::class, 'listCapturedImages'])->name('servicerecord.camera.images');
+    Route::post('/servicerecord/camera/upload', [ServiceRecordController::class, 'uploadCameraImage'])->name('servicerecord.camera.upload');
+    Route::post('/servicerecord/camera/edit', [ServiceRecordController::class, 'editCapturedImage'])->name('servicerecord.camera.edit');
+    Route::post('/servicerecord/camera/associate', [ServiceRecordController::class, 'associateCapturedImages'])->name('servicerecord.camera.associate');
+    Route::post('/servicerecord/camera/disassociate', [ServiceRecordController::class, 'disassociateCapturedImages'])->name('servicerecord.camera.disassociate');
+    Route::get('/servicerecord/camera/image/{fileName}', [ServiceRecordController::class, 'showCapturedImage'])->where('fileName', '[A-Za-z0-9._-]+')->name('servicerecord.camera.image');
+    Route::get('/servicerecord/camera/thumbnail/{fileName}', [ServiceRecordController::class, 'showCapturedThumbnail'])->where('fileName', '[A-Za-z0-9._-]+')->name('servicerecord.camera.thumbnail');
     Route::get('/servicerecord/intake/create', [ServiceRecordController::class, 'createWithoutFile'])->name('servicerecord.intake.create-blank');
     Route::post('/servicerecord/intake/upload', [ServiceRecordController::class, 'uploadForIntake'])->name('servicerecord.intake.upload');
     Route::get('/servicerecord/intake/{fileId}/create', [ServiceRecordController::class, 'createFromFile'])->name('servicerecord.intake.create');

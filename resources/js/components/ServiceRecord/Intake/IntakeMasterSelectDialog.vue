@@ -102,14 +102,15 @@ const isComposing = ref(false)
 const configs = {
     serviceMaster: {
         title: '製品名選択',
-        searchPlaceholder: '半角英数で検索（productName / entityID / serviceID）',
+        searchPlaceholder: '半角英数で検索（productName / entityID / id）',
         columns: [
-            { key: 'serviceID', label: 'serviceID', getter: item => item?.serviceID ?? '—' },
+            { key: 'id', label: 'id', getter: item => item?.id ?? '—' },
             { key: 'productName', label: 'productName', getter: item => item?.productName ?? '—' },
             { key: 'entityID', label: 'entityID', getter: item => item?.entityID ?? '—' },
         ],
-        valueGetter: item => item?.serviceID,
-        searchFields: item => [item?.serviceID, item?.productName, item?.entityID],
+        // serviceID はマスタ上で重複し得るため、一意キーは id を使う
+        valueGetter: item => item?.id,
+        searchFields: item => [item?.id, item?.serviceID, item?.productName, item?.entityID],
         buildResult: item => ({
             serviceID: item?.serviceID,
             productName: String(item?.productName ?? item?.entityID ?? item?.serviceID ?? ''),

@@ -193,10 +193,16 @@
                 <div class="detail-bottom-section pane-content-scroll">
                     <section class="section-card section-card-files">
                         <div class="section-header">
-                            <h3>Files（{{ sortedFiles.length }}件）</h3>
+                            <h3>
+                                Files（書類 {{ sortedFiles.length }}件
+                                ／ 撮影画像 {{ capturedImages.length }}件）
+                            </h3>
+                        </div>
+                        <div class="files-type-label">
+                            <span class="type-badge type-badge-doc">書類ファイル</span>
                         </div>
 
-                        <div v-if="sortedFiles.length" class="files-list-wrap">
+                        <div class="files-list-wrap">
                             <AttachedFileItem
                                 v-for="(file, index) in sortedFiles"
                                 :key="file.id"
@@ -208,8 +214,13 @@
                                 @move="(direction) => moveFile(file.id, direction)"
                                 @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
+                            <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
+
+                            <AssociatedCapturedImages
+                                :images="capturedImages"
+                                @changed="emit('reload-attachments')"
+                            />
                         </div>
-                        <p v-else class="empty-message">Files がありません。</p>
                     </section>
                 </div>
             </Pane>
@@ -222,6 +233,7 @@ import { computed, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -233,11 +245,12 @@ const props = defineProps({
     notes: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     files: { type: Array, default: () => [] },
+    capturedImages: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
 
-const emit = defineEmits(['open-dialog', 'files-updated'])
+const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 const fileSortSaving = ref(false)
 
 function compareFilesBySortNum(a, b) {
@@ -586,6 +599,25 @@ function openServiceMasterSelect() {
 .files-list-wrap {
     display: grid;
     gap: 12px;
+}
+
+.files-type-label {
+    margin: 0 0 8px;
+}
+
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.type-badge-doc {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
 }
 
 .empty-message {
