@@ -234,56 +234,66 @@ class ServiceRecordController extends Controller
         }
     }
 
-    public function detail($orderID) {
-
+    public function detail($orderID)
+    {
         $record = ServiceRecord::with(['statusMaster', 'statusMasterLoaner', 'laborMaster'])
-                    ->where('orderID', $orderID)
-                    ->first(); // 1件だけ取得
+            ->where('orderID', $orderID)
+            ->first();
 
-        $loaner_case = ServiceRecord::where('parentID', $orderID)->first();
-
-        $notes = AttachedNote::where('associatedID', $orderID)->get();
-        $files = AttachedFile::where('associatedID', $orderID)->get();
-        $parts = AttachedPart::where('associatedID', $orderID)->get();  
-        $currentMaster = $record->getServiceAtOrderedDate();
-
-    // return Inertia::render('ServiceRecords/Show', [
-    //     'serviceRecord' => $serviceRecord, // 案件の基本情報
-    //     'currentMaster' => $currentMaster, // 当時の価格が含まれたマスタ情報
-        
-    //     // 2. 詳細画面でマスタ自体を変更（プルダウン等で選択）できるようにマスタ一覧を渡す
-    //     // ※ 重複を防ぐため、最新のユニークなマスタ（またはグループ化されたもの）を取得
-    //     'masterOptions' => ServiceMaster::groupBy('serviceID')->get(['serviceID', 'serviceName']),
-    // ]);       
-
-        // 2. 万が一、不正なIDが直接URLに打ち込まれてデータが見つからなかった場合は404エラー画面を出す
         if (!$record) {
             abort(404, '指定された作業内容は存在しません。');
         }
 
-        $statuses = \App\Models\Status::orderBy('processID')->get();
-        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get();
-        $returnCodes = \App\Models\ReturnCode::all(); 
-        $labors = \App\Models\Labor::all();
+        $notes = AttachedNote::where('associatedID', $orderID)->get();
+        $files = AttachedFile::query()
+            ->where('associatedID', $orderID)
+            ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
+            ->orderByRaw('CASE WHEN sortNum IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('sortNum')
+            ->orderBy('id')
+            ->get();
+        $attachedParts = AttachedPart::query()
+            ->where('associatedID', $orderID)
+            ->with('partMaster')
+            ->orderBy('id')
+            ->get();
+
+        $statuses = \App\Models\Status::orderBy('processID')->get(['processID', 'status']);
+        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get(['processID', 'status']);
+        $returnCodes = \App\Models\ReturnCode::all();
+        $labors = \App\Models\Labor::all(['laborID', 'laborName']);
         $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
-        $parts = \App\Models\PartMaster::all(); 
-        $services = \App\Models\ServiceMaster::all();
+        $partsMaster = \App\Models\PartMaster::query()
+            ->orderBy('partName')
+            ->get(['partID', 'partName', 'description', 'price_discounted', 'type']);
+        $services = \App\Models\ServiceMaster::query()
+            ->orderBy('productName')
+            ->get([
+                'id',
+                'serviceID',
+                'productName',
+                'entityID',
+                'priceC_0',
+                'priceR_0',
+                'priceR_onSite',
+                'price_a2la',
+            ]);
 
         return Inertia::render('ServiceRecords.detail', [
-                    'initialRecord' => $record,
-                    'statuses'       => $statuses,
-                    'statusesLoaner' => $statusesLoaner,
-                    'returnCodes'    => $returnCodes,
-                    'labors'         => $labors,
-                    'notes'         => $notes,
-                    'files'         => $files,
-                    'parts'         => $parts,
-                    'servicesMaster' => $services,    
-                    'dealersMaster' => $dealers,
-                    'partsMaster' => $parts,
-                    'mode'           => 'admin'
-                ]);
-    }   
+            'initialRecord' => $record,
+            'statuses' => $statuses,
+            'statusesLoaner' => $statusesLoaner,
+            'returnCodes' => $returnCodes,
+            'labors' => $labors,
+            'notes' => $notes,
+            'files' => $files,
+            'parts' => $attachedParts,
+            'servicesMaster' => $services,
+            'dealersMaster' => $dealers,
+            'partsMaster' => $partsMaster,
+            'mode' => 'admin',
+        ]);
+    }
 
     public function record(Request $request, $orderID)
     {
@@ -770,19 +780,31 @@ class ServiceRecordController extends Controller
         if (!$uploaded || !$uploaded->isValid()) {
             \Log::warning('camera upload file invalid', [
                 'error_code' => $uploaded?->getError(),
+                'upload_tmp_dir' => ini_get('upload_tmp_dir'),
+                'sys_temp_dir' => sys_get_temp_dir(),
             ]);
 
             return response()->json([
                 'message' => 'ファイルのアップロードに失敗しました。',
-                'error' => 'upload_error_code=' . ($uploaded?->getError() ?? 'null'),
+                'error' => 'upload_error_code=' . ($uploaded?->getError() ?? 'null')
+                    . ' / upload_tmp_dir=' . (ini_get('upload_tmp_dir') ?: '(empty)'),
             ], 422);
         }
 
-        $binary = file_get_contents($uploaded->getRealPath());
-        if ($binary === false || $binary === '') {
+        $binary = $this->readUploadedFileBinary($uploaded);
+        if ($binary === null || $binary === '') {
+            \Log::error('camera upload temp path empty', [
+                'real_path' => $uploaded->getRealPath(),
+                'pathname' => $uploaded->getPathname(),
+                'upload_tmp_dir' => ini_get('upload_tmp_dir'),
+                'sys_temp_dir' => sys_get_temp_dir(),
+                'is_writable_tmp' => is_writable(ini_get('upload_tmp_dir') ?: sys_get_temp_dir()),
+            ]);
+
             return response()->json([
-                'message' => '画像データの読み込みに失敗しました。',
-            ], 422);
+                'message' => 'アップロード一時ファイルを読み取れませんでした。サーバーの upload_tmp_dir を確認してください。',
+                'error' => 'Path must not be empty / upload_tmp_dir=' . (ini_get('upload_tmp_dir') ?: '(empty)'),
+            ], 500);
         }
 
         // クライアント側で既に縮小・JPEG化済み。GD がある場合のみサーバーでも再正規化する。
@@ -901,6 +923,7 @@ class ServiceRecordController extends Controller
         if (!$uploaded || !$uploaded->isValid()) {
             \Log::warning('camera edit file invalid', [
                 'error_code' => $uploaded?->getError(),
+                'upload_tmp_dir' => ini_get('upload_tmp_dir'),
             ]);
 
             return response()->json([
@@ -909,11 +932,18 @@ class ServiceRecordController extends Controller
             ], 422);
         }
 
-        $binary = file_get_contents($uploaded->getRealPath());
-        if ($binary === false || $binary === '') {
+        $binary = $this->readUploadedFileBinary($uploaded);
+        if ($binary === null || $binary === '') {
+            \Log::error('camera edit temp path empty', [
+                'real_path' => $uploaded->getRealPath(),
+                'upload_tmp_dir' => ini_get('upload_tmp_dir'),
+                'sys_temp_dir' => sys_get_temp_dir(),
+            ]);
+
             return response()->json([
-                'message' => '画像データの読み込みに失敗しました。',
-            ], 422);
+                'message' => 'アップロード一時ファイルを読み取れませんでした。サーバーの upload_tmp_dir を確認してください。',
+                'error' => 'Path must not be empty / upload_tmp_dir=' . (ini_get('upload_tmp_dir') ?: '(empty)'),
+            ], 500);
         }
 
         try {
@@ -1197,6 +1227,41 @@ class ServiceRecordController extends Controller
             && function_exists('imagecreatefromstring')
             && function_exists('imagejpeg')
             && function_exists('imagecreatetruecolor');
+    }
+
+    /**
+     * アップロード一時ファイルを安全に読む。
+     * IIS で upload_tmp_dir が未設定／書けないと getRealPath() が空になり
+     * file_get_contents() が ValueError "Path must not be empty" になる。
+     */
+    private function readUploadedFileBinary(\Illuminate\Http\UploadedFile $uploaded): ?string
+    {
+        $realPath = $uploaded->getRealPath();
+        if (is_string($realPath) && $realPath !== '' && is_readable($realPath)) {
+            $binary = @file_get_contents($realPath);
+            if ($binary !== false && $binary !== '') {
+                return $binary;
+            }
+        }
+
+        $pathname = $uploaded->getPathname();
+        if (is_string($pathname) && $pathname !== '' && is_readable($pathname)) {
+            $binary = @file_get_contents($pathname);
+            if ($binary !== false && $binary !== '') {
+                return $binary;
+            }
+        }
+
+        try {
+            $binary = $uploaded->getContent();
+            if (is_string($binary) && $binary !== '') {
+                return $binary;
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('uploaded file getContent failed', ['error' => $e->getMessage()]);
+        }
+
+        return null;
     }
 
     private function makeCapturedImageFileName(?\App\Models\User $user, string $nameSuffix = ''): string

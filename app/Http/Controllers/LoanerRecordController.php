@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttachedLoaner;
+use App\Models\AttachedFile;
 use App\Models\Dealer;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
@@ -93,6 +94,251 @@ class LoanerRecordController extends Controller
         }
 
         return response()->json($payload);
+    }
+
+    public function detail(int $id)
+    {
+        $attached = AttachedLoaner::with([
+            'serviceRecord.statusMasterLoaner',
+            'loanerMaster:loanerID,productName,item,SN,manageNum,groupName',
+        ])->findOrFail($id);
+
+        $record = $attached->serviceRecord;
+        if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
+            abort(404, '指定された貸出案件は存在しません。');
+        }
+
+        $columns = Schema::getColumnListing('attachedloaners');
+
+        return Inertia::render('LoanerDetail', [
+            'attached' => [
+                'id' => $attached->id,
+                'associatedID' => $attached->associatedID,
+                'loanerID' => $attached->loanerID,
+                'sentDate' => optional($attached->sentDate)->format('Y-m-d'),
+                'returnedDate' => optional($attached->returnedDate)->format('Y-m-d'),
+                'plannedSentDate' => optional($attached->plannedSentDate)->format('Y-m-d'),
+                'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
+                'assignStatus' => $attached->assignStatus ?? null,
+                'comment' => $attached->comment,
+            ],
+            'record' => $record->only([
+                'orderID',
+                'parentID',
+                'order_type',
+                'status',
+                'productName',
+                'SN',
+                'loanerID',
+                'dealer',
+                'dealer_depart',
+                'contactPerson',
+                'email',
+                'phone',
+                'fax',
+                'zipcode',
+                'address1',
+                'address2',
+                'deliverToEndUser',
+                'endUser',
+                'endUser_depart',
+                'endUser_contactPerson',
+                'endUser_email',
+                'endUser_phone',
+                'endUser_fax',
+                'endUser_zipcode',
+                'endUser_address1',
+                'endUser_address2',
+                'deliveryDestination_company',
+                'deliveryDestination_depart',
+                'deliveryDestination_contactPerson',
+                'deliveryDestination_email',
+                'deliveryDestination_phone',
+                'deliveryDestination_zipcode',
+                'deliveryDestination_address1',
+                'deliveryDestination_address2',
+            ]) + [
+                'status_label' => $record->order_type === 'loaner'
+                    ? $record->statusMasterLoaner?->status
+                    : null,
+            ],
+            'loanerMaster' => $attached->loanerMaster?->only([
+                'loanerID',
+                'productName',
+                'item',
+                'SN',
+                'manageNum',
+                'groupName',
+            ]),
+            'files' => AttachedFile::query()
+                ->where('associatedID', $record->orderID)
+                ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
+                ->orderByRaw('CASE WHEN sortNum IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('sortNum')
+                ->orderBy('id')
+                ->get(),
+            'statuses' => StatusLoaner::orderBy('processID')->get(['processID', 'status']),
+            'dealersMaster' => Dealer::orderBy('dealerName')->get(),
+            'loanerUnits' => LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->orderBy('productName')
+                ->orderBy('loanerID')
+                ->get([
+                    'id',
+                    'loanerID',
+                    'productName',
+                    'item',
+                    'SN',
+                    'manageNum',
+                    'groupName',
+                    $this->resolveStatusColumn(),
+                ]),
+            'dateFields' => [
+                'hasPlannedSent' => in_array('plannedSentDate', $columns, true),
+                'hasPlannedReturned' => in_array('plannedReturnedDate', $columns, true),
+            ],
+        ]);
+    }
+
+    public function updateDetail(Request $request, int $id)
+    {
+        $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
+        $record = $attached->serviceRecord;
+
+        if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
+            return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
+        }
+
+        $recordRules = [
+            'parentID' => 'nullable|integer|exists:servicerecord,orderID',
+            'status' => 'nullable|integer',
+            'productName' => 'nullable|string|max:255',
+            'SN' => 'nullable|string|max:255',
+            'loanerID' => 'nullable|integer',
+            'dealer' => 'nullable|string|max:255',
+            'dealer_depart' => 'nullable|string|max:255',
+            'contactPerson' => 'nullable|string|max:255',
+            'email' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:255',
+            'fax' => 'nullable|string|max:255',
+            'zipcode' => 'nullable|string|max:20',
+            'address1' => 'nullable|string|max:255',
+            'address2' => 'nullable|string|max:255',
+            'deliverToEndUser' => 'nullable|boolean',
+            'endUser' => 'nullable|string|max:255',
+            'endUser_depart' => 'nullable|string|max:255',
+            'endUser_contactPerson' => 'nullable|string|max:255',
+            'endUser_email' => 'nullable|string|max:255',
+            'endUser_phone' => 'nullable|string|max:255',
+            'endUser_fax' => 'nullable|string|max:255',
+            'endUser_zipcode' => 'nullable|string|max:20',
+            'endUser_address1' => 'nullable|string|max:255',
+            'endUser_address2' => 'nullable|string|max:255',
+            'deliveryDestination_company' => 'nullable|string|max:255',
+            'deliveryDestination_depart' => 'nullable|string|max:255',
+            'deliveryDestination_contactPerson' => 'nullable|string|max:255',
+            'deliveryDestination_email' => 'nullable|string|max:255',
+            'deliveryDestination_phone' => 'nullable|string|max:255',
+            'deliveryDestination_zipcode' => 'nullable|string|max:20',
+            'deliveryDestination_address1' => 'nullable|string|max:255',
+            'deliveryDestination_address2' => 'nullable|string|max:255',
+        ];
+
+        $attachedColumns = Schema::getColumnListing('attachedloaners');
+        $attachedRules = [
+            'sentDate' => 'nullable|date',
+            'returnedDate' => 'nullable|date|after_or_equal:sentDate',
+            'comment' => 'nullable|string|max:1000',
+        ];
+        if (in_array('plannedSentDate', $attachedColumns, true)) {
+            $attachedRules['plannedSentDate'] = 'nullable|date';
+        }
+        if (in_array('plannedReturnedDate', $attachedColumns, true)) {
+            $attachedRules['plannedReturnedDate'] = 'nullable|date|after_or_equal:plannedSentDate';
+        }
+        if (in_array('assignStatus', $attachedColumns, true)) {
+            $attachedRules['assignStatus'] = 'nullable|string|max:255';
+        }
+
+        $validated = $request->validate($recordRules + $attachedRules);
+
+        if (
+            isset($validated['parentID'])
+            && (int) $validated['parentID'] === (int) $record->orderID
+        ) {
+            return response()->json(['message' => '自分自身を親案件には指定できません。'], 422);
+        }
+
+        if ($record->order_type === 'loaner' && array_key_exists('status', $validated) && $validated['status'] !== null) {
+            $statusExists = StatusLoaner::query()
+                ->where('processID', $validated['status'])
+                ->exists();
+            if (!$statusExists) {
+                return response()->json(['message' => '指定された status は存在しません。'], 422);
+            }
+        }
+
+        if (array_key_exists('loanerID', $validated) && $validated['loanerID'] !== null) {
+            $loanerExists = LoanerMaster::query()
+                ->where('loanerID', $validated['loanerID'])
+                ->orWhere('id', $validated['loanerID'])
+                ->exists();
+            if (!$loanerExists) {
+                return response()->json(['message' => '指定された貸出機は存在しません。'], 422);
+            }
+        }
+
+        $recordFields = array_keys($recordRules);
+        $attachedFields = array_keys($attachedRules);
+
+        DB::transaction(function () use (
+            $record,
+            $attached,
+            $validated,
+            $recordFields,
+            $attachedFields,
+            $request,
+        ) {
+            $recordPayload = collect($validated)->only($recordFields)->all();
+            if ($record->order_type === 'waiting_list') {
+                unset($recordPayload['status']);
+            }
+            $record->fill($recordPayload);
+            $record->lastEditPerson = $request->user()?->kanji_name;
+            $record->lastEditDate = now();
+            $record->save();
+
+            $attachedPayload = collect($validated)->only($attachedFields)->all();
+            if (array_key_exists('loanerID', $validated)) {
+                $attachedPayload['loanerID'] = $validated['loanerID'];
+            }
+            if (
+                array_key_exists('productName', $validated)
+                && in_array('productName', Schema::getColumnListing('attachedloaners'), true)
+            ) {
+                $attachedPayload['productName'] = $validated['productName'];
+            }
+            $attached->fill($attachedPayload);
+            $attached->save();
+        });
+
+        $attached->refresh();
+        $record->refresh();
+
+        return response()->json([
+            'message' => '貸出詳細を保存しました。',
+            'record' => $record,
+            'attached' => [
+                'id' => $attached->id,
+                'loanerID' => $attached->loanerID,
+                'sentDate' => optional($attached->sentDate)->format('Y-m-d'),
+                'returnedDate' => optional($attached->returnedDate)->format('Y-m-d'),
+                'plannedSentDate' => optional($attached->plannedSentDate)->format('Y-m-d'),
+                'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
+                'assignStatus' => $attached->assignStatus ?? null,
+                'comment' => $attached->comment,
+            ],
+        ]);
     }
 
     public function store(Request $request)

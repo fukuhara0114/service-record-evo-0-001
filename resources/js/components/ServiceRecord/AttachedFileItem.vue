@@ -206,6 +206,10 @@ const props = defineProps({
         type: [Number, String],
         default: null,
     },
+    fileBaseUrl: {
+        type: String,
+        default: '',
+    },
 })
 
 const emit = defineEmits(['select', 'move', 'sort-num-change'])
@@ -258,6 +262,9 @@ watch(
 )
 
 const fileUrl = computed(() => {
+    if (props.fileBaseUrl) {
+        return `${props.fileBaseUrl.replace(/\/$/, '')}/${props.file.id}`
+    }
     const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
     return `${window.location.origin}${basePath}/files/${props.file.id}`
 })

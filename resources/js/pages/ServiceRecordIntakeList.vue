@@ -10,6 +10,25 @@
             </div>
         </div>
 
+        <p v-if="deleteError" class="global-error">{{ deleteError }}</p>
+        <div v-if="importStatus || importBusy" class="global-info" role="status">
+            <span class="global-info-text">{{ importStatus }}</span>
+            <div
+                v-if="showImportProgress"
+                class="import-progress"
+                role="progressbar"
+                :aria-valuemin="0"
+                :aria-valuemax="100"
+                :aria-valuenow="importBusy ? undefined : 100"
+                :aria-label="importBusy ? '処理中' : '完了'"
+            >
+                <div
+                    class="import-progress-bar"
+                    :class="importBusy ? 'is-indeterminate' : 'is-complete'"
+                />
+            </div>
+        </div>
+
         <section class="list-card">
             <div class="list-header">
                 <h2>対象ファイル（{{ files.length }}件）</h2>
@@ -129,9 +148,10 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { usePage } from '@inertiajs/vue3'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { router, usePage } from '@inertiajs/vue3'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
+import { startFileImport } from '@/utils/startFileImport'
 
 const props = defineProps({
     unregisteredFiles: {
@@ -152,6 +172,10 @@ const uploadDragDepth = ref(0)
 const files = ref([...(props.unregisteredFiles ?? [])])
 const deletingFileId = ref(null)
 const deleteError = ref('')
+const importStatus = ref('')
+const importBusy = ref(false)
+const showImportProgress = ref(false)
+let importProgressHideTimer = null
 
 watch(
     () => props.unregisteredFiles,
@@ -159,6 +183,46 @@ watch(
         files.value = [...(value ?? [])]
     },
 )
+
+onMounted(async () => {
+    if (importProgressHideTimer) {
+        clearTimeout(importProgressHideTimer)
+        importProgressHideTimer = null
+    }
+
+    importBusy.value = true
+    showImportProgress.value = true
+    importStatus.value = '処理を開始しています...'
+
+    const result = await startFileImport({
+        appBaseUrl: page.props.appBaseUrl,
+        associatedID: -1,
+    })
+
+    importStatus.value = result.message || ''
+    importBusy.value = false
+
+    // 完了表示（100%）を見せてからバナーごと消し、対象ファイル一覧を再取得する。
+    importProgressHideTimer = setTimeout(() => {
+        showImportProgress.value = false
+        if (result.ok) {
+            importStatus.value = ''
+            router.reload({
+                only: ['unregisteredFiles'],
+                preserveScroll: true,
+                preserveState: true,
+            })
+        }
+        importProgressHideTimer = null
+    }, 500)
+})
+
+onBeforeUnmount(() => {
+    if (importProgressHideTimer) {
+        clearTimeout(importProgressHideTimer)
+        importProgressHideTimer = null
+    }
+})
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
@@ -402,6 +466,68 @@ async function uploadThenCreate(fileList) {
     margin: 0 0 8px;
     font-size: 24px;
     color: #1e293b;
+}
+
+.global-error {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    background: #fef2f2;
+    color: #b91c1c;
+    flex-shrink: 0;
+}
+
+.global-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    flex-shrink: 0;
+}
+
+.global-info-text {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.import-progress {
+    flex: 1;
+    min-width: 80px;
+    height: 8px;
+    border-radius: 999px;
+    background: #dbeafe;
+    overflow: hidden;
+}
+
+.import-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: #3b82f6;
+}
+
+.import-progress-bar.is-indeterminate {
+    width: 36%;
+    animation: import-progress-slide 1.15s ease-in-out infinite;
+}
+
+.import-progress-bar.is-complete {
+    width: 100%;
+    transition: width 0.35s ease;
+}
+
+@keyframes import-progress-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(320%);
+    }
 }
 
 .page-header p {

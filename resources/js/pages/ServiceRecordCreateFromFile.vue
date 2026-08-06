@@ -14,6 +14,7 @@
         </div>
 
         <p v-if="error" class="global-error">{{ error }}</p>
+        <p v-if="importStatus" class="global-info">{{ importStatus }}</p>
 
         <div class="create-layout">
             <Splitpanes class="default-theme create-splitpanes" @resized="syncPaneSizes">
@@ -399,11 +400,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
+import { startFileImport } from '@/utils/startFileImport'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
@@ -442,6 +444,7 @@ const props = defineProps({
 const page = usePage()
 const saving = ref(false)
 const error = ref('')
+const importStatus = ref('')
 const activeTab = ref('basic')
 const activeSelectKind = ref(null)
 const previewFile = ref(null)
@@ -928,6 +931,25 @@ async function linkToExistingRecord(payload) {
     }
 }
 
+onMounted(async () => {
+    const result = await startFileImport({
+        appBaseUrl: page.props.appBaseUrl,
+        associatedID: -1,
+    })
+    if (result.status === 423) {
+        importStatus.value = result.message
+        return
+    }
+    if (result.ok) {
+        importStatus.value = result.message
+        return
+    }
+    // キュー未起動などは画面利用を止めない（情報表示のみ）
+    if (result.message) {
+        importStatus.value = result.message
+    }
+})
+
 onBeforeUnmount(() => {
     Object.keys(zipLookupTimers).forEach((key) => {
         if (zipLookupTimers[key]) {
@@ -1061,6 +1083,15 @@ async function save() {
     border-radius: 6px;
     background: #fef2f2;
     color: #b91c1c;
+}
+
+.global-info {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
 }
 
 .create-layout {

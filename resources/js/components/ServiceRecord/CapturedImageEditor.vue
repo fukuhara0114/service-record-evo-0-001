@@ -242,6 +242,7 @@ const drawWidth = ref(4)
 /** @type {import('vue').Ref<ImageData[]>} */
 const history = ref([])
 const MAX_HISTORY = 30
+const historyBaseIsOriginal = ref(true)
 
 const cropRect = ref(null)
 const cropStart = ref(null)
@@ -271,6 +272,7 @@ function pushHistory() {
         history.value.push(snapshot)
         if (history.value.length > MAX_HISTORY) {
             history.value.shift()
+            historyBaseIsOriginal.value = false
         }
     } catch {
         // ignore tainted / oversized canvas snapshots
@@ -467,10 +469,12 @@ function applyCrop() {
     const rect = cropRect.value
     if (!canvas || !ctx || !rect || busy.value) return
 
-    const x = Math.round(Math.min(rect.x, rect.x + rect.w))
-    const y = Math.round(Math.min(rect.y, rect.y + rect.h))
-    const w = Math.round(Math.abs(rect.w))
-    const h = Math.round(Math.abs(rect.h))
+    const left = Math.max(0, Math.floor(Math.min(rect.x, rect.x + rect.w)))
+    const top = Math.max(0, Math.floor(Math.min(rect.y, rect.y + rect.h)))
+    const right = Math.min(canvas.width, Math.ceil(Math.max(rect.x, rect.x + rect.w)))
+    const bottom = Math.min(canvas.height, Math.ceil(Math.max(rect.y, rect.y + rect.h)))
+    const w = right - left
+    const h = bottom - top
 
     if (w < 2 || h < 2) {
         error.value = '切り抜き範囲が小さすぎます。'
@@ -483,7 +487,7 @@ function applyCrop() {
         ctx.putImageData(base, 0, 0)
     }
 
-    const cropped = ctx.getImageData(x, y, w, h)
+    const cropped = ctx.getImageData(left, top, w, h)
     canvas.width = w
     canvas.height = h
     ctx.putImageData(cropped, 0, 0)
@@ -530,7 +534,7 @@ function undo() {
     history.value.pop()
     const prev = history.value[history.value.length - 1]
     restoreFromHistory(prev)
-    dirty.value = history.value.length > 1
+    dirty.value = history.value.length > 1 || !historyBaseIsOriginal.value
     error.value = ''
     success.value = ''
 }
@@ -706,6 +710,7 @@ async function loadImage() {
     loadError.value = ''
     ready.value = false
     history.value = []
+    historyBaseIsOriginal.value = true
     dirty.value = false
     clearCrop()
 
@@ -805,11 +810,6 @@ async function saveEditedImage() {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('source_id', String(props.image.id ?? ''))
-
-        const title = String(props.image.title || '').trim()
-        if (title) {
-            formData.append('title', title)
-        }
 
         if (props.image.associatedID != null && props.image.associatedID !== '') {
             formData.append('associatedID', String(props.image.associatedID))

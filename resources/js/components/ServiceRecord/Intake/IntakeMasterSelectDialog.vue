@@ -14,9 +14,9 @@
                         v-model="searchQuery"
                         type="text"
                         class="search-input"
-                        :class="{ 'ime-latin': kind === 'serviceMaster' || kind === 'loanerProduct' }"
-                        :lang="kind === 'serviceMaster' || kind === 'loanerProduct' ? 'en' : 'ja'"
-                        :inputmode="kind === 'serviceMaster' || kind === 'loanerProduct' ? 'latin' : 'text'"
+                        :class="{ 'ime-latin': usesLatinSearch }"
+                        :lang="usesLatinSearch ? 'en' : 'ja'"
+                        :inputmode="usesLatinSearch ? 'latin' : 'text'"
                         autocomplete="off"
                         autocapitalize="off"
                         spellcheck="false"
@@ -143,6 +143,10 @@ const configs = {
             contactPerson: item?.contactPerson ?? '',
             email: item?.email ?? '',
             phone: item?.phone ?? '',
+            fax: item?.fax ?? '',
+            zipcode: item?.zipcode ?? item?.zip ?? '',
+            address1: item?.address1 ?? '',
+            address2: item?.address2 ?? '',
         }),
     },
     loanerProduct: {
@@ -160,9 +164,41 @@ const configs = {
             productName: String(item?.productName ?? ''),
         }),
     },
+    loanerUnit: {
+        title: '貸出機選択',
+        searchPlaceholder: '半角英数で検索（productName / item / SN / loanerID）',
+        columns: [
+            { key: 'productName', label: 'productName', getter: item => item?.productName ?? '—' },
+            { key: 'item', label: 'item', getter: item => item?.item ?? '—' },
+            { key: 'loanerID', label: 'loanerID', getter: item => item?.loanerID ?? '—' },
+            { key: 'SN', label: 'SN', getter: item => item?.SN ?? '—' },
+            { key: 'manageNum', label: '管理番号', getter: item => item?.manageNum ?? '—' },
+            { key: 'groupName', label: 'グループ', getter: item => item?.groupName ?? '—' },
+        ],
+        valueGetter: item => item?.loanerID,
+        searchFields: item => [
+            item?.productName,
+            item?.item,
+            item?.loanerID,
+            item?.SN,
+            item?.manageNum,
+            item?.groupName,
+        ],
+        buildResult: item => ({
+            loanerID: item?.loanerID ?? null,
+            productName: item?.productName ?? '',
+            item: item?.item ?? '',
+            SN: item?.SN ?? '',
+            manageNum: item?.manageNum ?? '',
+            groupName: item?.groupName ?? '',
+        }),
+    },
 }
 
 const config = computed(() => configs[props.kind] ?? configs.serviceMaster)
+const usesLatinSearch = computed(() =>
+    ['serviceMaster', 'loanerProduct', 'loanerUnit'].includes(props.kind),
+)
 const title = computed(() => config.value.title)
 const searchPlaceholder = computed(() => config.value.searchPlaceholder)
 const columns = computed(() => config.value.columns)
@@ -216,12 +252,12 @@ function onCompositionStart() {
 
 function onCompositionEnd(event) {
     isComposing.value = false
-    if (props.kind !== 'serviceMaster' && props.kind !== 'loanerProduct') return
+    if (!usesLatinSearch.value) return
     searchQuery.value = toHalfWidthAlnum(event.target.value)
 }
 
 function onSearchInput(event) {
-    if ((props.kind !== 'serviceMaster' && props.kind !== 'loanerProduct') || isComposing.value) return
+    if (!usesLatinSearch.value || isComposing.value) return
     const next = toHalfWidthAlnum(event.target.value)
     if (next !== searchQuery.value) {
         searchQuery.value = next

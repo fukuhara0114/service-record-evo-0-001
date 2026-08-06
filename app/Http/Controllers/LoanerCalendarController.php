@@ -70,7 +70,7 @@ class LoanerCalendarController extends Controller
                 $status = ($statusRaw !== null && $statusRaw !== '') ? (int) $statusRaw : null;
                 $colors = $this->resolveEventColors($orderType, $status);
                 $titleParts = array_filter([
-                    $master?->productName ?? $record?->productName ?? $row->productName,
+                    $record?->productName ?? $row->productName ?? $master?->productName,
                     $master?->item,
                     $row->loanerID ? ('ID:' . $row->loanerID) : null,
                     $record?->dealer,
@@ -98,7 +98,11 @@ class LoanerCalendarController extends Controller
                         'dealer' => $record?->dealer,
                         'dealer_depart' => $record?->dealer_depart,
                         'contactPerson' => $record?->contactPerson,
-                        'SN' => $master?->SN ?? $record?->SN,
+                        'email' => $record?->email,
+                        'phone' => $record?->phone,
+                        'productName' => $record?->productName ?? $row->productName ?? $master?->productName,
+                        'item' => $master?->item,
+                        'SN' => $record?->SN ?? $master?->SN,
                         'sentDate' => optional($row->sentDate)->format('Y-m-d'),
                         'returnedDate' => optional($row->returnedDate)->format('Y-m-d'),
                         'plannedSentDate' => optional($row->plannedSentDate)->format('Y-m-d'),

@@ -9,11 +9,11 @@
         <p v-else-if="attachmentsError" class="status-message error">{{ attachmentsError }}</p>
 
         <Splitpanes v-else class="default-theme detail-splitpanes" @resized="syncOuterPaneSizes">
-            <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="35">
-                <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-left" horizontal @resized="syncLeftPaneSizes">
-                    <Pane class="detail-pane detail-pane-left-top" :size="leftTopPaneSize" :min-size="20">
-                        <div class="pane-content pane-content-scroll">
-                            <div class="detail-top-grid">
+            <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="50">
+                <div class="left-pane-layout">
+                    <div class="fixed-summary-area">
+                            <div class="left-top-section left-top-section-main">
+                                <div class="detail-top-grid">
                                 <section class="section-card detail-card">
                                     <dl class="info-grid compact-info-grid">
                                         <dt>受領日</dt>
@@ -221,9 +221,9 @@
                                     </div>
                                 </section>
 
-                            </div>
+                                </div>
 
-                            <section class="section-card price-adjust-row">
+                                <section class="section-card price-adjust-row">
                                 <div class="price-adjust-main">
                                     <span class="price-adjust-label">価格</span>
                                     <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
@@ -249,11 +249,13 @@
                                         <strong>{{ formatSignedAmount(displayAdjustmentAmount) }}</strong>
                                     </div>
                                 </div>
-                            </section>
+                                </section>
+                            </div>
 
                             <section
                                 v-if="showLinkedLoaners"
                                 class="section-card detail-card linked-loaner-card"
+                                :class="{ 'linked-loaner-card-has-items': loaners.length > 0 }"
                             >
                                 <div class="section-header">
                                     <h3>loaner案件（{{ loaners.length }}件）</h3>
@@ -300,11 +302,11 @@
                                                     <a
                                                         v-if="loaner.attachedLoanerId"
                                                         class="loaner-period-link"
-                                                        :href="periodEditUrl(loaner.attachedLoanerId)"
+                                                        :href="loanerDetailUrl(loaner.attachedLoanerId)"
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                     >
-                                                        期間編集
+                                                        詳細
                                                     </a>
                                                     <span v-else class="loaner-period-missing">期間なし</span>
                                                 </td>
@@ -314,8 +316,16 @@
                                 </div>
                                 <p v-else class="empty-message">関連loaner案件はありません。</p>
                             </section>
+                    </div>
 
-                            <div class="detail-bottom-grid">
+                    <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-left" horizontal @resized="syncLeftPaneSizes">
+                        <Pane
+                            class="detail-pane detail-pane-left-top"
+                            :size="leftTopPaneSize"
+                            :min-size="0"
+                        >
+                            <div class="left-top-section left-top-section-contacts">
+                                <div class="detail-bottom-grid">
                                 <section class="section-card detail-card detail-card-input">
                                     <div class="section-header">
                                         <button type="button" class="action-btn action-btn-primary" @click="openDealerSelect">依頼社選択</button>
@@ -425,11 +435,11 @@
                                         </label>
                                     </div>
                                 </section>
+                                </div>
                             </div>
-                        </div>
-                    </Pane>
+                        </Pane>
 
-                    <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="30">
+                        <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="10">
                         <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-bottom" @resized="syncBottomPaneSizes">
                             <Pane class="detail-pane detail-pane-notes" :size="notesPaneSize" :min-size="25">
                                 <div class="pane-content pane-content-scroll">
@@ -518,8 +528,9 @@
                                 </div>
                             </Pane>
                         </Splitpanes>
-                    </Pane>
-                </Splitpanes>
+                        </Pane>
+                    </Splitpanes>
+                </div>
             </Pane>
 
             <Pane class="detail-pane detail-pane-files" :size="rightPaneSize" :min-size="28">
@@ -687,8 +698,8 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
-const leftTopPaneSize = ref(70)
-const leftBottomPaneSize = ref(30)
+const leftTopPaneSize = ref(45)
+const leftBottomPaneSize = ref(55)
 const notesPaneSize = ref(70)
 const partsPaneSize = ref(30)
 const selectedNoteId = ref(null)
@@ -746,8 +757,10 @@ const statusOptions = computed(() => {
     return page.props.statuses ?? []
 })
 
-function periodEditUrl(attachedId) {
-    return `${page.props.appBaseUrl}/servicerecord/loaner/period/${attachedId}`
+function loanerDetailUrl(attachedId) {
+    const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+    const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
+    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${attachedId}${params}`
 }
 
 function isNoteOwner(note) {
@@ -789,8 +802,8 @@ function applyDefaultPaneSizes() {
     const { left, right } = getDefaultPaneSizes()
     leftPaneSize.value = left
     rightPaneSize.value = right
-    leftTopPaneSize.value = 70
-    leftBottomPaneSize.value = 30
+    leftTopPaneSize.value = 45
+    leftBottomPaneSize.value = 55
     notesPaneSize.value = 70
     partsPaneSize.value = 30
 }
@@ -1407,6 +1420,9 @@ function formatDate(value) {
 }
 
 .detail-splitpanes-left {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
     min-height: 0;
 }
 
@@ -1475,10 +1491,54 @@ function formatDate(value) {
     padding-right: 4px;
 }
 
-.detail-pane-left-top > .pane-content {
+.left-pane-layout {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 5px;
-    justify-content: flex-start;
-    align-content: flex-start;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding-right: 4px;
+    box-sizing: border-box;
+}
+
+.fixed-summary-area {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.left-top-section {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.left-top-section-main,
+.left-top-section-contacts {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.left-top-section-main {
+    flex: 0 0 auto;
+    overflow: hidden;
+}
+
+.left-top-section-contacts {
+    width: 100%;
+    height: 100%;
+    padding-right: 4px;
+    box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .pane-content-scroll {
@@ -1493,35 +1553,17 @@ function formatDate(value) {
 }
 
 .detail-top-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
     gap: 5px;
     align-items: stretch;
-    justify-content: flex-start;
 }
 
 .detail-top-grid > .detail-card {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-}
-
-.detail-top-grid > .detail-card:nth-child(1) {
-    flex: 0 1 500px;
-    width: 500px;
-    max-width: min(500px, 100%);
-}
-
-.detail-top-grid > .detail-card:nth-child(2) {
-    flex: 0 1 350px;
-    width: 350px;
-    max-width: min(350px, 100%);
-}
-
-.detail-top-grid > .detail-card:nth-child(3) {
-    flex: 0 1 350px;
-    width: 350px;
-    max-width: min(350px, 100%);
+    min-width: 0;
 }
 
 .detail-bottom-grid {
@@ -1535,6 +1577,7 @@ function formatDate(value) {
 
 .price-adjust-row {
     display: flex;
+    flex: 0 0 auto;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
@@ -1689,9 +1732,59 @@ function formatDate(value) {
 }
 
 .linked-loaner-card {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 64px;
+    max-height: clamp(104px, 18vh, 180px);
     margin-top: 0;
+    padding: 10px 12px;
     border-color: #93c5fd;
     background: #eff6ff;
+    overflow: hidden;
+}
+
+.linked-loaner-card-has-items {
+    min-height: 104px;
+}
+
+.linked-loaner-card .section-header {
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+}
+
+.linked-loaner-card .attachment-table-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 54px;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.linked-loaner-card .data-table {
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.linked-loaner-card .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.linked-loaner-card .data-table th,
+.linked-loaner-card .data-table td {
+    padding: 4px 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.linked-loaner-card .data-table th:last-child,
+.linked-loaner-card .data-table td:last-child {
+    width: 48px;
 }
 
 .linked-loaner-help {
@@ -1836,8 +1929,8 @@ function formatDate(value) {
 }
 
 .dd-order-num .field-date {
-    flex: 0 0 132px;
-    width: 132px;
+    flex: 0 1 132px;
+    width: min(132px, 45%);
 }
 
 .dots-btn {

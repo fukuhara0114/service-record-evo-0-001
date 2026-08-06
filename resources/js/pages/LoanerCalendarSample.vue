@@ -68,6 +68,10 @@
                 <div><dt>dealer</dt><dd>{{ selectedEvent.extendedProps?.dealer ?? '—' }}</dd></div>
                 <div><dt>dealer_depart</dt><dd>{{ selectedEvent.extendedProps?.dealer_depart ?? '—' }}</dd></div>
                 <div><dt>contactPerson</dt><dd>{{ selectedEvent.extendedProps?.contactPerson ?? '—' }}</dd></div>
+                <div><dt>email</dt><dd>{{ selectedEvent.extendedProps?.email ?? '—' }}</dd></div>
+                <div><dt>phone</dt><dd>{{ selectedEvent.extendedProps?.phone ?? '—' }}</dd></div>
+                <div><dt>productName</dt><dd>{{ selectedEvent.extendedProps?.productName ?? '—' }}</dd></div>
+                <div><dt>item</dt><dd>{{ selectedEvent.extendedProps?.item ?? '—' }}</dd></div>
                 <div><dt>SN</dt><dd>{{ selectedEvent.extendedProps?.SN ?? '—' }}</dd></div>
                 <div><dt>sentDate</dt><dd>{{ selectedEvent.extendedProps?.sentDate ?? '—' }}</dd></div>
                 <div><dt>returnedDate</dt><dd>{{ selectedEvent.extendedProps?.returnedDate ?? '—' }}</dd></div>
@@ -79,9 +83,9 @@
                 <a
                     v-if="selectedEvent.id"
                     class="btn btn-primary"
-                    :href="periodEditUrl(selectedEvent.id)"
+                    :href="loanerDetailUrl(selectedEvent)"
                 >
-                    貸出期間を編集
+                    貸出案件を編集
                 </a>
             </div>
         </aside>
@@ -89,7 +93,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -397,8 +401,15 @@ async function handleEventDropOrResize(changeInfo) {
     }
 }
 
-function periodEditUrl(id) {
-    return `${page.props.appBaseUrl}/servicerecord/loaner/period/${id}`
+function loanerDetailUrl(event) {
+    const params = new URLSearchParams({
+        returnUrl: window.location.href,
+    })
+    const orderID = event?.extendedProps?.associatedID
+    const loanerID = event?.extendedProps?.loanerID
+    if (orderID != null && orderID !== '') params.set('orderID', String(orderID))
+    if (loanerID != null && loanerID !== '') params.set('loanerID', String(loanerID))
+    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${event.id}?${params.toString()}`
 }
 
 function reloadEvents() {
@@ -407,6 +418,24 @@ function reloadEvents() {
     const api = calendarRef.value?.getApi?.()
     api?.refetchEvents()
 }
+
+function handlePageShow(event) {
+    if (event.persisted) reloadEvents()
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') reloadEvents()
+}
+
+onMounted(() => {
+    window.addEventListener('pageshow', handlePageShow)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+    window.removeEventListener('pageshow', handlePageShow)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 </script>
 
 <style scoped>

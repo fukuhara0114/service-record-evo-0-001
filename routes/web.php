@@ -2,6 +2,7 @@
 
 // routes/web.php
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\FileImportController;
 use App\Http\Controllers\LoanerCalendarController;
 use App\Http\Controllers\LoanerRecordController;
 use App\Http\Controllers\ServiceRecordController;
@@ -55,6 +56,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/camera/thumbnail/{fileName}', [ServiceRecordController::class, 'showCapturedThumbnail'])->where('fileName', '[A-Za-z0-9._-]+')->name('servicerecord.camera.thumbnail');
     Route::get('/servicerecord/intake/create', [ServiceRecordController::class, 'createWithoutFile'])->name('servicerecord.intake.create-blank');
     Route::post('/servicerecord/intake/upload', [ServiceRecordController::class, 'uploadForIntake'])->name('servicerecord.intake.upload');
+    Route::post('/servicerecord/file-import/start', [FileImportController::class, 'start'])->name('servicerecord.file-import.start');
     Route::get('/servicerecord/intake/{fileId}/create', [ServiceRecordController::class, 'createFromFile'])->name('servicerecord.intake.create');
     Route::get('/servicerecord/search-existing', [ServiceRecordController::class, 'searchExisting'])->name('servicerecord.search-existing');
     Route::post('/servicerecord/intake/link-existing', [ServiceRecordController::class, 'linkToExisting'])->name('servicerecord.intake.link-existing');
@@ -68,6 +70,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/loaner/create', [LoanerRecordController::class, 'create'])->name('servicerecord.loaner.create');
     Route::get('/servicerecord/loaner/availability', [LoanerRecordController::class, 'availability'])->name('servicerecord.loaner.availability');
     Route::post('/servicerecord/loaner/store', [LoanerRecordController::class, 'store'])->name('servicerecord.loaner.store');
+    Route::get('/servicerecord/loaner/detail/{id}', [LoanerRecordController::class, 'detail'])->name('servicerecord.loaner.detail');
+    Route::put('/servicerecord/loaner/detail/{id}', [LoanerRecordController::class, 'updateDetail'])->name('servicerecord.loaner.detail.update');
     Route::get('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'editPeriod'])->name('servicerecord.loaner.period.edit');
     Route::put('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'updatePeriod'])->name('servicerecord.loaner.period.update');
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');

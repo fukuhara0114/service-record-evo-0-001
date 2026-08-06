@@ -1,11 +1,24 @@
 import './bootstrap';
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
-import { handleUnauthorizedStatus } from './utils/auth';
+import { createInertiaApp, router } from '@inertiajs/vue3';
+import { handleUnauthorizedResponse, handleUnauthorizedStatus } from './utils/auth';
 
+function onInertiaHttpException(event) {
+    const response = event.detail?.response;
+    if (handleUnauthorizedResponse(response)) {
+        event.preventDefault?.();
+        return false;
+    }
+}
+
+// Inertia v3: httpException（v2 の invalid 相当）
+router.on('httpException', onInertiaHttpException);
+
+// 互換・フォールバック（環境差で DOM イベントのみ届く場合）
+document.addEventListener('inertia:httpException', onInertiaHttpException);
+document.addEventListener('inertia:invalid', onInertiaHttpException);
 document.addEventListener('inertia:error', (event) => {
-    const status = event.detail?.response?.status;
-    handleUnauthorizedStatus(status);
+    handleUnauthorizedStatus(event.detail?.response?.status);
 });
 
 createInertiaApp({
