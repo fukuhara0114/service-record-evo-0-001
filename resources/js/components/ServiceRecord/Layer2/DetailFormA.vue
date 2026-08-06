@@ -10,8 +10,16 @@
 
         <Splitpanes v-else class="default-theme detail-splitpanes" @resized="syncOuterPaneSizes">
             <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="50">
-                <div class="left-pane-layout">
-                    <div class="fixed-summary-area">
+                <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-left" horizontal @resized="syncLeftPaneSizes">
+                    <Pane
+                        class="detail-pane detail-pane-left-top"
+                        :size="leftTopPaneSize"
+                        :min-size="showLinkedLoaners && loaners.length ? 65 : 48"
+                    >
+                        <div
+                            class="left-top-layout"
+                            :class="{ 'left-top-layout-with-loaner': showLinkedLoaners }"
+                        >
                             <div class="left-top-section left-top-section-main">
                                 <div class="detail-top-grid">
                                 <section class="section-card detail-card">
@@ -316,14 +324,7 @@
                                 </div>
                                 <p v-else class="empty-message">関連loaner案件はありません。</p>
                             </section>
-                    </div>
 
-                    <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-left" horizontal @resized="syncLeftPaneSizes">
-                        <Pane
-                            class="detail-pane detail-pane-left-top"
-                            :size="leftTopPaneSize"
-                            :min-size="0"
-                        >
                             <div class="left-top-section left-top-section-contacts">
                                 <div class="detail-bottom-grid">
                                 <section class="section-card detail-card detail-card-input">
@@ -437,9 +438,10 @@
                                 </section>
                                 </div>
                             </div>
-                        </Pane>
+                        </div>
+                    </Pane>
 
-                        <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="10">
+                    <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="30">
                         <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-bottom" @resized="syncBottomPaneSizes">
                             <Pane class="detail-pane detail-pane-notes" :size="notesPaneSize" :min-size="25">
                                 <div class="pane-content pane-content-scroll">
@@ -528,9 +530,8 @@
                                 </div>
                             </Pane>
                         </Splitpanes>
-                        </Pane>
-                    </Splitpanes>
-                </div>
+                    </Pane>
+                </Splitpanes>
             </Pane>
 
             <Pane class="detail-pane detail-pane-files" :size="rightPaneSize" :min-size="28">
@@ -698,8 +699,8 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
-const leftTopPaneSize = ref(45)
-const leftBottomPaneSize = ref(55)
+const leftTopPaneSize = ref(70)
+const leftBottomPaneSize = ref(30)
 const notesPaneSize = ref(70)
 const partsPaneSize = ref(30)
 const selectedNoteId = ref(null)
@@ -802,8 +803,8 @@ function applyDefaultPaneSizes() {
     const { left, right } = getDefaultPaneSizes()
     leftPaneSize.value = left
     rightPaneSize.value = right
-    leftTopPaneSize.value = 45
-    leftBottomPaneSize.value = 55
+    leftTopPaneSize.value = 70
+    leftBottomPaneSize.value = 30
     notesPaneSize.value = 70
     partsPaneSize.value = 30
 }
@@ -1420,9 +1421,6 @@ function formatDate(value) {
 }
 
 .detail-splitpanes-left {
-    flex: 1 1 auto;
-    width: 100%;
-    height: 100%;
     min-height: 0;
 }
 
@@ -1491,9 +1489,9 @@ function formatDate(value) {
     padding-right: 4px;
 }
 
-.left-pane-layout {
+.left-top-layout {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(72px, 1fr);
     gap: 5px;
     width: 100%;
     height: 100%;
@@ -1504,13 +1502,8 @@ function formatDate(value) {
     box-sizing: border-box;
 }
 
-.fixed-summary-area {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    gap: 5px;
-    min-width: 0;
-    overflow: hidden;
+.left-top-layout-with-loaner {
+    grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .left-top-section {
@@ -1534,10 +1527,6 @@ function formatDate(value) {
 }
 
 .left-top-section-contacts {
-    width: 100%;
-    height: 100%;
-    padding-right: 4px;
-    box-sizing: border-box;
     overflow-y: auto;
 }
 
