@@ -347,6 +347,7 @@ const props = defineProps({
     loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
+    currentUserKanji: { type: String, default: '' },
 })
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'save', 'workflow-done'])
@@ -369,16 +370,30 @@ const fileDropError = ref('')
 const fileDropProgress = ref('')
 const fileDragDepth = ref(0)
 
-const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
+const authUserName = computed(() => {
+    const fromProp = String(props.currentUserKanji ?? '').trim()
+    if (fromProp) return fromProp
+    return String(page.props.authUser?.kanji_name ?? '').trim()
+})
 
 const sharedNotes = computed(() =>
     (props.notes ?? []).filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
 )
 
-const selectedNote = computed(() => sharedNotes.value.find(n => n.id === selectedNoteId.value))
+const selectedNote = computed(() => sharedNotes.value.find(n => Number(n.id) === Number(selectedNoteId.value)))
 
 function isNoteOwner(note) {
-    return Boolean(note?.whoWrote) && note.whoWrote === authUserName.value
+    if (!note) return false
+
+    const who = String(note.whoWrote ?? '').trim()
+    if (!who) return false
+
+    if (note.is_mine === true || note.is_mine === 1 || note.is_mine === '1') {
+        return true
+    }
+
+    const me = authUserName.value
+    return me !== '' && me === who
 }
 
 const canModifySelectedNote = computed(() => !!selectedNote.value && isNoteOwner(selectedNote.value))

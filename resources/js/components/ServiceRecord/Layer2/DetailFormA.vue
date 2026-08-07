@@ -10,16 +10,11 @@
 
         <Splitpanes v-else class="default-theme detail-splitpanes" @resized="syncOuterPaneSizes">
             <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="50">
-                <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-left" horizontal @resized="syncLeftPaneSizes">
-                    <Pane
-                        class="detail-pane detail-pane-left-top"
-                        :size="leftTopPaneSize"
-                        :min-size="showLinkedLoaners && loaners.length ? 65 : 48"
+                <div class="left-column-layout">
+                    <div
+                        class="left-fixed-header"
+                        :class="{ 'left-fixed-header-with-loaner': showLinkedLoaners }"
                     >
-                        <div
-                            class="left-top-layout"
-                            :class="{ 'left-top-layout-with-loaner': showLinkedLoaners }"
-                        >
                             <div class="left-top-section left-top-section-main">
                                 <div class="detail-top-grid">
                                 <section class="section-card detail-card">
@@ -47,10 +42,10 @@
                                                 <option value="">選択してください</option>
                                                 <option
                                                     v-for="status in statusOptions"
-                                                    :key="status.processID"
-                                                    :value="status.processID"
+                                                    :key="status.processID_new"
+                                                    :value="status.processID_new"
                                                 >
-                                                    {{ status.status }} ({{ status.processID }})
+                                                    {{ status.status }} ({{ status.processID_new }})
                                                 </option>
                                             </select>
                                         </dd>
@@ -219,7 +214,13 @@
                                     </div>
 
                                     <div class="misc-block misc-block-incidents">
-                                        <div class="incidents-header">Incidents</div>
+                                        <button
+                                            type="button"
+                                            class="incidents-header"
+                                            @click="openIncidentSelect"
+                                        >
+                                            Incidents
+                                        </button>
                                         <input
                                             type="text"
                                             class="field-input incidents-input"
@@ -232,19 +233,24 @@
                                 </div>
 
                                 <section class="section-card price-adjust-row">
-                                <div class="price-adjust-main">
-                                    <span class="price-adjust-label">価格</span>
-                                    <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
-                                </div>
-                                <div class="price-adjust-actions">
-                                    <button
-                                        type="button"
-                                        class="action-btn action-btn-primary"
-                                        :disabled="!record?.orderID || priceAdjustSaving"
-                                        @click="openPriceAdjustDialog"
-                                    >
-                                        価格調整
-                                    </button>
+                                    <div class="price-adjust-main">
+                                        <span class="price-adjust-label">価格</span>
+                                        <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
+                                    </div>
+                                    <div class="price-adjust-actions">
+                                        <button
+                                            type="button"
+                                            class="action-btn action-btn-primary"
+                                            :disabled="!record?.orderID || priceAdjustSaving"
+                                            @click="openPriceAdjustDialog"
+                                        >
+                                            価格調整
+                                        </button>
+                                        <div class="price-adjust-delta">
+                                            <span class="price-adjust-label">調整額</span>
+                                            <strong>{{ formatSignedAmount(displayAdjustmentAmount) }}</strong>
+                                        </div>
+                                    </div>
                                     <button
                                         type="button"
                                         class="action-btn"
@@ -252,11 +258,15 @@
                                     >
                                         Gallery
                                     </button>
-                                    <div class="price-adjust-delta">
-                                        <span class="price-adjust-label">調整額</span>
-                                        <strong>{{ formatSignedAmount(displayAdjustmentAmount) }}</strong>
-                                    </div>
-                                </div>
+                                    <label class="price-adjust-symptoms">
+                                        <input
+                                            type="text"
+                                            class="field-input symptoms-input"
+                                            placeholder="symptoms入力"
+                                            :value="draftRecord?.symptoms ?? record?.symptoms ?? ''"
+                                            @input="updateDraftValue('symptoms', $event.target.value)"
+                                        >
+                                    </label>
                                 </section>
                             </div>
 
@@ -280,8 +290,7 @@
                                                 <th>status</th>
                                                 <th>productName</th>
                                                 <th>SN</th>
-                                                <th>loanerID</th>
-                                                <th>dealer</th>
+                                                <th>price</th>
                                                 <th>期間</th>
                                                 <th></th>
                                             </tr>
@@ -296,8 +305,7 @@
                                                 </td>
                                                 <td>{{ loaner.productName || '—' }}</td>
                                                 <td>{{ loaner.SN || '—' }}</td>
-                                                <td>{{ loaner.loanerID || '—' }}</td>
-                                                <td>{{ loaner.dealer || '—' }}</td>
+                                                <td>{{ formatPrice(loanerDisplayPrice(loaner)) }}</td>
                                                 <td>
                                                     <template v-if="loaner.plannedSentDate || loaner.plannedReturnedDate">
                                                         {{ loaner.plannedSentDate || '—' }}
@@ -324,7 +332,18 @@
                                 </div>
                                 <p v-else class="empty-message">関連loaner案件はありません。</p>
                             </section>
+                    </div>
 
+                    <Splitpanes
+                        class="default-theme detail-splitpanes detail-splitpanes-left"
+                        horizontal
+                        @resized="syncLeftPaneSizes"
+                    >
+                        <Pane
+                            class="detail-pane detail-pane-contacts"
+                            :size="leftTopPaneSize"
+                            :min-size="0"
+                        >
                             <div class="left-top-section left-top-section-contacts">
                                 <div class="detail-bottom-grid">
                                 <section class="section-card detail-card detail-card-input">
@@ -366,7 +385,7 @@
                                 </section>
 
                                 <section class="section-card detail-card detail-card-input">
-                                    <h3>E/U</H3>
+                                    <h3>E/U</h3>
                                         <div class="input-grid">
                                         <label class="input-field">
                                             <input type="text" placeholder="E/U会社名" :value="draftRecord?.endUser ?? record?.endUser ?? ''" @input="updateDraftValue('endUser', $event.target.value)">
@@ -402,7 +421,7 @@
                                 </section>
 
                                 <section class="section-card detail-card detail-card-input">
-                                    <h3>発送先</H3>
+                                    <h3>発送先</h3>
                                     <div class="input-grid">
                                         <label class="input-field">
                                             <input type="text" placeholder="発送先会社名" :value="draftRecord?.deliveryDestination_company ?? record?.deliveryDestination_company ?? ''" @input="updateDraftValue('deliveryDestination_company', $event.target.value)">
@@ -438,10 +457,9 @@
                                 </section>
                                 </div>
                             </div>
-                        </div>
-                    </Pane>
+                        </Pane>
 
-                    <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="30">
+                    <Pane class="detail-pane detail-pane-left-bottom" :size="leftBottomPaneSize" :min-size="10">
                         <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-bottom" @resized="syncBottomPaneSizes">
                             <Pane class="detail-pane detail-pane-notes" :size="notesPaneSize" :min-size="25">
                                 <div class="pane-content pane-content-scroll">
@@ -449,8 +467,8 @@
                                         <div class="section-header">
                                             <h3>Notes（{{ sharedNotes.length }}件）</h3>
                                             <div class="section-actions">
-                                                <button type="button" class="action-btn" :disabled="!canModifySelectedNote" :title="noteEditDeleteTitle" @click="openNoteEdit">編集</button>
-                                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedNote" :title="noteEditDeleteTitle" @click="openNoteDelete">削除</button>
+                                                <button type="button" class="action-btn" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteEdit">編集</button>
+                                                <button type="button" class="action-btn action-btn-danger" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteDelete">削除</button>
                                                 <button type="button" class="action-btn" @click="openEmailNoteLink">メール紐づけ</button>
                                                 <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
                                             </div>
@@ -469,14 +487,14 @@
                                                         v-for="note in sharedNotes"
                                                         :key="note.id"
                                                         class="table-row"
-                                                        :class="{ 'important-row': note.important, 'active-row': selectedNoteId === note.id }"
+                                                        :class="{ 'important-row': note.important, 'active-row': Number(selectedNoteId) === Number(note.id) }"
                                                         @click="selectedNoteId = note.id"
                                                     >
                                                         <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
                                                         <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
                                                         <td
                                                             class="text-cell col-note-body"
-                                                            @click.stop
+                                                            @click.stop="selectedNoteId = note.id"
                                                             v-html="linkifyNote(note.note)"
                                                         />
                                                     </tr>
@@ -532,6 +550,7 @@
                         </Splitpanes>
                     </Pane>
                 </Splitpanes>
+                </div>
             </Pane>
 
             <Pane class="detail-pane detail-pane-files" :size="rightPaneSize" :min-size="28">
@@ -547,8 +566,22 @@
                                 <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                             </div>
                         </div>
-                        <div class="files-type-label">
-                            <span class="type-badge type-badge-doc">書類ファイル</span>
+                        <div class="captured-images-panel">
+                            <button
+                                type="button"
+                                class="captured-toggle"
+                                @click="capturedImagesOpen = !capturedImagesOpen"
+                            >
+                                <span>撮影画像（{{ capturedImages.length }}件）</span>
+                                <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                            </button>
+                            <div v-show="capturedImagesOpen" class="captured-images-body">
+                                <AssociatedCapturedImages
+                                    :images="capturedImages"
+                                    @changed="emit('reload-attachments')"
+                                />
+                                <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
+                            </div>
                         </div>
 
                         <div
@@ -605,11 +638,6 @@
                                 @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
                             <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
-
-                            <AssociatedCapturedImages
-                                :images="capturedImages"
-                                @changed="emit('reload-attachments')"
-                            />
                         </div>
                     </section>
                 </div>
@@ -693,14 +721,15 @@ const props = defineProps({
     loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
+    currentUserKanji: { type: String, default: '' },
 })
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
-const leftTopPaneSize = ref(70)
-const leftBottomPaneSize = ref(30)
+const leftTopPaneSize = ref(45)
+const leftBottomPaneSize = ref(55)
 const notesPaneSize = ref(70)
 const partsPaneSize = ref(30)
 const selectedNoteId = ref(null)
@@ -709,6 +738,7 @@ const selectedFileId = ref(null)
 const fileSortSaving = ref(false)
 const showPriceAdjustDialog = ref(false)
 const showGalleryDialog = ref(false)
+const capturedImagesOpen = ref(true)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const priceAdjustSaving = ref(false)
 const priceAdjustError = ref('')
@@ -725,11 +755,23 @@ const fileDropError = ref('')
 const fileDropProgress = ref('')
 const fileDragDepth = ref(0)
 
-const authUserName = computed(() => page.props.authUser?.kanji_name ?? '')
+const authUserName = computed(() => {
+    const fromProp = String(props.currentUserKanji ?? '').trim()
+    if (fromProp) return fromProp
+
+    const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
+    if (fromPage) return fromPage
+
+    if (typeof document !== 'undefined') {
+        return String(document.querySelector('meta[name="auth-kanji-name"]')?.content ?? '').trim()
+    }
+
+    return ''
+})
 const sharedNotes = computed(() =>
     (props.notes ?? []).filter(note => !isPersonalNote(note)),
 )
-const selectedNote = computed(() => sharedNotes.value.find(n => n.id === selectedNoteId.value))
+const selectedNote = computed(() => sharedNotes.value.find(n => Number(n.id) === Number(selectedNoteId.value)))
 
 function isPersonalNote(note) {
     return note?.personal === true || note?.personal === 1 || note?.personal === '1'
@@ -765,14 +807,27 @@ function loanerDetailUrl(attachedId) {
 }
 
 function isNoteOwner(note) {
-    return note?.whoWrote === authUserName.value
+    if (!note) return false
+
+    const who = String(note.whoWrote ?? '').trim()
+    if (!who) return false
+
+    if (note.is_mine === true || note.is_mine === 1 || note.is_mine === '1') {
+        return true
+    }
+
+    const me = authUserName.value
+    return me !== '' && me === who
 }
 
 const canModifySelectedNote = computed(() => !!selectedNote.value && isNoteOwner(selectedNote.value))
 
 const noteEditDeleteTitle = computed(() => {
     if (!selectedNoteId.value) return 'Note を選択してください'
-    if (!canModifySelectedNote.value) return '自分が書いた Note のみ編集・削除できます'
+    if (!selectedNote.value) return 'Note を選択してください'
+    if (!isNoteOwner(selectedNote.value)) {
+        return `自分が書いた Note のみ編集・削除できます（ログイン: ${authUserName.value || '不明'} / 記入者: ${selectedNote.value.whoWrote || '不明'}）`
+    }
     return ''
 })
 
@@ -803,8 +858,8 @@ function applyDefaultPaneSizes() {
     const { left, right } = getDefaultPaneSizes()
     leftPaneSize.value = left
     rightPaneSize.value = right
-    leftTopPaneSize.value = 70
-    leftBottomPaneSize.value = 30
+    leftTopPaneSize.value = 45
+    leftBottomPaneSize.value = 55
     notesPaneSize.value = 70
     partsPaneSize.value = 30
 }
@@ -836,7 +891,10 @@ onMounted(() => {
 })
 
 watch(() => props.notes, () => {
-    if (selectedNoteId.value && !sharedNotes.value.some(n => n.id === selectedNoteId.value)) {
+    if (
+        selectedNoteId.value != null &&
+        !sharedNotes.value.some(n => Number(n.id) === Number(selectedNoteId.value))
+    ) {
         selectedNoteId.value = null
     }
 })
@@ -862,7 +920,11 @@ watch(() => props.record?.orderID, () => {
 
 function openNoteEdit() {
     const note = selectedNote.value
-    if (!note || !isNoteOwner(note)) return
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ編集できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
     emit('open-dialog', 'NOTE', { mode: 'edit', note })
 }
 
@@ -886,6 +948,13 @@ function openDealerSelect() {
     emit('open-dialog', 'MASTER_SELECT', {
         kind: 'dealer',
         dealer: props.draftRecord?.dealer ?? props.record?.dealer,
+    })
+}
+
+function openIncidentSelect() {
+    emit('open-dialog', 'MASTER_SELECT', {
+        kind: 'incident',
+        incident: props.draftRecord?.incident ?? props.record?.incident,
     })
 }
 
@@ -1057,7 +1126,11 @@ function updateDraftDateValue(field, value) {
 
 function openNoteDelete() {
     const note = selectedNote.value
-    if (!note || !isNoteOwner(note)) return
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ削除できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
     emit('open-dialog', 'D', { action: 'delete-note', note, noteId: note.id })
 }
 
@@ -1356,6 +1429,23 @@ function formatPrice(value) {
     return num.toLocaleString('ja-JP')
 }
 
+const PAID_LOANER_RETURN_CODES = [1, 2, 7, 13]
+const currentReturnCode = computed(() => {
+    const value = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const num = Number(value)
+    return Number.isFinite(num) ? num : null
+})
+
+function loanerDisplayPrice(loaner) {
+    if (!PAID_LOANER_RETURN_CODES.includes(currentReturnCode.value)) {
+        return 0
+    }
+    const master = Number(loaner?.masterPrice)
+    if (Number.isFinite(master)) return master
+    const stored = Number(loaner?.price)
+    return Number.isFinite(stored) ? stored : 0
+}
+
 function formatSignedAmount(value) {
     if (value === '' || value == null) return '—'
     const num = Number(value)
@@ -1420,14 +1510,11 @@ function formatDate(value) {
     min-height: 0;
 }
 
-.detail-splitpanes-left {
-    min-height: 0;
-}
-
 .detail-splitpanes-bottom {
     min-height: 0;
     height: 100%;
     width: 100%;
+    background: #ccccff
 }
 
 .detail-pane {
@@ -1440,7 +1527,38 @@ function formatDate(value) {
     flex-direction: column;
 }
 
+.left-column-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.left-fixed-header {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    overflow: hidden;
+    padding-right: 4px;
+    box-sizing: border-box;
+}
+
+.left-fixed-header-with-loaner {
+    flex: 0 0 auto;
+}
+
+.detail-splitpanes-left {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .detail-pane-left-top,
+.detail-pane-contacts,
 .detail-pane-left-bottom,
 .detail-pane-notes,
 .detail-pane-parts {
@@ -1452,7 +1570,8 @@ function formatDate(value) {
     min-width: 0;
 }
 
-.detail-pane-left-top {
+.detail-pane-left-top,
+.detail-pane-contacts {
     font-size: 14px;
 }
 
@@ -1467,11 +1586,29 @@ function formatDate(value) {
 .detail-pane-left-top .action-btn,
 .detail-pane-left-top .section-card h3,
 .detail-pane-left-top .entity-id-label,
-.detail-pane-left-top .entity-id-value {
+.detail-pane-left-top .entity-id-value,
+.left-fixed-header .info-grid dt,
+.left-fixed-header .info-grid dd,
+.left-fixed-header .field-input,
+.left-fixed-header .field-select,
+.left-fixed-header .field-button,
+.left-fixed-header .input-field,
+.left-fixed-header .input-field input,
+.left-fixed-header .input-field input::placeholder,
+.left-fixed-header .action-btn,
+.left-fixed-header .section-card h3,
+.left-fixed-header .entity-id-label,
+.left-fixed-header .entity-id-value,
+.detail-pane-contacts .input-field,
+.detail-pane-contacts .input-field input,
+.detail-pane-contacts .input-field input::placeholder,
+.detail-pane-contacts .action-btn,
+.detail-pane-contacts .section-card h3 {
     font-size: 14px;
 }
 
-.detail-pane-left-top .info-grid dd input:not(.field-input) {
+.detail-pane-left-top .info-grid dd input:not(.field-input),
+.left-fixed-header .info-grid dd input:not(.field-input) {
     font-size: 14px;
     font-weight: bold;
 }
@@ -1527,7 +1664,10 @@ function formatDate(value) {
 }
 
 .left-top-section-contacts {
+    height: 100%;
     overflow-y: auto;
+    padding-right: 4px;
+    box-sizing: border-box;
 }
 
 .pane-content-scroll {
@@ -1567,27 +1707,56 @@ function formatDate(value) {
 .price-adjust-row {
     display: flex;
     flex: 0 0 auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px 20px;
-    padding: 10px 14px;
+    justify-content: flex-start;
+    gap: 12px 16px;
+    padding: 2px 12px;
     border-color: #93c5fd;
-    background: #f8fbff;
+    background:rgb(210, 210, 220);
 }
 
 .price-adjust-main,
 .price-adjust-actions,
 .price-adjust-delta {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 10px;
+}
+
+.price-adjust-symptoms {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.symptoms-input{
+    padding: 5px 5px;
+
+}
+.symptoms-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    background: #fff;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    color: #0f172a;
+}
+
+.symptoms-input::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
 }
 
 .price-adjust-label {
     font-size: 14px;
     font-weight: 700;
     color: #475569;
+    white-space: nowrap;
 }
 
 .price-adjust-value {
@@ -1725,28 +1894,35 @@ function formatDate(value) {
     flex-direction: column;
     flex: 0 0 auto;
     min-width: 0;
-    min-height: 64px;
-    max-height: clamp(104px, 18vh, 180px);
+    min-height: 0;
+    max-height: clamp(96px, 16vh, 160px);
     margin-top: 0;
-    padding: 10px 12px;
-    border-color: #93c5fd;
+    padding: 4px 8px;
+    border-color: #e6f2ff;
     background: #eff6ff;
     overflow: hidden;
 }
 
 .linked-loaner-card-has-items {
-    min-height: 104px;
+    min-height: 0;
 }
 
 .linked-loaner-card .section-header {
     flex: 0 0 auto;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
+    min-height: 0;
+}
+
+.linked-loaner-card .section-header h3 {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.2;
 }
 
 .linked-loaner-card .attachment-table-wrap {
     flex: 1 1 auto;
     min-width: 0;
-    min-height: 54px;
+    min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
 }
@@ -1808,7 +1984,7 @@ function formatDate(value) {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 2px;
 }
 
 .section-actions {
@@ -1851,7 +2027,7 @@ function formatDate(value) {
 }
 
 .compact-info-grid {
-    grid-template-columns: 80px 1fr;
+    grid-template-columns: 60px 1fr;
     gap: 6px 12px;
 }
 
@@ -1894,7 +2070,7 @@ function formatDate(value) {
 
 .detail-card-rma-order .rma-order-grid {
     /* compact 80px の半分 + 列ギャップ 12px の半分 */
-    grid-template-columns: 40px 1fr;
+    grid-template-columns: 50px 1fr;
     gap: 6px 6px;
 }
 
@@ -1910,16 +2086,23 @@ function formatDate(value) {
     display: flex;
     gap: 6px;
     align-items: center;
-}
-
-.dd-order-num .field-input:not(.field-date) {
-    flex: 1 1 auto;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
-.dd-order-num .field-date {
-    flex: 0 1 132px;
-    width: min(132px, 45%);
+.dd-order-num .field-input {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    max-width: none;
+}
+
+.dd-order-num .field-date,
+.dd-order-num input[type="date"] {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
 }
 
 .dots-btn {
@@ -2008,14 +2191,21 @@ function formatDate(value) {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     min-height: 28px;
     padding: 4px 8px;
+    border: none;
     border-top: 3px solid #3b82f6;
     background: #4b5563;
     color: #fff;
     font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.incidents-header:hover {
+    background: #374151;
 }
 
 .incidents-input {
@@ -2339,6 +2529,7 @@ function formatDate(value) {
     flex-direction: column;
     min-height: 0;
     height: 100%;
+    backgroud: #cccccc;
 }
 
 .attachment-table-wrap {
@@ -2353,30 +2544,53 @@ function formatDate(value) {
     overflow: auto;
 }
 
-.files-type-label {
+.captured-images-panel {
+    flex: 0 0 auto;
     margin: 0 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    overflow: hidden;
 }
 
-.type-badge {
-    display: inline-flex;
+.captured-toggle {
+    width: 100%;
+    display: flex;
     align-items: center;
-    padding: 2px 8px;
-    border-radius: 4px;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border: none;
+    background: #e2e8f0;
+    color: #0f172a;
     font-size: 13px;
     font-weight: 700;
+    cursor: pointer;
 }
 
-.type-badge-doc {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 1px solid #93c5fd;
-}
-
-:deep(.splitpanes__splitter) {
+.captured-toggle:hover {
     background: #cbd5e1;
 }
 
+.captured-toggle-icon {
+    font-size: 11px;
+    color: #475569;
+}
+
+.captured-images-body {
+    max-height: 200px;
+    overflow: auto;
+    padding: 8px;
+}
+
+:deep(.splitpanes__splitter) {
+    /* background: #cbd5e1; */
+    background: #ff0000;
+    
+}
+
 :deep(.splitpanes__splitter:hover) {
-    background: #94a3b8;
+    /* background: #94a3b8; */
+    background: #0000ff;
 }
 </style>

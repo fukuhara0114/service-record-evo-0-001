@@ -22,31 +22,84 @@
                                 貸出機を選択
                             </button>
                         </div>
-                        <div class="compact-grid loaner-grid">
-                            <label><span>親OrderID</span><input v-model="form.parentID" type="number"></label>
-                            <label class="span-2">
-                                <span>製品名</span>
-                                <button type="button" class="master-value" @click="activeSelectKind = 'loanerUnit'">
-                                    {{ form.productName || '選択してください' }}
+                        <div class="loaner-info-layout">
+                            <div class="loaner-id-col">
+                                <label><span>親OrderID</span><input v-model="form.parentID" type="number"></label>
+                                <label><span>loanerID</span><input :value="form.loanerID" type="text" readonly></label>
+                                <label><span>管理番号</span><input :value="selectedUnit?.manageNum || loanerMaster?.manageNum || ''" type="text" readonly></label>
+                            </div>
+
+                            <div class="loaner-detail-col">
+                                <label>
+                                    <span>製品名</span>
+                                    <button type="button" class="master-value" @click="activeSelectKind = 'loanerUnit'">
+                                        {{ form.productName || '選択してください' }}
+                                    </button>
+                                </label>
+                                <div class="detail-pair">
+                                    <label><span>品目</span><input :value="selectedUnit?.item || loanerMaster?.item || ''" type="text" readonly></label>
+                                    <label><span>S/N</span><input v-model="form.SN" type="text"></label>
+                                </div>
+                                <div class="detail-pair">
+                                    <label><span>グループ</span><input :value="selectedUnit?.groupName || loanerMaster?.groupName || ''" type="text" readonly></label>
+                                    <label><span>案件種別</span><input :value="record.order_type || ''" type="text" readonly></label>
+                                </div>
+                                <div class="detail-pair">
+                                    <label><span>割当状態</span><input v-model="form.assignStatus" type="text"></label>
+                                    <label v-if="record.order_type === 'loaner'">
+                                        <span>status</span>
+                                        <select v-model="form.status">
+                                            <option value="">選択してください</option>
+                                            <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
+                                                {{ status.status }} ({{ status.processID_new }})
+                                            </option>
+                                        </select>
+                                    </label>
+                                    <label v-else class="detail-spacer" aria-hidden="true"><span></span><span></span></label>
+                                </div>
+                            </div>
+
+                            <div class="loaner-commerce-col">
+                                <label>
+                                    <span>見積 #</span>
+                                    <div class="num-date-pair">
+                                        <input v-model="form.quoteNum" type="text">
+                                        <input v-model="form.quoteDate" type="date" title="見積日">
+                                    </div>
+                                </label>
+                                <label>
+                                    <span>受注 #</span>
+                                    <div class="num-date-pair">
+                                        <input v-model="form.orderNum" type="text">
+                                        <input v-model="form.orderDate" type="date" title="受注日">
+                                    </div>
+                                </label>
+                                <label>
+                                    <span>注文 #</span>
+                                    <input v-model="form.poNum" type="text">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="price-adjust-row">
+                            <div class="price-adjust-main">
+                                <span class="price-adjust-label">価格</span>
+                                <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
+                            </div>
+                            <div class="price-adjust-actions">
+                                <button
+                                    type="button"
+                                    class="btn btn-primary price-adjust-btn"
+                                    :disabled="priceAdjustSaving"
+                                    @click="openPriceAdjustDialog"
+                                >
+                                    価格調整
                                 </button>
-                            </label>
-                            <label><span>loanerID</span><input :value="form.loanerID" type="text" readonly></label>
-                            <label><span>品目</span><input :value="selectedUnit?.item || loanerMaster?.item || ''" type="text" readonly></label>
-                            <label><span>S/N</span><input v-model="form.SN" type="text"></label>
-                            <label><span>管理番号</span><input :value="selectedUnit?.manageNum || loanerMaster?.manageNum || ''" type="text" readonly></label>
-                            <label><span>グループ</span><input :value="selectedUnit?.groupName || loanerMaster?.groupName || ''" type="text" readonly></label>
-                            <label><span>案件種別</span><input :value="record.order_type || ''" type="text" readonly></label>
-                            <label v-if="record.order_type === 'loaner'">
-                                <span>status</span>
-                                <select v-model="form.status">
-                                    <option value="">選択してください</option>
-                                    <option v-for="status in statuses" :key="status.processID" :value="String(status.processID)">
-                                        {{ status.status }} ({{ status.processID }})
-                                    </option>
-                                </select>
-                            </label>
-                            <label><span>割当状態</span><input v-model="form.assignStatus" type="text"></label>
-                            <label class="span-2"><span>コメント</span><input v-model="form.comment" type="text"></label>
+                                <div class="price-adjust-delta">
+                                    <span class="price-adjust-label">調整額</span>
+                                    <strong>{{ formatSignedAmount(discountAmount) }}</strong>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -96,13 +149,89 @@
                         <label><span>実終了</span><input v-model="form.returnedDate" type="date"></label>
                     </section>
 
-                    <section class="panel calendar-panel">
-                        <div class="panel-heading">
-                            <h2>カレンダー</h2>
-                            <span class="calendar-help">予定を移動／左右端で期間変更</span>
+                    <section class="panel tab-panel">
+                        <div class="panel-heading tab-heading">
+                            <div class="tab-buttons">
+                                <button
+                                    type="button"
+                                    class="tab-btn"
+                                    :class="{ active: bottomTab === 'notes' }"
+                                    @click="bottomTab = 'notes'"
+                                >
+                                    Notes（{{ sharedNotes.length }}件）
+                                </button>
+                                <button
+                                    type="button"
+                                    class="tab-btn"
+                                    :class="{ active: bottomTab === 'calendar' }"
+                                    @click="switchToCalendar"
+                                >
+                                    カレンダー
+                                </button>
+                            </div>
+                            <div v-if="bottomTab === 'notes'" class="notes-actions">
+                                <button
+                                    type="button"
+                                    class="select-btn"
+                                    :disabled="!canModifySelectedNote"
+                                    :title="noteEditDeleteTitle"
+                                    @click="openNoteEdit"
+                                >
+                                    編集
+                                </button>
+                                <button
+                                    type="button"
+                                    class="select-btn delete-btn"
+                                    :disabled="!canModifySelectedNote"
+                                    :title="noteEditDeleteTitle"
+                                    @click="openNoteDelete"
+                                >
+                                    削除
+                                </button>
+                                <button type="button" class="select-btn add-btn" @click="openNoteCreate">
+                                    新規追加
+                                </button>
+                            </div>
+                            <span v-else class="calendar-help">予定を移動／左右端で期間変更</span>
                         </div>
-                        <p v-if="calendarError" class="calendar-error">{{ calendarError }}</p>
-                        <div class="calendar-shell">
+
+                        <div v-show="bottomTab === 'notes'" class="notes-shell">
+                            <p v-if="noteError" class="calendar-error">{{ noteError }}</p>
+                            <div v-if="sharedNotes.length" class="notes-table-wrap">
+                                <table class="notes-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-note-date">日時</th>
+                                            <th class="col-note-author">記入者</th>
+                                            <th class="col-note-body">内容</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="note in sharedNotes"
+                                            :key="note.id"
+                                            :class="{
+                                                'important-row': note.important,
+                                                'active-row': Number(selectedNoteId) === Number(note.id),
+                                            }"
+                                            @click="selectedNoteId = note.id"
+                                        >
+                                            <td class="col-note-date">{{ formatNoteDate(note.whenWrote) }}</td>
+                                            <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                                            <td
+                                                class="col-note-body"
+                                                @click.stop="selectedNoteId = note.id"
+                                                v-html="linkifyNote(note.note)"
+                                            />
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="empty-notes">Notes がありません。</p>
+                        </div>
+
+                        <div v-show="bottomTab === 'calendar'" class="calendar-shell">
+                            <p v-if="calendarError" class="calendar-error">{{ calendarError }}</p>
                             <FullCalendar ref="calendarRef" :options="calendarOptions" />
                         </div>
                     </section>
@@ -193,11 +322,98 @@
                 </div>
             </div>
         </div>
+
+        <div v-if="showPriceAdjustDialog" class="confirm-overlay" @click.self="closePriceAdjustDialog">
+            <div class="confirm-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>価格調整</h3>
+                    <button type="button" class="close-btn" @click="closePriceAdjustDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p class="confirm-current-price">
+                        元価格: {{ formatPrice(basePrice) }}
+                        ／ 表示価格: {{ formatPrice(displayPrice) }}
+                    </p>
+                    <label class="confirm-field">
+                        調整額
+                        <input
+                            v-model="priceAdjustForm.amount"
+                            type="number"
+                            class="confirm-input"
+                            placeholder="例: 5000（表示は 元価格 - 調整額）"
+                        >
+                    </label>
+                    <label class="confirm-field">
+                        調整理由
+                        <textarea
+                            v-model="priceAdjustForm.reason"
+                            rows="4"
+                            class="confirm-textarea"
+                            placeholder="調整理由を入力"
+                        />
+                    </label>
+                    <p v-if="priceAdjustError" class="confirm-error">{{ priceAdjustError }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" :disabled="priceAdjustSaving" @click="closePriceAdjustDialog">
+                        キャンセル
+                    </button>
+                    <button type="button" class="btn btn-primary" :disabled="priceAdjustSaving" @click="confirmPriceAdjust">
+                        {{ priceAdjustSaving ? '保存中...' : 'OK' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showNoteDialog" class="confirm-overlay" @click.self="closeNoteDialog">
+            <div class="confirm-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>{{ noteDialogMode === 'edit' ? 'Note 編集' : 'Note 新規追加' }}</h3>
+                    <button type="button" class="close-btn" @click="closeNoteDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <label class="confirm-field">
+                        内容
+                        <textarea v-model="noteForm.note" rows="6" class="confirm-textarea" />
+                    </label>
+                    <label class="confirm-checkbox">
+                        <input v-model="noteForm.important" type="checkbox">
+                        重要
+                    </label>
+                    <p v-if="noteDialogError" class="confirm-error">{{ noteDialogError }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" :disabled="noteSaving" @click="closeNoteDialog">
+                        キャンセル
+                    </button>
+                    <button type="button" class="btn btn-primary" :disabled="noteSaving || !noteForm.note.trim()" @click="saveNote">
+                        {{ noteSaving ? '保存中...' : '保存' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="notePendingDelete" class="confirm-overlay" @click.self="notePendingDelete = null">
+            <div class="confirm-panel">
+                <h3>Note 削除</h3>
+                <p>この Note を削除しますか？</p>
+                <p class="note-delete-preview">{{ notePendingDelete.note }}</p>
+                <p v-if="noteError" class="confirm-error">{{ noteError }}</p>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" :disabled="noteDeleting" @click="notePendingDelete = null">
+                        キャンセル
+                    </button>
+                    <button type="button" class="btn delete-btn" :disabled="noteDeleting" @click="deleteNote">
+                        {{ noteDeleting ? '削除中...' : '削除' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -208,12 +424,17 @@ import listPlugin from '@fullcalendar/list'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { linkifyText } from '@/utils/linkifyText'
+
+const PAID_RETURN_CODES = [1, 2, 7, 13]
 
 const props = defineProps({
     attached: { type: Object, required: true },
     record: { type: Object, required: true },
+    parentReturnCode: { type: [Number, String], default: null },
     loanerMaster: { type: Object, default: null },
     files: { type: Array, default: () => [] },
+    notes: { type: Array, default: () => [] },
     statuses: { type: Array, default: () => [] },
     dealersMaster: { type: Array, default: () => [] },
     loanerUnits: { type: Array, default: () => [] },
@@ -226,22 +447,74 @@ const error = ref('')
 const success = ref('')
 const calendarError = ref('')
 const calendarRef = ref(null)
+const bottomTab = ref('notes')
 const fileInput = ref(null)
 const fileItems = ref([...props.files])
+const noteItems = ref([...props.notes])
 const selectedFileId = ref(props.files[0]?.id ?? null)
+const selectedNoteId = ref(null)
 const uploading = ref(false)
 const deleting = ref(false)
 const fileError = ref('')
+const noteError = ref('')
 const uploadProgress = ref('')
 const fileDropActive = ref(false)
 const fileDragDepth = ref(0)
 const filePendingDelete = ref(null)
+const notePendingDelete = ref(null)
 const activeSelectKind = ref(null)
 const leftPaneSize = ref(49)
 const rightPaneSize = ref(51)
 const fileBusy = computed(() => uploading.value || deleting.value)
+const parentReturnCode = ref(props.parentReturnCode)
+const showPriceAdjustDialog = ref(false)
+const priceAdjustSaving = ref(false)
+const priceAdjustError = ref('')
+const priceAdjustForm = reactive({
+    amount: '',
+    reason: '',
+})
+const showNoteDialog = ref(false)
+const noteDialogMode = ref('create')
+const noteSaving = ref(false)
+const noteDeleting = ref(false)
+const noteDialogError = ref('')
+const noteForm = reactive({
+    note: '',
+    important: false,
+})
+const editingNoteId = ref(null)
+
+const authUserName = computed(() => String(page.props.auth?.user?.kanji_name ?? '').trim())
+const sharedNotes = computed(() =>
+    noteItems.value.filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
+)
+const selectedNote = computed(() =>
+    sharedNotes.value.find(note => Number(note.id) === Number(selectedNoteId.value)) || null,
+)
+function isNoteOwner(note) {
+    if (!note) return false
+    const who = String(note.whoWrote ?? '').trim()
+    if (!who) return false
+    if (note.is_mine === true || note.is_mine === 1 || note.is_mine === '1') return true
+    return authUserName.value !== '' && authUserName.value === who
+}
+const canModifySelectedNote = computed(() => !!selectedNote.value && isNoteOwner(selectedNote.value))
+const noteEditDeleteTitle = computed(() => {
+    if (!selectedNoteId.value) return 'Note を選択してください'
+    if (!selectedNote.value) return 'Note を選択してください'
+    if (!isNoteOwner(selectedNote.value)) {
+        return `自分が書いた Note のみ編集・削除できます（ログイン: ${authUserName.value || '不明'} / 記入者: ${selectedNote.value.whoWrote || '不明'}）`
+    }
+    return ''
+})
 
 const stringValue = value => value == null ? '' : String(value)
+function toDateInputValue(value) {
+    if (!value) return ''
+    const text = String(value)
+    return text.length >= 10 ? text.slice(0, 10) : text
+}
 const form = reactive({
     parentID: stringValue(props.record.parentID),
     status: stringValue(props.record.status),
@@ -249,7 +522,12 @@ const form = reactive({
     SN: stringValue(props.record.SN ?? props.loanerMaster?.SN),
     loanerID: props.attached.loanerID ?? props.record.loanerID ?? null,
     assignStatus: stringValue(props.attached.assignStatus),
-    comment: stringValue(props.attached.comment),
+    quoteNum: stringValue(props.record.quoteNum),
+    quoteDate: toDateInputValue(props.record.quoteDate),
+    orderNum: stringValue(props.record.orderNum),
+    orderDate: toDateInputValue(props.record.orderDate),
+    poNum: stringValue(props.record.poNum),
+    discount_service: props.record.discount_service ?? 0,
     sentDate: stringValue(props.attached.sentDate),
     returnedDate: stringValue(props.attached.returnedDate),
     plannedSentDate: stringValue(props.attached.plannedSentDate ?? props.attached.sentDate),
@@ -276,6 +554,48 @@ const form = reactive({
 const selectedUnit = computed(() =>
     props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID)) ?? null,
 )
+const masterPrice = computed(() => {
+    const raw = selectedUnit.value?.price ?? props.loanerMaster?.price ?? 0
+    const num = Number(raw)
+    return Number.isFinite(num) ? num : 0
+})
+const basePrice = computed(() => {
+    if (!form.parentID) return 0
+    const code = Number(parentReturnCode.value)
+    if (!PAID_RETURN_CODES.includes(code)) return 0
+    return masterPrice.value
+})
+const discountAmount = computed(() => {
+    const num = Number(form.discount_service)
+    return Number.isFinite(num) ? num : 0
+})
+const displayPrice = computed(() => basePrice.value - discountAmount.value)
+
+watch(() => form.parentID, async (parentId) => {
+    if (!parentId) {
+        parentReturnCode.value = null
+        return
+    }
+    if (String(parentId) === String(props.record.parentID)) {
+        parentReturnCode.value = props.parentReturnCode
+        return
+    }
+    try {
+        const result = await apiFetch(`${page.props.appBaseUrl}/servicerecord/record/${parentId}`)
+        if (!result) {
+            parentReturnCode.value = null
+            return
+        }
+        const { response, data } = result
+        if (!response.ok) {
+            parentReturnCode.value = null
+            return
+        }
+        parentReturnCode.value = data.returnCode ?? null
+    } catch {
+        parentReturnCode.value = null
+    }
+})
 const activeSelectItems = computed(() =>
     activeSelectKind.value === 'dealer' ? props.dealersMaster : props.loanerUnits,
 )
@@ -311,6 +631,221 @@ function nullable(value) {
 
 function numericNullable(value) {
     return value === '' || value === null || value === undefined ? null : Number(value)
+}
+
+function formatPrice(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return '0'
+    return num.toLocaleString('ja-JP')
+}
+
+function formatSignedAmount(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num) || num === 0) return '0'
+    const formatted = Math.abs(num).toLocaleString('ja-JP')
+    return num > 0 ? `+${formatted}` : `-${formatted}`
+}
+
+function openPriceAdjustDialog() {
+    priceAdjustForm.amount = form.discount_service == null || form.discount_service === ''
+        ? ''
+        : String(form.discount_service)
+    priceAdjustForm.reason = ''
+    priceAdjustError.value = ''
+    showPriceAdjustDialog.value = true
+}
+
+function closePriceAdjustDialog() {
+    if (priceAdjustSaving.value) return
+    showPriceAdjustDialog.value = false
+    priceAdjustError.value = ''
+}
+
+async function confirmPriceAdjust() {
+    const amountRaw = String(priceAdjustForm.amount ?? '').trim()
+    const reason = String(priceAdjustForm.reason ?? '').trim()
+    if (amountRaw === '' || !Number.isFinite(Number(amountRaw))) {
+        priceAdjustError.value = '調整額を数値で入力してください。'
+        return
+    }
+    if (!reason) {
+        priceAdjustError.value = '調整理由を入力してください。'
+        return
+    }
+
+    const amount = Number(amountRaw)
+    priceAdjustSaving.value = true
+    priceAdjustError.value = ''
+
+    try {
+        const result = await apiFetch(`${page.props.appBaseUrl}/servicerecord/notes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                associatedID: props.record.orderID,
+                note: `[調整理由]${reason}`,
+                important: true,
+            }),
+        })
+        if (!result) throw new Error('Notes の追加に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(validationError(data, `Notes の追加に失敗しました。（HTTP ${response.status}）`))
+        }
+        form.discount_service = amount
+        if (data?.note) {
+            noteItems.value = [data.note, ...noteItems.value.filter(n => Number(n.id) !== Number(data.note.id))]
+        }
+        showPriceAdjustDialog.value = false
+        success.value = '価格調整を反映しました。保存ボタンで確定してください。'
+    } catch (e) {
+        priceAdjustError.value = e.message || '価格調整に失敗しました。'
+    } finally {
+        priceAdjustSaving.value = false
+    }
+}
+
+async function switchToCalendar() {
+    bottomTab.value = 'calendar'
+    await nextTick()
+    calendarRef.value?.getApi?.().updateSize()
+    calendarRef.value?.getApi?.().refetchEvents()
+}
+
+function linkifyNote(value) {
+    return linkifyText(value) || '—'
+}
+
+function formatNoteDate(value) {
+    if (!value) return '—'
+    const date = new Date(String(value).replace(' ', 'T'))
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleDateString('ja-JP')
+}
+
+function openNoteCreate() {
+    noteDialogMode.value = 'create'
+    editingNoteId.value = null
+    noteForm.note = ''
+    noteForm.important = false
+    noteDialogError.value = ''
+    showNoteDialog.value = true
+}
+
+function openNoteEdit() {
+    const note = selectedNote.value
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ編集できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
+    noteDialogMode.value = 'edit'
+    editingNoteId.value = note.id
+    noteForm.note = note.note ?? ''
+    noteForm.important = !!note.important
+    noteDialogError.value = ''
+    showNoteDialog.value = true
+}
+
+function closeNoteDialog() {
+    if (noteSaving.value) return
+    showNoteDialog.value = false
+    noteDialogError.value = ''
+}
+
+async function saveNote() {
+    const text = String(noteForm.note ?? '').trim()
+    if (!text) {
+        noteDialogError.value = '内容を入力してください。'
+        return
+    }
+
+    noteSaving.value = true
+    noteDialogError.value = ''
+    try {
+        const isEdit = noteDialogMode.value === 'edit'
+        const url = isEdit
+            ? `${page.props.appBaseUrl}/servicerecord/notes/${editingNoteId.value}`
+            : `${page.props.appBaseUrl}/servicerecord/notes`
+        const body = isEdit
+            ? { note: text, important: !!noteForm.important }
+            : {
+                associatedID: props.record.orderID,
+                note: text,
+                important: !!noteForm.important,
+                personal: false,
+            }
+        const result = await apiFetch(url, {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(body),
+        })
+        if (!result) throw new Error('Note の保存に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) throw new Error(validationError(data, `Note の保存に失敗しました。（HTTP ${response.status}）`))
+
+        const saved = data.note
+        if (isEdit) {
+            noteItems.value = noteItems.value.map(note =>
+                Number(note.id) === Number(saved.id) ? saved : note,
+            )
+        } else {
+            noteItems.value = [saved, ...noteItems.value]
+            selectedNoteId.value = saved.id
+        }
+        showNoteDialog.value = false
+        success.value = data.message || 'Note を保存しました。'
+    } catch (e) {
+        noteDialogError.value = e.message || 'Note の保存に失敗しました。'
+    } finally {
+        noteSaving.value = false
+    }
+}
+
+function openNoteDelete() {
+    const note = selectedNote.value
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ削除できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
+    noteError.value = ''
+    notePendingDelete.value = note
+}
+
+async function deleteNote() {
+    if (!notePendingDelete.value) return
+    noteDeleting.value = true
+    noteError.value = ''
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/notes/${notePendingDelete.value.id}`,
+            {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': getCsrfToken(), Accept: 'application/json' },
+            },
+        )
+        if (!result) throw new Error('Note の削除に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) throw new Error(validationError(data, `Note の削除に失敗しました。（HTTP ${response.status}）`))
+        const deletedId = notePendingDelete.value.id
+        noteItems.value = noteItems.value.filter(note => Number(note.id) !== Number(deletedId))
+        if (Number(selectedNoteId.value) === Number(deletedId)) selectedNoteId.value = null
+        notePendingDelete.value = null
+        success.value = data.message || 'Note を削除しました。'
+    } catch (e) {
+        noteError.value = e.message || 'Note の削除に失敗しました。'
+    } finally {
+        noteDeleting.value = false
+    }
 }
 
 function getCsrfToken() {
@@ -499,6 +1034,8 @@ async function save() {
     payload.parentID = numericNullable(form.parentID)
     payload.loanerID = numericNullable(form.loanerID)
     payload.status = numericNullable(form.status)
+    payload.discount_service = numericNullable(form.discount_service) ?? 0
+    payload.price = basePrice.value
     Object.keys(payload).forEach((key) => {
         if (typeof payload[key] === 'string') payload[key] = nullable(payload[key])
     })
@@ -518,7 +1055,7 @@ async function save() {
         if (!result) return
         const { response, data } = result
         if (!response.ok) throw new Error(validationError(data, `保存に失敗しました。（HTTP ${response.status}）`))
-        syncCurrentDates(data.attached)
+        syncCurrentDates(data.attached, data.record)
         success.value = data.message || '貸出詳細を保存しました。'
         calendarRef.value?.getApi?.().refetchEvents()
     } catch (e) {
@@ -528,14 +1065,23 @@ async function save() {
     }
 }
 
-function syncCurrentDates(attached) {
-    if (!attached) return
-    form.sentDate = attached.sentDate || ''
-    form.returnedDate = attached.returnedDate || ''
-    form.plannedSentDate = attached.plannedSentDate || attached.sentDate || ''
-    form.plannedReturnedDate = attached.plannedReturnedDate || attached.returnedDate || ''
-    form.assignStatus = attached.assignStatus || ''
-    form.comment = attached.comment || ''
+function syncCurrentDates(attached, record = null) {
+    if (attached) {
+        form.sentDate = attached.sentDate || ''
+        form.returnedDate = attached.returnedDate || ''
+        form.plannedSentDate = attached.plannedSentDate || attached.sentDate || ''
+        form.plannedReturnedDate = attached.plannedReturnedDate || attached.returnedDate || ''
+        form.assignStatus = attached.assignStatus || ''
+    }
+    if (record) {
+        form.quoteNum = stringValue(record.quoteNum)
+        form.quoteDate = toDateInputValue(record.quoteDate)
+        form.orderNum = stringValue(record.orderNum)
+        form.orderDate = toDateInputValue(record.orderDate)
+        form.poNum = stringValue(record.poNum)
+        form.discount_service = record.discount_service ?? 0
+        if (record.parentID != null) form.parentID = stringValue(record.parentID)
+    }
 }
 
 async function fetchCalendarEvents(info, successCallback, failureCallback) {
@@ -734,13 +1280,90 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .period-panel h2 { margin-right: 5px; white-space: nowrap; }
 .period-panel label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .period-panel input { width: 116px; }
-.calendar-panel { flex: 1 0 330px; min-height: 330px; display: flex; flex-direction: column; overflow: hidden; }
-.calendar-shell { flex: 1; min-height: 0; overflow: hidden; }
 .calendar-help, .file-help { color: #64748b; font-size: 10px; }
 .calendar-error { margin: 0 0 3px; color: #b91c1c; font-size: 11px; }
 
+.tab-panel { flex: 1 0 330px; min-height: 330px; display: flex; flex-direction: column; overflow: hidden; }
+.tab-heading { flex-wrap: wrap; gap: 6px; }
+.tab-buttons { display: flex; align-items: center; gap: 4px; }
+.tab-btn {
+    min-height: 26px;
+    padding: 3px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 3px 3px 0 0;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 12px;
+    cursor: pointer;
+}
+.tab-btn.active {
+    border-bottom-color: #fff;
+    background: #fff;
+    color: #0f172a;
+    font-weight: 600;
+}
+.notes-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.notes-shell,
+.calendar-shell {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.notes-table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.notes-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+.notes-table th,
+.notes-table td {
+    border-bottom: 1px solid #cbd5e1;
+    padding: 5px 6px;
+    text-align: left;
+    vertical-align: top;
+}
+.notes-table th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+    z-index: 1;
+}
+.notes-table .col-note-date { width: 88px; white-space: nowrap; }
+.notes-table .col-note-author { width: 88px; white-space: nowrap; }
+.notes-table .col-note-body { overflow-wrap: anywhere; }
+.notes-table tbody tr { cursor: pointer; }
+.notes-table tbody tr:hover { background: #f8fafc; }
+.notes-table tbody tr.active-row,
+.notes-table tbody tr.active-row td {
+    color: #fff;
+    background: #7e25eb !important;
+}
+.notes-table tbody tr.important-row:not(.active-row) td { background: #fef08a; }
+.empty-notes { margin: 12px 4px; color: #64748b; font-size: 12px; }
+.confirm-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #475569;
+    font-size: 12px;
+}
+.note-delete-preview {
+    max-height: 120px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+
 .compact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 6px; }
-.loaner-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .compact-grid label { min-width: 0; display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 4px; }
 .compact-grid label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #475569; }
 .compact-grid input,
@@ -760,6 +1383,93 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .compact-grid input[readonly] { background: #f1f5f9; color: #64748b; }
 .compact-grid .span-2 { grid-column: span 2; }
 .master-value { cursor: pointer; text-align: left; }
+
+.loaner-info-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 2fr);
+    gap: 4px 8px;
+    align-items: start;
+}
+.loaner-id-col,
+.loaner-detail-col,
+.loaner-commerce-col {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+.loaner-id-col label,
+.loaner-detail-col > label,
+.loaner-detail-col .detail-pair > label,
+.loaner-commerce-col > label {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+}
+.loaner-id-col label > span,
+.loaner-detail-col label > span,
+.loaner-commerce-col label > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #475569;
+}
+.loaner-id-col input,
+.loaner-detail-col input,
+.loaner-detail-col select,
+.loaner-detail-col .master-value,
+.loaner-commerce-col input {
+    width: 100%;
+    min-width: 0;
+    height: 25px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 11px;
+}
+.loaner-id-col input[readonly],
+.loaner-detail-col input[readonly] {
+    background: #f1f5f9;
+    color: #64748b;
+}
+.detail-pair {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 6px;
+}
+.detail-spacer { visibility: hidden; pointer-events: none; }
+.num-date-pair {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px;
+}
+.price-adjust-row {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    padding: 4px 8px;
+    border: 1px solid #93c5fd;
+    background: rgb(210, 210, 220);
+}
+.price-adjust-main,
+.price-adjust-actions,
+.price-adjust-delta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.price-adjust-label { color: #475569; font-size: 11px; white-space: nowrap; }
+.price-adjust-value { font-size: 13px; color: #0f172a; }
+.price-adjust-btn { min-height: 24px; padding: 2px 10px; font-size: 11px; }
+.price-adjust-delta strong { font-size: 12px; color: #0f172a; }
+
 .files-panel { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .file-actions { display: flex; align-items: center; gap: 5px; }
 .file-input { display: none; }
@@ -802,6 +1512,36 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .confirm-panel { width: min(420px, 100%); padding: 16px; border-radius: 7px; background: #fff; box-shadow: 0 12px 32px rgba(15, 23, 42, .25); }
 .confirm-panel h3 { margin: 0 0 10px; font-size: 15px; }
 .confirm-panel p { overflow-wrap: anywhere; }
+.confirm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: -16px -16px 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid #cbd5e1;
+}
+.confirm-header h3 { margin: 0; }
+.close-btn {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+.confirm-body { padding: 12px 0; display: grid; gap: 8px; }
+.confirm-current-price { margin: 0; color: #334155; font-size: 12px; }
+.confirm-field { display: grid; gap: 4px; color: #475569; font-size: 12px; }
+.confirm-input,
+.confirm-textarea {
+    width: 100%;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    padding: 6px 8px;
+    font-size: 12px;
+}
+.confirm-error { margin: 0; color: #b91c1c; font-size: 12px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
 
 :deep(.splitpanes__splitter) { width: 7px !important; border-left: 1px solid #64748b; border-right: 1px solid #64748b; background: #cbd5e1 !important; }
@@ -815,13 +1555,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 :deep(.file-item) { margin-bottom: 7px; }
 
 @media (max-width: 1050px) {
-    .loaner-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .loaner-info-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    .loaner-commerce-col { grid-column: 1 / -1; }
     .compact-grid { grid-template-columns: 1fr; }
     .compact-grid .span-2 { grid-column: auto; }
 }
 
 @media (max-height: 760px) {
-    .calendar-panel { flex-basis: 300px; min-height: 300px; }
+    .tab-panel { flex-basis: 300px; min-height: 300px; }
 }
 
 @media (max-width: 720px) {
@@ -832,6 +1573,8 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     .save-message { display: none; }
     .people-row { grid-template-columns: 1fr; }
     .period-panel h2, .period-panel label span { display: none; }
+    .loaner-info-layout { grid-template-columns: 1fr; }
+    .detail-pair { grid-template-columns: 1fr; }
 }
 </style>
 

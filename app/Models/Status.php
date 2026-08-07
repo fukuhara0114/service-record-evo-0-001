@@ -8,8 +8,7 @@ class Status extends Model
     // 💡 【重要】実際のテーブル名「attachedfiles」をすべて小文字で正確に指定します
     protected $table = 'statusmaster';
 
-    // テーブルの主キーが「id」であることを明示
-    protected $primaryKey = 'processID';
+    protected $primaryKey = 'processID_new';
 
     // もしテーブルに「created_at」「updated_at」カラムがない場合は以下を必須で追加
     public $timestamps = false;
@@ -17,6 +16,6 @@ class Status extends Model
 
     public function serviceRecords()
     {
-        return $this->hasMany(ServiceRecord::class, 'status', 'processID');
+        return $this->hasMany(ServiceRecord::class, 'status', 'processID_new');
     }
 }

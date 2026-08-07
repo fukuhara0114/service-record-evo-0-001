@@ -1,24 +1,5 @@
 <template>
     <div class="engineer-detail">
-        <header class="engineer-header">
-            <div class="header-item">
-                <span class="header-label">OrderID</span>
-                <strong>{{ record?.orderID ?? '—' }}</strong>
-            </div>
-            <div class="header-item">
-                <span class="header-label">productName</span>
-                <strong>{{ record?.productName || '—' }}</strong>
-            </div>
-            <div class="header-item">
-                <span class="header-label">SN</span>
-                <strong>{{ record?.SN || '—' }}</strong>
-            </div>
-            <div class="header-item">
-                <span class="header-label">dealer</span>
-                <strong>{{ record?.dealer || '—' }}</strong>
-            </div>
-        </header>
-
         <p v-if="attachmentsLoading" class="status-message">添付データを読み込み中...</p>
         <p v-else-if="attachmentsError" class="status-message error">{{ attachmentsError }}</p>
 
@@ -35,9 +16,25 @@
                             <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                         </div>
                     </div>
-                    <div class="files-type-label">
-                        <span class="type-badge type-badge-doc">書類ファイル</span>
+
+                    <div class="captured-images-panel">
+                        <button
+                            type="button"
+                            class="captured-toggle"
+                            @click="capturedImagesOpen = !capturedImagesOpen"
+                        >
+                            <span>撮影画像（{{ capturedImages.length }}件）</span>
+                            <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                        </button>
+                        <div v-show="capturedImagesOpen" class="captured-images-body">
+                            <AssociatedCapturedImages
+                                :images="capturedImages"
+                                @changed="emit('reload-attachments')"
+                            />
+                            <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
+                        </div>
                     </div>
+
                     <div class="files-list">
                         <AttachedFileItem
                             v-for="(file, index) in sortedFiles"
@@ -53,11 +50,6 @@
                             @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                         />
                         <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
-
-                        <AssociatedCapturedImages
-                            :images="capturedImages"
-                            @changed="emit('reload-attachments')"
-                        />
                     </div>
                 </section>
             </Pane>
@@ -66,29 +58,7 @@
                 <div class="right-stack">
                     <div class="action-bar">
                         <button type="button" class="action-btn" @click="showGalleryDialog = true">Gallery</button>
-                        <div class="action-bar-spacer" />
-                        <div class="action-status-group">
-                            <button
-                                type="button"
-                                class="action-btn action-btn-success action-btn-wide"
-                                :disabled="statusActionSaving"
-                                @click="onComplete"
-                            >
-                                {{ statusActionSaving ? '処理中...' : '完了' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="action-btn action-btn-warn action-btn-wide"
-                                :disabled="statusActionSaving"
-                                @click="onRemand"
-                            >
-                                差戻
-                            </button>
-                        </div>
-                    </div>
-
-                    <section class="panel panel-docs">
-                        <div class="docs-row">
+                        <div class="docs-row docs-row-inline">
                             <span class="docs-label">添付書類</span>
                             <label class="flag-toggle" :class="{ on: isA2laOn }">
                                 <span class="flag-name">A2LA</span>
@@ -130,159 +100,187 @@
                                 </button>
                             </label>
                         </div>
-                    </section>
-
-                    <section class="panel panel-block">
-                        <div class="panel-header">
-                            <h3>Parts（{{ parts.length }}件）</h3>
-                            <div class="panel-actions">
-                                <button type="button" class="action-btn" :disabled="!selectedPartId" @click="openPartDelete">削除</button>
-                                <button type="button" class="action-btn action-btn-primary" @click="openPartCreate">新規追加</button>
-                            </div>
+                        <div class="action-status-group">
+                            <button
+                                type="button"
+                                class="action-btn action-btn-success action-btn-wide"
+                                :disabled="statusActionSaving"
+                                @click="onComplete"
+                            >
+                                {{ statusActionSaving ? '処理中...' : '完了' }}
+                            </button>
+                            <button
+                                type="button"
+                                class="action-btn action-btn-warn action-btn-wide"
+                                :disabled="statusActionSaving"
+                                @click="onRemand"
+                            >
+                                差戻
+                            </button>
                         </div>
-                        <div v-if="parts.length" class="table-wrap">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Part ID</th>
-                                        <th>部品名</th>
-                                        <th>説明</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="part in parts"
-                                        :key="part.id"
-                                        class="table-row"
-                                        :class="{ 'active-row': selectedPartId === part.id }"
-                                        @click="selectedPartId = part.id"
-                                    >
-                                        <td>{{ part.partID }}</td>
-                                        <td>{{ part.part_master?.partName || '—' }}</td>
-                                        <td class="text-cell">{{ part.part_master?.description || '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">Parts がありません。</p>
-                    </section>
-
-                    <section class="panel panel-block">
-                        <div class="panel-header">
-                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
-                            <div class="panel-actions">
-                                <button type="button" class="action-btn" :disabled="!canModifySelectedSharedNote" @click="openNoteEdit(false)">編集</button>
-                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedSharedNote" @click="openNoteDelete(false)">削除</button>
-                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(false)">新規追加</button>
-                            </div>
-                        </div>
-                        <div v-if="sharedNotes.length" class="table-wrap">
-                            <table class="data-table notes-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-note-date">日時</th>
-                                        <th class="col-note-author">記入者</th>
-                                        <th>内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="note in sharedNotes"
-                                        :key="note.id"
-                                        class="table-row"
-                                        :class="{
-                                            'important-row': note.important,
-                                            'active-row': selectedSharedNoteId === note.id,
-                                        }"
-                                        @click="selectedSharedNoteId = note.id"
-                                    >
-                                        <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                        <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                        <td class="text-cell" @click.stop v-html="linkifyNote(note.note)" />
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">Notes がありません。</p>
-                    </section>
-
-                    <section class="panel panel-block">
-                        <div class="panel-header">
-                            <h3>Personal Notes（{{ personalNotes.length }}件）</h3>
-                            <div class="panel-actions">
-                                <button type="button" class="action-btn" :disabled="!canModifySelectedPersonalNote" @click="openNoteEdit(true)">編集</button>
-                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedPersonalNote" @click="openNoteDelete(true)">削除</button>
-                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(true)">新規追加</button>
-                            </div>
-                        </div>
-                        <div v-if="personalNotes.length" class="table-wrap">
-                            <table class="data-table notes-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-note-date">日時</th>
-                                        <th class="col-note-author">記入者</th>
-                                        <th>内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="note in personalNotes"
-                                        :key="note.id"
-                                        class="table-row"
-                                        :class="{
-                                            'important-row': note.important,
-                                            'active-row': selectedPersonalNoteId === note.id,
-                                        }"
-                                        @click="selectedPersonalNoteId = note.id"
-                                    >
-                                        <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                        <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                        <td class="text-cell" @click.stop v-html="linkifyNote(note.note)" />
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">Personal Notes がありません。</p>
-                    </section>
-
+                    </div>
+                    
                     <section class="panel panel-block panel-stocked">
-                        <div class="panel-header">
+                        <aside class="card-side">
                             <h3>stocked Parts（{{ stockedParts.length }}件）</h3>
-                            <div class="panel-actions">
+                            <div class="card-side-actions">
+                                <button type="button" class="action-btn action-btn-primary" @click="openStockedPartCreate">新規追加</button>
                                 <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartEdit">数量編集</button>
                                 <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartDelete">削除</button>
-                                <button type="button" class="action-btn action-btn-primary" @click="openStockedPartCreate">新規追加</button>
                             </div>
+                        </aside>
+                        <div class="card-main">
+                            <div v-if="stockedParts.length" class="table-wrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Part ID</th>
+                                            <th>部品名</th>
+                                            <th>説明</th>
+                                            <th>使用数</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="part in stockedParts"
+                                            :key="part.id"
+                                            class="table-row"
+                                            :class="{ 'active-row': selectedStockedPartId === part.id }"
+                                            @click="selectedStockedPartId = part.id"
+                                            @dblclick="openStockedPartEditFor(part)"
+                                        >
+                                            <td>{{ part.partID }}</td>
+                                            <td>{{ part.stocked_part_master?.partName || '—' }}</td>
+                                            <td class="text-cell">{{ part.stocked_part_master?.description || '—' }}</td>
+                                            <td>{{ part.quantity ?? '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="empty-message">stocked Parts がありません。</p>
                         </div>
-                        <div v-if="stockedParts.length" class="table-wrap">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Part ID</th>
-                                        <th>部品名</th>
-                                        <th>説明</th>
-                                        <th>使用数</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="part in stockedParts"
-                                        :key="part.id"
-                                        class="table-row"
-                                        :class="{ 'active-row': selectedStockedPartId === part.id }"
-                                        @click="selectedStockedPartId = part.id"
-                                        @dblclick="openStockedPartEditFor(part)"
-                                    >
-                                        <td>{{ part.partID }}</td>
-                                        <td>{{ part.stocked_part_master?.partName || '—' }}</td>
-                                        <td class="text-cell">{{ part.stocked_part_master?.description || '—' }}</td>
-                                        <td>{{ part.quantity ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">stocked Parts がありません。</p>
                     </section>
+
+                    <section class="panel panel-block panel-notes">
+                        <aside class="card-side">
+                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
+                            <div class="card-side-actions">
+                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(false)">新規追加</button>
+                                <button type="button" class="action-btn" :disabled="!canModifySelectedSharedNote" @click="openNoteEdit(false)">編集</button>
+                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedSharedNote" @click="openNoteDelete(false)">削除</button>
+                            </div>
+                        </aside>
+                        <div class="card-main">
+                            <div v-if="sharedNotes.length" class="table-wrap">
+                                <table class="data-table notes-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-note-date">日時</th>
+                                            <th class="col-note-author">記入者</th>
+                                            <th>内容</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="note in sharedNotes"
+                                            :key="note.id"
+                                            class="table-row"
+                                            :class="{
+                                                'important-row': note.important,
+                                                'active-row': selectedSharedNoteId === note.id,
+                                            }"
+                                            @click="selectedSharedNoteId = note.id"
+                                        >
+                                            <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
+                                            <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                                            <td class="text-cell" @click.stop="selectedSharedNoteId = note.id" v-html="linkifyNote(note.note)" />
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="empty-message">Notes がありません。</p>
+                        </div>
+                    </section>
+
+                    <section class="panel panel-block panel-notes">
+                        <aside class="card-side">
+                            <h3>Personal Notes（{{ personalNotes.length }}件）</h3>
+                            <div class="card-side-actions">
+                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(true)">新規追加</button>
+                                <button type="button" class="action-btn" :disabled="!canModifySelectedPersonalNote" @click="openNoteEdit(true)">編集</button>
+                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedPersonalNote" @click="openNoteDelete(true)">削除</button>
+                            </div>
+                        </aside>
+                        <div class="card-main">
+                            <div v-if="personalNotes.length" class="table-wrap">
+                                <table class="data-table notes-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-note-date">日時</th>
+                                            <th class="col-note-author">記入者</th>
+                                            <th>内容</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="note in personalNotes"
+                                            :key="note.id"
+                                            class="table-row"
+                                            :class="{
+                                                'important-row': note.important,
+                                                'active-row': selectedPersonalNoteId === note.id,
+                                            }"
+                                            @click="selectedPersonalNoteId = note.id"
+                                        >
+                                            <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
+                                            <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                                            <td class="text-cell" @click.stop="selectedPersonalNoteId = note.id" v-html="linkifyNote(note.note)" />
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="empty-message">Personal Notes がありません。</p>
+                        </div>
+                    </section>
+
+
+                    <section class="panel panel-block panel-parts">
+                        <aside class="card-side">
+                            <h3>Parts（{{ parts.length }}件）</h3>
+                            <div class="card-side-actions">
+                                <button type="button" class="action-btn action-btn-primary" @click="openPartCreate">新規追加</button>
+                                <button type="button" class="action-btn" :disabled="!selectedPartId" @click="openPartDelete">削除</button>
+                            </div>
+                        </aside>
+                        <div class="card-main">
+                            <div v-if="parts.length" class="table-wrap">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Part ID</th>
+                                            <th>部品名</th>
+                                            <th>説明</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="part in parts"
+                                            :key="part.id"
+                                            class="table-row"
+                                            :class="{ 'active-row': selectedPartId === part.id }"
+                                            @click="selectedPartId = part.id"
+                                        >
+                                            <td>{{ part.partID }}</td>
+                                            <td>{{ part.part_master?.partName || '—' }}</td>
+                                            <td class="text-cell">{{ part.part_master?.description || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else class="empty-message">Parts がありません。</p>
+                        </div>
+                    </section>
+
                 </div>
             </Pane>
         </Splitpanes>
@@ -337,6 +335,7 @@ const fileSortSaving = ref(false)
 const flagSaving = ref(false)
 const statusActionSaving = ref(false)
 const showGalleryDialog = ref(false)
+const capturedImagesOpen = ref(true)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const actionMessage = ref('')
 
@@ -640,6 +639,7 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 
 <style scoped>
 .engineer-detail {
+    width: 100%;
     height: 100%;
     min-height: 0;
     display: flex;
@@ -649,38 +649,7 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     box-sizing: border-box;
     background: #e2e8f0;
     position: relative;
-}
-
-.engineer-header {
-    flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid #94a3b8;
-    border-radius: 6px;
-    background: #fff;
-}
-
-.header-item {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.header-label {
-    font-size: 11px;
-    color: #64748b;
-    font-weight: 700;
-}
-
-.header-item strong {
-    font-size: 14px;
-    color: #0f172a;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .status-message {
@@ -746,94 +715,113 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     flex-wrap: wrap;
 }
 
+.captured-images-panel {
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    overflow: hidden;
+}
+
+.captured-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border: none;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.captured-toggle:hover {
+    background: #cbd5e1;
+}
+
+.captured-toggle-icon {
+    font-size: 11px;
+    color: #475569;
+}
+
+.captured-images-body {
+    max-height: 180px;
+    overflow: auto;
+    padding: 8px;
+}
+
 .files-list {
     flex: 1;
     min-height: 0;
     overflow: auto;
 }
 
-.files-type-label {
-    margin: 0 0 8px;
-}
-
-.type-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.type-badge-doc {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 1px solid #93c5fd;
-}
-
 .right-stack {
     width: 100%;
     height: 100%;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     padding-right: 2px;
 }
 
 .action-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 10px;
+    padding: 6px 10px;
     border: 1px solid #94a3b8;
     border-radius: 6px;
     background: #fff;
     flex: 0 0 auto;
-}
-
-.action-bar-spacer {
-    flex: 1;
+    flex-wrap: wrap;
 }
 
 .action-status-group {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
+    margin-left: auto;
 }
 
 .action-btn-wide {
-    min-width: 112px;
-    padding-left: 22px;
-    padding-right: 22px;
-}
-
-.panel-docs {
-    flex: 0 0 auto;
-    height: auto;
-    padding: 8px 10px;
+    min-width: 96px;
+    padding-left: 18px;
+    padding-right: 18px;
 }
 
 .docs-row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
+.docs-row-inline {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+}
+
 .docs-label {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: #334155;
-    margin-right: 4px;
+    margin-right: 2px;
+    white-space: nowrap;
 }
 
 .flag-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    gap: 6px;
+    padding: 4px 8px;
     border: 1px solid #94a3b8;
     border-radius: 8px;
     background: #f1f5f9;
@@ -850,15 +838,15 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 }
 
 .flag-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    min-width: 64px;
+    min-width: 56px;
 }
 
 .switch {
     position: relative;
-    width: 42px;
-    height: 24px;
+    width: 38px;
+    height: 22px;
     padding: 0;
     border: none;
     border-radius: 999px;
@@ -878,8 +866,8 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 
 .switch-thumb {
     position: absolute;
-    top: 3px;
-    left: 3px;
+    top: 2px;
+    left: 2px;
     width: 18px;
     height: 18px;
     border-radius: 50%;
@@ -889,20 +877,67 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 }
 
 .flag-toggle.on .switch-thumb {
-    transform: translateX(18px);
+    transform: translateX(16px);
 }
 
 .panel-block {
-    height: auto;
-    min-height: 140px;
-    max-height: 260px;
-    padding: 8px 10px;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.panel-parts {
+    flex: 0.9 1 0;
+}
+
+.panel-notes {
+    flex: 1.35 1 0;
 }
 
 .panel-stocked {
-    min-height: 220px;
-    max-height: none;
+    flex: 1.1 1 0;
+}
+
+.card-side {
+    flex: 0 0 132px;
+    width: 132px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-right: 1px solid #cbd5e1;
+    background: #f8fafc;
+    box-sizing: border-box;
+}
+
+.card-side h3 {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.25;
+    color: #0f172a;
+}
+
+.card-side-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.card-side-actions .action-btn {
+    width: 100%;
+    text-align: center;
+}
+
+.card-main {
     flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px;
 }
 
 .table-wrap {
@@ -920,7 +955,7 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 .data-table th,
 .data-table td {
     border-bottom: 1px solid #e2e8f0;
-    padding: 6px 8px;
+    padding: 5px 6px;
     text-align: left;
     vertical-align: top;
 }
@@ -971,13 +1006,13 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 
 .empty-message {
     margin: 0;
-    padding: 12px 4px;
+    padding: 10px 4px;
     color: #64748b;
     font-size: 13px;
 }
 
 .action-btn {
-    padding: 6px 10px;
+    padding: 5px 8px;
     border: 1px solid #94a3b8;
     border-radius: 4px;
     background: #fff;
@@ -1036,11 +1071,5 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 
 :deep(.splitpanes__splitter:hover) {
     background: #94a3b8;
-}
-
-@media (max-width: 1100px) {
-    .engineer-header {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 }
 </style>

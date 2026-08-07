@@ -81,6 +81,7 @@ class ServiceRecord extends Model
         'shipTo',
         'sentOut',
         'incident',
+        'symptoms',
         'sm_workorder',
         'sm_quote',
         'coNum',
@@ -132,12 +133,14 @@ class ServiceRecord extends Model
     {
         // 第2引数はご自身のテーブルのカラム名（小文字の 'status'）
         // 第3引数は相手のマスターテーブルの主キー名（'id'）
-        return $this->belongsTo(Status::class, 'status', 'processID');
+        return $this->belongsTo(Status::class, 'status', 'processID_new')
+            ->select(['processID_new', 'status']);
     }
 
     public function statusMasterLoaner()
     {
-        return $this->belongsTo(StatusLoaner::class, 'status', 'processID');
+        return $this->belongsTo(StatusLoaner::class, 'status', 'processID_new')
+            ->select(['processID_new', 'status']);
     }
 
     /**

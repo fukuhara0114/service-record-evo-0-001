@@ -85,10 +85,10 @@
                                 <option value="">変更しない（案件未登録のまま）</option>
                                 <option
                                     v-for="status in statuses"
-                                    :key="status.processID"
-                                    :value="String(status.processID)"
+                                    :key="status.processID_new"
+                                    :value="String(status.processID_new)"
                                 >
-                                    {{ status.status }} ({{ status.processID }})
+                                    {{ status.status }} ({{ status.processID_new }})
                                 </option>
                             </select>
                         </label>
@@ -116,10 +116,10 @@
                             <option value="">選択してください</option>
                             <option
                                 v-for="status in statuses"
-                                :key="status.processID"
-                                :value="String(status.processID)"
+                                :key="status.processID_new"
+                                :value="String(status.processID_new)"
                             >
-                                {{ status.status }} ({{ status.processID }})
+                                {{ status.status }} ({{ status.processID_new }})
                             </option>
                         </select>
                     </label>

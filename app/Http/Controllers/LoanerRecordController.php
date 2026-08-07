@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AttachedLoaner;
 use App\Models\AttachedFile;
+use App\Models\AttachedNote;
 use App\Models\Dealer;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
@@ -50,7 +51,7 @@ class LoanerRecordController extends Controller
             })
             ->values();
 
-        $statuses = StatusLoaner::orderBy('processID')->get();
+        $statuses = StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
         $dealers = Dealer::orderBy('dealerName')->get();
         $unregisteredStatus = $this->resolveUnregisteredStatus();
 
@@ -98,14 +99,34 @@ class LoanerRecordController extends Controller
 
     public function detail(int $id)
     {
-        $attached = AttachedLoaner::with([
+        $with = [
             'serviceRecord.statusMasterLoaner',
-            'loanerMaster:loanerID,productName,item,SN,manageNum,groupName',
-        ])->findOrFail($id);
+            'loanerMaster:loanerID,productName,item,SN,manageNum,groupName,price',
+        ];
+
+        $attached = AttachedLoaner::with($with)->find($id);
+        if (!$attached) {
+            // 一覧からは orderID で遷移するため、associatedID でも解決する
+            $attached = AttachedLoaner::with($with)
+                ->where('associatedID', $id)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if (!$attached) {
+            abort(404, '指定された貸出案件は存在しません。');
+        }
 
         $record = $attached->serviceRecord;
         if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
             abort(404, '指定された貸出案件は存在しません。');
+        }
+
+        $parentReturnCode = null;
+        if ($record->parentID) {
+            $parentReturnCode = ServiceRecord::query()
+                ->where('orderID', $record->parentID)
+                ->value('returnCode');
         }
 
         $columns = Schema::getColumnListing('attachedloaners');
@@ -130,6 +151,13 @@ class LoanerRecordController extends Controller
                 'productName',
                 'SN',
                 'loanerID',
+                'price',
+                'discount_service',
+                'quoteNum',
+                'quoteDate',
+                'orderNum',
+                'orderDate',
+                'poNum',
                 'dealer',
                 'dealer_depart',
                 'contactPerson',
@@ -162,6 +190,7 @@ class LoanerRecordController extends Controller
                     ? $record->statusMasterLoaner?->status
                     : null,
             ],
+            'parentReturnCode' => $parentReturnCode,
             'loanerMaster' => $attached->loanerMaster?->only([
                 'loanerID',
                 'productName',
@@ -169,6 +198,7 @@ class LoanerRecordController extends Controller
                 'SN',
                 'manageNum',
                 'groupName',
+                'price',
             ]),
             'files' => AttachedFile::query()
                 ->where('associatedID', $record->orderID)
@@ -177,7 +207,14 @@ class LoanerRecordController extends Controller
                 ->orderBy('sortNum')
                 ->orderBy('id')
                 ->get(),
-            'statuses' => StatusLoaner::orderBy('processID')->get(['processID', 'status']),
+            'notes' => $this->serializeLoanerNotes(
+                AttachedNote::query()
+                    ->where('associatedID', $record->orderID)
+                    ->orderByDesc('whenWrote')
+                    ->orderByDesc('id')
+                    ->get()
+            ),
+            'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
             'loanerUnits' => LoanerMaster::query()
                 ->whereNotNull('loanerID')
@@ -191,6 +228,7 @@ class LoanerRecordController extends Controller
                     'SN',
                     'manageNum',
                     'groupName',
+                    'price',
                     $this->resolveStatusColumn(),
                 ]),
             'dateFields' => [
@@ -215,6 +253,13 @@ class LoanerRecordController extends Controller
             'productName' => 'nullable|string|max:255',
             'SN' => 'nullable|string|max:255',
             'loanerID' => 'nullable|integer',
+            'price' => 'nullable|numeric',
+            'discount_service' => 'nullable|numeric',
+            'quoteNum' => 'nullable|string|max:255',
+            'quoteDate' => 'nullable|date',
+            'orderNum' => 'nullable|string|max:255',
+            'orderDate' => 'nullable|date',
+            'poNum' => 'nullable|string|max:255',
             'dealer' => 'nullable|string|max:255',
             'dealer_depart' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
@@ -271,7 +316,7 @@ class LoanerRecordController extends Controller
 
         if ($record->order_type === 'loaner' && array_key_exists('status', $validated) && $validated['status'] !== null) {
             $statusExists = StatusLoaner::query()
-                ->where('processID', $validated['status'])
+                ->where('processID_new', $validated['status'])
                 ->exists();
             if (!$statusExists) {
                 return response()->json(['message' => '指定された status は存在しません。'], 422);
@@ -303,6 +348,16 @@ class LoanerRecordController extends Controller
             if ($record->order_type === 'waiting_list') {
                 unset($recordPayload['status']);
             }
+
+            // 価格: parent の returnCode が 1,2,7,13 のときだけ loanermaster.price、それ以外/親なしは 0
+            $parentId = array_key_exists('parentID', $validated)
+                ? $validated['parentID']
+                : $record->parentID;
+            $loanerId = array_key_exists('loanerID', $validated)
+                ? $validated['loanerID']
+                : ($attached->loanerID ?? $record->loanerID);
+            $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId);
+
             $record->fill($recordPayload);
             $record->lastEditPerson = $request->user()?->kanji_name;
             $record->lastEditDate = now();
@@ -327,7 +382,21 @@ class LoanerRecordController extends Controller
 
         return response()->json([
             'message' => '貸出詳細を保存しました。',
-            'record' => $record,
+            'record' => $record->only([
+                'orderID',
+                'parentID',
+                'status',
+                'productName',
+                'SN',
+                'loanerID',
+                'price',
+                'discount_service',
+                'quoteNum',
+                'quoteDate',
+                'orderNum',
+                'orderDate',
+                'poNum',
+            ]),
             'attached' => [
                 'id' => $attached->id,
                 'loanerID' => $attached->loanerID,
@@ -411,7 +480,7 @@ class LoanerRecordController extends Controller
         $status = -1; // waiting_list は status リレーションなし。NOT NULL 制約のため -1 固定
         if ($orderType === 'loaner') {
             if ($linkMode === 'none') {
-                $status = $this->resolveUnregisteredStatus()?->processID;
+                $status = $this->resolveUnregisteredStatus()?->processID_new;
                 if ($status === null) {
                     return response()->json([
                         'message' => 'statusmaster_loaner に「未登録」ステータスが見つかりません。',
@@ -550,7 +619,7 @@ class LoanerRecordController extends Controller
             ],
             'parentRecord' => $parent,
             'productLoanSchedule' => $productLoanSchedule,
-            'statuses' => StatusLoaner::orderBy('processID')->get(['processID', 'status']),
+            'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
             'dateFields' => [
                 'hasPlannedSent' => $hasPlannedSent,
                 'hasPlannedReturned' => $hasPlannedReturned,
@@ -655,7 +724,7 @@ class LoanerRecordController extends Controller
 
         if ($isLoaner && array_key_exists('status', $validated) && $validated['status'] !== null) {
             $statusExists = StatusLoaner::query()
-                ->where('processID', $validated['status'])
+                ->where('processID_new', $validated['status'])
                 ->exists();
             if (!$statusExists) {
                 return response()->json([
@@ -985,16 +1054,72 @@ class LoanerRecordController extends Controller
 
     private function resolveUnregisteredStatus(): ?StatusLoaner
     {
-        // 期間付きで新規登録する既定は「案件未登録-期間仮予約」(35)
-        $provisional = StatusLoaner::query()->where('processID', 35)->first();
+        // processID_new=20 は「案件未登録」。
+        $provisional = StatusLoaner::query()
+            ->select(['processID_new', 'status'])
+            ->where('processID_new', 20)
+            ->first();
         if ($provisional) {
             return $provisional;
         }
 
         return StatusLoaner::query()
+            ->select(['processID_new', 'status'])
             ->where('status', 'like', '%未登録%')
-            ->orderBy('processID')
+            ->orderBy('processID_new')
             ->first();
+    }
+
+    /**
+     * 貸出案件の課金価格を算出する。
+     * parent の returnCode が 1,2,7,13 のとき loanermaster.price、それ以外／親なしは 0。
+     */
+    private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId): float
+    {
+        if ($parentId === null || $parentId === '') {
+            return 0.0;
+        }
+
+        $returnCode = ServiceRecord::query()
+            ->where('orderID', $parentId)
+            ->value('returnCode');
+
+        if (! in_array((int) $returnCode, [1, 2, 7, 13], true)) {
+            return 0.0;
+        }
+
+        if ($loanerId === null || $loanerId === '') {
+            return 0.0;
+        }
+
+        $master = LoanerMaster::query()
+            ->where(function ($query) use ($loanerId) {
+                $query->where('loanerID', $loanerId)
+                    ->orWhere('id', $loanerId);
+            })
+            ->first(['price']);
+
+        return (float) ($master->price ?? 0);
+    }
+
+    private function serializeLoanerNotes($notes)
+    {
+        $kanjiName = trim((string) (auth()->user()?->kanji_name ?? ''));
+
+        return collect($notes)->map(function (AttachedNote $note) use ($kanjiName) {
+            $whoWrote = trim((string) ($note->whoWrote ?? ''));
+
+            return [
+                'id' => $note->id,
+                'associatedID' => $note->associatedID,
+                'note' => $note->note,
+                'whoWrote' => $note->whoWrote,
+                'whenWrote' => $note->whenWrote,
+                'important' => (bool) $note->important,
+                'personal' => (bool) $note->personal,
+                'is_mine' => $kanjiName !== '' && $whoWrote !== '' && $whoWrote === $kanjiName,
+            ];
+        })->values();
     }
 
     private function resolveStatusColumn(): string

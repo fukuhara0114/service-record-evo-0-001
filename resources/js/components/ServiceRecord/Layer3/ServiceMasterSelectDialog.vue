@@ -106,14 +106,14 @@ const configs = {
         searchPlaceholder: 'status で検索',
         items: propsValue => propsValue.statuses ?? [],
         columns: [
-            { label: 'processID', getter: item => item?.processID ?? '—' },
+            { label: 'processID_new', getter: item => item?.processID_new ?? '—' },
             { label: 'status', getter: item => item?.status ?? '—' },
         ],
-        valueGetter: item => item?.processID,
+        valueGetter: item => item?.processID_new,
         initialValue: payload => payload?.status ?? props.record?.status ?? null,
-        searchFields: item => [item?.processID, item?.status],
+        searchFields: item => [item?.processID_new, item?.status],
         buildResult: item => ({
-            status: item?.processID,
+            status: item?.processID_new,
         }),
     },
     returnCode: {
@@ -167,6 +167,23 @@ const configs = {
             contactPerson: item?.contactPerson ?? '',
             email: item?.email ?? '',
             phone: item?.phone ?? '',
+        }),
+    },
+    incident: {
+        title: 'Incidents 選択',
+        searchPlaceholder: 'incidentNum / companyName / depart / customerNum で検索',
+        items: propsValue => propsValue.incidentsMaster ?? [],
+        columns: [
+            { label: 'incidentNum', getter: item => item?.incidentNum ?? '—' },
+            { label: 'companyName', getter: item => item?.companyName ?? '—' },
+            { label: 'depart', getter: item => item?.depart ?? '—' },
+            { label: 'customerNum', getter: item => item?.customerNum ?? '—' },
+        ],
+        valueGetter: item => item?.id,
+        initialValue: payload => payload?.incident ?? props.record?.incident ?? null,
+        searchFields: item => [item?.id, item?.incidentNum, item?.companyName, item?.depart, item?.customerNum],
+        buildResult: item => ({
+            incident: item?.incidentNum != null && item?.incidentNum !== '' ? Number(item.incidentNum) : null,
         }),
     },
 }
@@ -226,6 +243,16 @@ watch(
             const matched = items.value.find(item =>
                 (desiredName !== '' && String(item?.productName ?? '') === String(desiredName))
                 || (desiredEntity !== '' && String(item?.entityID ?? '') === String(desiredEntity)),
+            )
+            selectedValue.value = matched?.id ?? null
+            return
+        }
+
+        if (kind.value === 'incident') {
+            const desiredIncident = props.payload?.incident ?? props.record?.incident ?? ''
+            const matched = items.value.find(item =>
+                String(item?.incidentNum ?? '') === String(desiredIncident)
+                || String(item?.id ?? '') === String(desiredIncident),
             )
             selectedValue.value = matched?.id ?? null
             return

@@ -4,7 +4,7 @@
             <div>
                 <h1>貸出カレンダー（サンプル）</h1>
                 <p class="subtitle">
-                    attachedloaners の予約期間を表示します。loaner status 35=赤 / 40以上=青。
+                    attachedloaners の予約期間を表示します。loaner status 20=赤 / 200以上=青。
                     予定をドラッグで移動、端をドラッグして期間を変更できます。
                 </p>
             </div>
@@ -33,8 +33,8 @@
                 </select>
             </label>
             <div class="legend">
-                <span class="legend-item status-35">仮予約 (35)</span>
-                <span class="legend-item status-40">予約済以降 (40+)</span>
+                <span class="legend-item status-20">案件未登録 (20)</span>
+                <span class="legend-item status-200">出荷準備以降 (200+)</span>
                 <span class="legend-item waiting">waiting_list</span>
             </div>
         </div>
@@ -133,11 +133,11 @@ function resolveColors(orderType, statusRaw) {
         : Number(statusRaw)
 
     if (orderType === 'loaner') {
-        if (status === 35) {
-            return { background: '#dc2626', border: '#b91c1c', className: 'loaner-status-35' }
+        if (status === 20) {
+            return { background: '#dc2626', border: '#b91c1c', className: 'loaner-status-20' }
         }
-        if (status !== null && !Number.isNaN(status) && status >= 40) {
-            return { background: '#2563eb', border: '#1d4ed8', className: 'loaner-status-40' }
+        if (status !== null && !Number.isNaN(status) && status >= 200) {
+            return { background: '#2563eb', border: '#1d4ed8', className: 'loaner-status-200' }
         }
         return { background: '#64748b', border: '#475569', className: 'loaner-status-other' }
     }
@@ -557,11 +557,11 @@ onBeforeUnmount(() => {
     color: #fff;
 }
 
-.legend-item.status-35 {
+.legend-item.status-20 {
     background: #dc2626;
 }
 
-.legend-item.status-40 {
+.legend-item.status-200 {
     background: #2563eb;
 }
 
@@ -682,17 +682,17 @@ onBeforeUnmount(() => {
     text-overflow: ellipsis;
 }
 
-.calendar-shell .fc .fc-event.loaner-status-35,
-.calendar-shell .fc .fc-event.loaner-status-35 .fc-event-main,
-.calendar-shell .fc .fc-event.loaner-status-35 .loaner-event-chip {
+.calendar-shell .fc .fc-event.loaner-status-20,
+.calendar-shell .fc .fc-event.loaner-status-20 .fc-event-main,
+.calendar-shell .fc .fc-event.loaner-status-20 .loaner-event-chip {
     background-color: #dc2626 !important;
     border-color: #b91c1c !important;
     color: #fff !important;
 }
 
-.calendar-shell .fc .fc-event.loaner-status-40,
-.calendar-shell .fc .fc-event.loaner-status-40 .fc-event-main,
-.calendar-shell .fc .fc-event.loaner-status-40 .loaner-event-chip {
+.calendar-shell .fc .fc-event.loaner-status-200,
+.calendar-shell .fc .fc-event.loaner-status-200 .fc-event-main,
+.calendar-shell .fc .fc-event.loaner-status-200 .loaner-event-chip {
     background-color: #2563eb !important;
     border-color: #1d4ed8 !important;
     color: #fff !important;

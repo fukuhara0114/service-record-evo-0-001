@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ServiceRecord;
 use App\Models\ServiceMaster;
 use App\Models\Dealer;
+use App\Models\IncidentMaster;
 use App\Models\PartMaster;
 use App\Models\AttachedNote;
 use App\Models\AttachedFile;
@@ -14,11 +15,13 @@ use App\Models\StockedPartMaster;
 use App\Models\AttachedStockedPart;
 use App\Models\UnregisteredEmailNote;
 use App\Models\CapturedImage;
+use App\Models\LoanerMaster;
 use App\Services\EmlReplyDraftService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use ZBateson\MailMimeParser\Message;
 
@@ -35,7 +38,7 @@ class ServiceRecordController extends Controller
                 ->orderBy('receivedDate', 'asc')->paginate(2000);
 
         // return view('servicerecord', compact('records'));
-        $statuses = \App\Models\Status::orderBy('processID')->get(); 
+        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
                 
@@ -78,7 +81,7 @@ class ServiceRecordController extends Controller
         ->orderBy('receivedDate', 'asc')
         ->get();
 
-        $statuses = \App\Models\Status::all(); 
+        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']); 
         $returnCodes = \App\Models\ReturnCode::all(); 
         $labors = \App\Models\Labor::all();
         
@@ -126,11 +129,22 @@ class ServiceRecordController extends Controller
         $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
 
         if ($mode === 'engineer') {
-            $query->where('status', '>=', 90)
-                ->where('status', '<=', 170)
-                ->where(function ($typeQuery) {
-                    $typeQuery->whereIn('order_type', ['service', 'loaner'])
-                        ->orWhereNull('order_type');
+            $query->where(function ($statusQuery) {
+                $statusQuery
+                    ->where(function ($normalQuery) {
+                        $normalQuery
+                            ->where(function ($typeQuery) {
+                                $typeQuery->where('order_type', 'service')
+                                    ->orWhereNull('order_type')
+                                    ->orWhere('order_type', '');
+                            })
+                            ->whereBetween('status', [90, 170]);
+                    })
+                    ->orWhere(function ($loanerQuery) {
+                        // 旧IDの90/100（営業貸出中/貸出中）に対応する新ID。
+                        $loanerQuery->where('order_type', 'loaner')
+                            ->whereIn('status', [400, 700]);
+                    });
                 });
 
             $laborID = auth()->user()?->laborID;
@@ -140,8 +154,23 @@ class ServiceRecordController extends Controller
                 $query->where('laborID', $laborID);
             }
         } else {
-            $query->where('status', '>=', 0)
-                ->where('status', '<', 399);
+            $query->where(function ($statusQuery) {
+                $statusQuery
+                    ->where(function ($normalQuery) {
+                        $normalQuery
+                            ->where(function ($typeQuery) {
+                                $typeQuery->whereNull('order_type')
+                                    ->orWhere('order_type', '')
+                                    ->orWhere('order_type', 'service');
+                            })
+                            ->where('status', '>=', 0)
+                            ->where('status', '<', 399);
+                    })
+                    ->orWhere(function ($loanerQuery) {
+                        $loanerQuery->where('order_type', 'loaner')
+                            ->whereIn('status', \App\Models\StatusLoaner::query()->select('processID_new'));
+                    });
+            });
         }
 
         $records = $query->orderBy('receivedDate', 'asc')->get();
@@ -157,8 +186,8 @@ class ServiceRecordController extends Controller
             }
         });
 
-        $statuses = \App\Models\Status::orderBy('processID')->get();
-        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get();
+        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
+        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
@@ -174,6 +203,10 @@ class ServiceRecordController extends Controller
         $stockedPartsMaster = StockedPartMaster::query()
             ->select(['partID', 'partName', 'description'])
             ->orderBy('partName')
+            ->get();
+        $incidentsMaster = IncidentMaster::query()
+            ->select(['id', 'incidentNum', 'companyName', 'depart', 'customerNum'])
+            ->orderByDesc('incidentNum')
             ->get();
 
         $attachmentData = null;
@@ -195,6 +228,7 @@ class ServiceRecordController extends Controller
             'servicesMaster' => $services,
             'partsMaster' => $partsMaster,
             'stockedPartsMaster' => $stockedPartsMaster,
+            'incidentsMaster' => $incidentsMaster,
             'mode' => $mode,
             'attachmentData' => $attachmentData,
         ]);
@@ -244,7 +278,9 @@ class ServiceRecordController extends Controller
             abort(404, '指定された作業内容は存在しません。');
         }
 
-        $notes = AttachedNote::where('associatedID', $orderID)->get();
+        $notes = $this->serializeNotes(
+            AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
+        );
         $files = AttachedFile::query()
             ->where('associatedID', $orderID)
             ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
@@ -258,8 +294,8 @@ class ServiceRecordController extends Controller
             ->orderBy('id')
             ->get();
 
-        $statuses = \App\Models\Status::orderBy('processID')->get(['processID', 'status']);
-        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID')->get(['processID', 'status']);
+        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
+        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all(['laborID', 'laborName']);
         $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
@@ -383,8 +419,23 @@ class ServiceRecordController extends Controller
         } elseif ($orderTypeFilter === 'waiting_list') {
             $query->where('order_type', 'waiting_list');
         } else {
-            $query->where('status', '<', 399)
-                ->where('status', '>', -1);
+            $query->where(function ($statusQuery) {
+                $statusQuery
+                    ->where(function ($normalQuery) {
+                        $normalQuery
+                            ->where(function ($typeQuery) {
+                                $typeQuery->whereNull('order_type')
+                                    ->orWhere('order_type', '')
+                                    ->orWhere('order_type', 'service');
+                            })
+                            ->where('status', '<', 399)
+                            ->where('status', '>', -1);
+                    })
+                    ->orWhere(function ($loanerQuery) {
+                        $loanerQuery->where('order_type', 'loaner')
+                            ->whereIn('status', \App\Models\StatusLoaner::query()->select('processID_new'));
+                    });
+            });
         }
 
         $records = $query
@@ -437,6 +488,16 @@ class ServiceRecordController extends Controller
             return response()->json([
                 'message' => '指定された案件は存在しません。',
             ], 404);
+        }
+
+        if (
+            array_key_exists('status', $validated)
+            && $validated['status'] !== null
+            && !$this->statusValueExistsForRecord($record, (int) $validated['status'])
+        ) {
+            return response()->json([
+                'message' => '指定された status は対応するステータスマスターに存在しません。',
+            ], 422);
         }
 
         $fileIds = collect([$validated['sourceFileId']])
@@ -1465,7 +1526,7 @@ class ServiceRecordController extends Controller
 
     private function renderCreateFromFilePage($sourceFile)
     {
-        $statuses = \App\Models\Status::orderBy('processID')->get();
+        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
@@ -1505,6 +1566,16 @@ class ServiceRecordController extends Controller
                         ->orderByDesc('id')
                         ->first();
 
+                    $masterPrice = 0.0;
+                    if ($loaner->loanerID !== null && $loaner->loanerID !== '') {
+                        $masterPrice = (float) (LoanerMaster::query()
+                            ->where(function ($query) use ($loaner) {
+                                $query->where('loanerID', $loaner->loanerID)
+                                    ->orWhere('id', $loaner->loanerID);
+                            })
+                            ->value('price') ?? 0);
+                    }
+
                     return [
                         'orderID' => $loaner->orderID,
                         'order_type' => $loaner->order_type,
@@ -1514,6 +1585,8 @@ class ServiceRecordController extends Controller
                             : ($loaner->statusMasterLoaner?->status),
                         'productName' => $loaner->productName,
                         'SN' => $loaner->SN,
+                        'price' => $loaner->price,
+                        'masterPrice' => $masterPrice,
                         'loanerID' => $loaner->loanerID,
                         'dealer' => $loaner->dealer,
                         'dealer_depart' => $loaner->dealer_depart,
@@ -1535,7 +1608,9 @@ class ServiceRecordController extends Controller
                 ->values();
 
             return [
-                'notes' => AttachedNote::where('associatedID', $orderID)->get(),
+                'notes' => $this->serializeNotes(
+                    AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
+                ),
                 'files' => AttachedFile::where('associatedID', $orderID)
                     ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
                     ->orderByRaw('CASE WHEN sortNum IS NULL THEN 1 ELSE 0 END')
@@ -1629,7 +1704,7 @@ class ServiceRecordController extends Controller
 
         return response()->json([
             'message' => '案件の Notes にメールリンクを紐づけました。',
-            'note' => $attachedNote,
+            'note' => $this->serializeNote($attachedNote),
         ]);
     }
 
@@ -1670,7 +1745,7 @@ class ServiceRecordController extends Controller
 
         return response()->json([
             'message' => 'Note を登録しました。',
-            'note' => $note,
+            'note' => $this->serializeNote($note),
         ], 201);
     }
 
@@ -1694,7 +1769,7 @@ class ServiceRecordController extends Controller
 
         return response()->json([
             'message' => 'Note を更新しました。',
-            'note' => $note->fresh(),
+            'note' => $this->serializeNote($note->fresh()),
         ]);
     }
 
@@ -1716,14 +1791,44 @@ class ServiceRecordController extends Controller
     private function assertNoteOwner(Request $request, AttachedNote $note)
     {
         $user = $request->user();
+        $whoWrote = trim((string) ($note->whoWrote ?? ''));
+        $kanjiName = trim((string) ($user?->kanji_name ?? ''));
 
-        if (!$user || $note->whoWrote !== $user->kanji_name) {
+        if (!$user || $kanjiName === '' || $whoWrote === '' || $whoWrote !== $kanjiName) {
             return response()->json([
                 'message' => '自分が書いた Note のみ編集・削除できます。',
             ], 403);
         }
 
         return null;
+    }
+
+    private function serializeNotes($notes)
+    {
+        return collect($notes)
+            ->map(fn ($note) => $this->serializeNote($note))
+            ->values();
+    }
+
+    private function serializeNote(?AttachedNote $note): ?array
+    {
+        if (!$note) {
+            return null;
+        }
+
+        $kanjiName = trim((string) (auth()->user()?->kanji_name ?? ''));
+        $whoWrote = trim((string) ($note->whoWrote ?? ''));
+
+        return [
+            'id' => $note->id,
+            'associatedID' => $note->associatedID,
+            'note' => $note->note,
+            'whoWrote' => $note->whoWrote,
+            'whenWrote' => $note->whenWrote,
+            'important' => (bool) $note->important,
+            'personal' => (bool) $note->personal,
+            'is_mine' => $kanjiName !== '' && $whoWrote !== '' && $whoWrote === $kanjiName,
+        ];
     }
 
     public function storeFile(Request $request)
@@ -1989,7 +2094,7 @@ class ServiceRecordController extends Controller
             'additionalFileIds' => 'nullable|array',
             'additionalFileIds.*' => 'integer',
             'receivedDate' => 'nullable|date',
-            'status' => 'nullable|integer',
+            'status' => ['nullable', 'integer', Rule::exists('statusmaster', 'processID_new')],
             'serviceID' => 'required|integer',
             'SN' => 'nullable|string|max:255',
             'returnCode' => 'nullable|integer',
@@ -2172,7 +2277,10 @@ class ServiceRecordController extends Controller
     // 3. 新規保存（全カラム対応）
     public function store(Request $request)
     {
-        // データの存在チェック（最低限のバリデーション）のみ行い、すべて取得
+        $request->validate([
+            'status' => ['nullable', 'integer', Rule::exists('statusmaster', 'processID_new')],
+        ]);
+
         $data = $request->except('_token');
         
         ServiceRecord::create($data);
@@ -2196,7 +2304,32 @@ class ServiceRecordController extends Controller
 
         $data = $request->except(['_token', '_method', 'allow_over_capacity']);
 
+        if (
+            array_key_exists('status', $data)
+            && $data['status'] !== null
+            && $data['status'] !== ''
+            && !$this->statusValueExistsForRecord($record, (int) $data['status'])
+        ) {
+            return response()->json([
+                'message' => '指定された status は対応するステータスマスターに存在しません。',
+            ], 422);
+        }
+
+        $returnCodeChanged = array_key_exists('returnCode', $data)
+            && (string) ($data['returnCode'] ?? '') !== (string) ($record->returnCode ?? '');
+
         $record->update($data);
+
+        $updatedLoaners = [];
+        if (
+            $returnCodeChanged
+            && ! in_array($record->order_type, ['loaner', 'waiting_list'], true)
+        ) {
+            $updatedLoaners = $this->syncChildLoanerPrices(
+                $record->orderID,
+                $record->fresh()->returnCode,
+            );
+        }
 
         if ($request->expectsJson()) {
             $freshRelations = ['returnCodeMaster', 'laborMaster'];
@@ -2209,10 +2342,80 @@ class ServiceRecordController extends Controller
             return response()->json([
                 'message' => '更新しました。',
                 'record' => $record->fresh($freshRelations),
+                'loaners' => $updatedLoaners,
             ]);
         }
 
         return redirect()->route('servicerecord.index')->with('success', '更新しました。');
+    }
+
+    /**
+     * 親案件の returnCode に応じて、紐づく loaner 案件の price を再計算して保存する。
+     * returnCode が 1,2,7,13 のとき loanermaster.price、それ以外は 0。
+     */
+    private function syncChildLoanerPrices(int $parentOrderId, mixed $returnCode): array
+    {
+        $isPaid = in_array((int) $returnCode, [1, 2, 7, 13], true);
+
+        $children = ServiceRecord::query()
+            ->where('parentID', $parentOrderId)
+            ->whereIn('order_type', ['loaner', 'waiting_list'])
+            ->get(['orderID', 'loanerID', 'price', 'order_type', 'productName', 'SN']);
+
+        $updated = [];
+        foreach ($children as $child) {
+            $price = 0.0;
+            $masterPrice = 0.0;
+            if ($isPaid && $child->loanerID !== null && $child->loanerID !== '') {
+                $masterPrice = (float) (LoanerMaster::query()
+                    ->where(function ($query) use ($child) {
+                        $query->where('loanerID', $child->loanerID)
+                            ->orWhere('id', $child->loanerID);
+                    })
+                    ->value('price') ?? 0);
+                $price = $masterPrice;
+            }
+
+            if ((float) ($child->price ?? 0) !== $price) {
+                $child->price = $price;
+                $child->save();
+            }
+
+            $attached = AttachedLoaner::query()
+                ->where('associatedID', $child->orderID)
+                ->orderByDesc('id')
+                ->first();
+
+            $updated[] = [
+                'orderID' => $child->orderID,
+                'order_type' => $child->order_type,
+                'price' => $price,
+                'masterPrice' => $masterPrice,
+                'productName' => $child->productName,
+                'SN' => $child->SN,
+                'loanerID' => $child->loanerID,
+                'attachedLoanerId' => $attached?->id,
+                'plannedSentDate' => optional($attached?->plannedSentDate ?? $attached?->sentDate)->format('Y-m-d'),
+                'plannedReturnedDate' => optional($attached?->plannedReturnedDate ?? $attached?->returnedDate)->format('Y-m-d'),
+            ];
+        }
+
+        return $updated;
+    }
+
+    private function statusValueExistsForRecord(ServiceRecord $record, int $status): bool
+    {
+        if ($record->order_type === 'waiting_list') {
+            return $status === -1;
+        }
+
+        $model = $record->order_type === 'loaner'
+            ? \App\Models\StatusLoaner::class
+            : \App\Models\Status::class;
+
+        return $model::query()
+            ->where('processID_new', $status)
+            ->exists();
     }
 
     /**
@@ -2244,6 +2447,11 @@ class ServiceRecordController extends Controller
         $records = ServiceRecord::query()
             ->whereNotNull('shippingOut_requiredDate')
             ->where('shippingOut_requiredDate', '!=', '')
+            ->where(function ($typeQuery) {
+                $typeQuery->whereNull('order_type')
+                    ->orWhere('order_type', '')
+                    ->orWhere('order_type', 'service');
+            })
             ->where('status', '>=', 300)
             ->whereDate('shippingOut_requiredDate', '>=', $validated['start'])
             ->whereDate('shippingOut_requiredDate', '<', $validated['end'])

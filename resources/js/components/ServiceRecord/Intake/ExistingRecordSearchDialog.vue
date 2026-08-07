@@ -140,10 +140,10 @@
                             <select v-model="linkForm.status">
                                 <option
                                     v-for="status in statuses"
-                                    :key="status.processID"
-                                    :value="String(status.processID)"
+                                    :key="status.processID_new"
+                                    :value="String(status.processID_new)"
                                 >
-                                    {{ status.status }} ({{ status.processID }})
+                                    {{ status.status }} ({{ status.processID_new }})
                                 </option>
                             </select>
                         </label>

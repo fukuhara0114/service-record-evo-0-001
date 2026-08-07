@@ -86,16 +86,16 @@
                                     :value="unregisteredStatusLabel"
                                     readonly
                                 >
-                                <p class="field-hint">紐づけ無しのため「案件未登録-期間仮予約」(35) で保存します。後から service 案件が作成されたら、貸出期間編集画面で親案件を紐づけできます。</p>
+                                <p class="field-hint">紐づけ無しのため「案件未登録」(20) で保存します。後から service 案件が作成されたら、貸出期間編集画面で親案件を紐づけできます。</p>
                             </template>
                             <select v-else v-model="form.status">
                                 <option value="">選択してください</option>
                                 <option
                                     v-for="status in statuses"
-                                    :key="status.processID"
-                                    :value="String(status.processID)"
+                                    :key="status.processID_new"
+                                    :value="String(status.processID_new)"
                                 >
-                                    {{ status.status }} ({{ status.processID }})
+                                    {{ status.status }} ({{ status.processID_new }})
                                 </option>
                             </select>
                         </label>
@@ -460,7 +460,7 @@ const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administ
 const unregisteredStatusLabel = computed(() => {
     const row = props.unregisteredStatus
     if (!row) return '案件未登録'
-    return `${row.status} (${row.processID})`
+    return `${row.status} (${row.processID_new})`
 })
 
 const parentSearchQuerySummary = computed(() => parentSearchQuery.value.trim() || '検索キーワードなし')

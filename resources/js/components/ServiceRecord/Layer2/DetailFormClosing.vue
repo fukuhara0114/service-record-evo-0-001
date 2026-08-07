@@ -2,6 +2,7 @@
     <div class="closing-form">
         <header class="closing-topbar">
             <span class="closing-meta">{{ draftRecord?.productName || record?.productName || '—' }}</span>
+            <span class="closing-meta">SN : {{ draftRecord?.SN || record?.SN || '—' }}</span>
             <span class="closing-meta">{{ draftRecord?.dealer || record?.dealer || '—' }}</span>
             <span class="closing-meta">{{ returnCodeLabel }}</span>
         </header>
@@ -11,7 +12,7 @@
 
         <Splitpanes v-else class="default-theme closing-splitpanes" @resized="onSplitResized">
             <Pane class="closing-pane closing-pane-left" :size="leftPaneSize" :min-size="28">
-                <div class="left-scroll">
+                <div class="left-column">
                     <section class="id-bar">
                         <span>RMA: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
                         <span>Quote: {{ draftRecord?.quoteNum || draftRecord?.sm_quote || record?.quoteNum || record?.sm_quote || '—' }}</span>
@@ -52,98 +53,136 @@
                     </div>
                     <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
-                    <section class="panel">
-                        <table class="price-table">
-                            <thead>
-                                <tr>
-                                    <th>項目</th>
-                                    <th class="col-amount">金額</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>作業内容（{{ returnCodeLabel }}）</td>
-                                    <td class="col-amount">{{ formatPrice(workPrice) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>a2la{{ isA2laOn ? '' : '（OFF）' }}</td>
-                                    <td class="col-amount">{{ formatPrice(a2laPrice) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Parts</td>
-                                    <td class="col-amount">{{ formatPrice(partsPriceTotal) }}</td>
-                                </tr>
-                                <tr class="row-summary">
-                                    <td>小計</td>
-                                    <td class="col-amount">{{ formatPrice(subtotal) }}</td>
-                                </tr>
-                                <tr class="row-summary">
-                                    <td>価格調整</td>
-                                    <td class="col-amount">{{ formatSignedAmount(adjustmentAmount) }}</td>
-                                </tr>
-                                <tr class="row-total">
-                                    <td>合計</td>
-                                    <td class="col-amount">{{ formatPrice(grandTotal) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </section>
+                    <Splitpanes
+                        class="default-theme left-inner-splitpanes"
+                        horizontal
+                        @resized="onLeftVerticalResized"
+                    >
+                        <Pane class="left-top-pane" :size="leftTopPaneSize" :min-size="22">
+                            <Splitpanes
+                                class="default-theme price-info-splitpanes"
+                                @resized="onPriceInfoResized"
+                            >
+                                <Pane class="price-pane" :size="pricePaneSize" :min-size="20">
+                                    <section class="panel panel-price">
+                                        <table class="price-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>項目</th>
+                                                    <th class="col-amount">金額</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>作業内容（{{ returnCodeLabel }}）</td>
+                                                    <td class="col-amount">{{ formatPrice(workPrice) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>a2la{{ isA2laOn ? '' : '（OFF）' }}</td>
+                                                    <td class="col-amount">{{ formatPrice(a2laPrice) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Parts</td>
+                                                    <td class="col-amount">{{ formatPrice(partsPriceTotal) }}</td>
+                                                </tr>
+                                                <tr class="row-summary">
+                                                    <td>小計</td>
+                                                    <td class="col-amount">{{ formatPrice(subtotal) }}</td>
+                                                </tr>
+                                                <tr class="row-summary">
+                                                    <td>価格調整</td>
+                                                    <td class="col-amount">{{ formatSignedAmount(adjustmentAmount) }}</td>
+                                                </tr>
+                                                <tr class="row-total">
+                                                    <td>合計</td>
+                                                    <td class="col-amount">{{ formatPrice(grandTotal) }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </section>
+                                </Pane>
+                                <Pane class="info-pane" :size="infoPaneSize" :min-size="30">
+                                    <section class="panel panel-info">
+                                        <div class="info-stack">
+                                            <div class="info-block">
+                                                <h4>Dealer</h4>
+                                                <p>{{ draftRecord?.dealer || record?.dealer || '—' }}</p>
+                                                <p>{{ draftRecord?.dealer_depart || record?.dealer_depart || '—' }}</p>
+                                                <p>{{ formatAddress(draftRecord?.address1 ?? record?.address1, draftRecord?.address2 ?? record?.address2) }}</p>
+                                                <p>{{ draftRecord?.contactPerson || record?.contactPerson || '—' }}</p>
+                                                <p>{{ draftRecord?.email || record?.email || '—' }}</p>
+                                                <p>{{ draftRecord?.phone || record?.phone || '—' }}</p>
+                                            </div>
+                                            <div class="info-block">
+                                                <h4>E/U</h4>
+                                                <p>{{ draftRecord?.endUser || record?.endUser || '—' }}</p>
+                                                <p>{{ draftRecord?.endUser_depart || record?.endUser_depart || '—' }}</p>
+                                                <p>{{ formatAddress(draftRecord?.endUser_address1 ?? record?.endUser_address1, draftRecord?.endUser_address2 ?? record?.endUser_address2) }}</p>
+                                                <p>{{ draftRecord?.endUser_contactPerson || record?.endUser_contactPerson || '—' }}</p>
+                                                <p>{{ draftRecord?.endUser_email || record?.endUser_email || '—' }}</p>
+                                                <p>{{ draftRecord?.endUser_phone || record?.endUser_phone || '—' }}</p>
+                                            </div>
+                                            <div class="info-block">
+                                                <h4>Delivery</h4>
+                                                <p>{{ draftRecord?.deliveryDestination_company || record?.deliveryDestination_company || '—' }}</p>
+                                                <p>{{ draftRecord?.deliveryDestination_depart || record?.deliveryDestination_depart || '—' }}</p>
+                                                <p>{{ formatAddress(draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1, draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2) }}</p>
+                                                <p>{{ draftRecord?.deliveryDestination_contactPerson || record?.deliveryDestination_contactPerson || '—' }}</p>
+                                                <p>{{ draftRecord?.deliveryDestination_email || record?.deliveryDestination_email || '—' }}</p>
+                                                <p>{{ draftRecord?.deliveryDestination_phone || record?.deliveryDestination_phone || '—' }}</p>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </Pane>
+                            </Splitpanes>
+                        </Pane>
 
-                    <section class="panel panel-info">
-                        <h3>Dealer / E/U / Delivery</h3>
-                        <div class="info-grid">
-                            <div>
-                                <h4>Dealer</h4>
-                                <p>{{ draftRecord?.dealer || record?.dealer || '—' }}</p>
-                                <p>{{ draftRecord?.dealer_depart || record?.dealer_depart || '—' }}</p>
-                                <p>{{ draftRecord?.contactPerson || record?.contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.email || record?.email || '—' }}</p>
-                                <p>{{ draftRecord?.phone || record?.phone || '—' }}</p>
-                            </div>
-                            <div>
-                                <h4>E/U</h4>
-                                <p>{{ draftRecord?.endUser || record?.endUser || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_depart || record?.endUser_depart || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_contactPerson || record?.endUser_contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_email || record?.endUser_email || '—' }}</p>
-                                <p>{{ draftRecord?.endUser_phone || record?.endUser_phone || '—' }}</p>
-                            </div>
-                            <div>
-                                <h4>Delivery</h4>
-                                <p>{{ draftRecord?.deliveryDestination_company || record?.deliveryDestination_company || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_depart || record?.deliveryDestination_depart || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_contactPerson || record?.deliveryDestination_contactPerson || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_email || record?.deliveryDestination_email || '—' }}</p>
-                                <p>{{ draftRecord?.deliveryDestination_phone || record?.deliveryDestination_phone || '—' }}</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel panel-notes">
-                        <div class="panel-header">
-                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
-                            <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
-                        </div>
-                        <div v-if="sharedNotes.length" class="notes-wrap">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>日時</th>
-                                        <th>記入者</th>
-                                        <th>内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="note in sharedNotes" :key="note.id">
-                                        <td class="col-date">{{ formatDate(note.whenWrote) }}</td>
-                                        <td class="col-author">{{ note.whoWrote || '—' }}</td>
-                                        <td class="text-cell" v-html="linkifyNote(note.note)" />
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">Notes がありません。</p>
-                    </section>
+                        <Pane class="left-notes-pane" :size="leftNotesPaneSize" :min-size="20">
+                            <section class="panel panel-notes notes-card">
+                                <div class="section-header">
+                                    <h3>Notes（{{ sharedNotes.length }}件）</h3>
+                                    <div class="section-actions">
+                                        <button type="button" class="action-btn" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteEdit">編集</button>
+                                        <button type="button" class="action-btn action-btn-danger" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteDelete">削除</button>
+                                        <button type="button" class="action-btn" @click="openEmailNoteLink">メール紐づけ</button>
+                                        <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
+                                    </div>
+                                </div>
+                                <div v-if="sharedNotes.length" class="attachment-table-wrap">
+                                    <table class="data-table notes-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="col-note-date">日時</th>
+                                                <th class="col-note-author">記入者</th>
+                                                <th class="col-note-body">内容</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr
+                                                v-for="note in sharedNotes"
+                                                :key="note.id"
+                                                class="table-row"
+                                                :class="{
+                                                    'important-row': note.important,
+                                                    'active-row': Number(selectedNoteId) === Number(note.id),
+                                                }"
+                                                @click="selectedNoteId = note.id"
+                                            >
+                                                <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
+                                                <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                                                <td
+                                                    class="text-cell col-note-body"
+                                                    @click.stop="selectedNoteId = note.id"
+                                                    v-html="linkifyNote(note.note)"
+                                                />
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p v-else class="empty-message">Notes がありません。</p>
+                            </section>
+                        </Pane>
+                    </Splitpanes>
                 </div>
             </Pane>
 
@@ -168,8 +207,22 @@
                                 <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                             </div>
                         </div>
-                        <div class="files-type-label">
-                            <span class="type-badge type-badge-doc">書類ファイル</span>
+                        <div class="captured-images-panel">
+                            <button
+                                type="button"
+                                class="captured-toggle"
+                                @click="capturedImagesOpen = !capturedImagesOpen"
+                            >
+                                <span>撮影画像（{{ capturedImages.length }}件）</span>
+                                <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                            </button>
+                            <div v-show="capturedImagesOpen" class="captured-images-body">
+                                <AssociatedCapturedImages
+                                    :images="capturedImages"
+                                    @changed="emit('reload-attachments')"
+                                />
+                                <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
+                            </div>
                         </div>
 
                         <div
@@ -226,11 +279,6 @@
                                 @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                             />
                             <p v-if="!sortedFiles.length" class="empty-message">書類ファイルがありません。</p>
-
-                            <AssociatedCapturedImages
-                                :images="capturedImages"
-                                @changed="emit('reload-attachments')"
-                            />
                         </div>
                     </section>
                 </div>
@@ -290,7 +338,13 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 
 const page = usePage()
 const leftPaneSize = ref(48)
 const rightPaneSize = ref(52)
+const leftTopPaneSize = ref(55)
+const leftNotesPaneSize = ref(45)
+const pricePaneSize = ref(40)
+const infoPaneSize = ref(60)
 const selectedFileId = ref(null)
+const selectedNoteId = ref(null)
+const capturedImagesOpen = ref(true)
 const actionComment = ref('')
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
@@ -306,9 +360,41 @@ const fileDropError = ref('')
 const fileDropProgress = ref('')
 const fileDragDepth = ref(0)
 
+const authUserName = computed(() => String(page.props.authUser?.kanji_name ?? '').trim())
+
 const sharedNotes = computed(() =>
     (props.notes ?? []).filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
 )
+
+const selectedNote = computed(() =>
+    sharedNotes.value.find(n => Number(n.id) === Number(selectedNoteId.value)) || null,
+)
+
+function isNoteOwner(note) {
+    if (!note) return false
+    const who = String(note.whoWrote ?? '').trim()
+    if (!who) return false
+    if (note.is_mine === true || note.is_mine === 1 || note.is_mine === '1') {
+        return true
+    }
+    return authUserName.value !== '' && authUserName.value === who
+}
+
+const noteEditDeleteTitle = computed(() => {
+    if (!selectedNoteId.value) return 'Note を選択してください'
+    if (!selectedNote.value) return 'Note を選択してください'
+    if (!isNoteOwner(selectedNote.value)) {
+        return `自分が書いた Note のみ編集・削除できます（ログイン: ${authUserName.value || '不明'} / 記入者: ${selectedNote.value.whoWrote || '不明'}）`
+    }
+    return ''
+})
+
+function formatAddress(address1, address2) {
+    const parts = [address1, address2]
+        .map(value => String(value ?? '').trim())
+        .filter(Boolean)
+    return parts.length ? parts.join(' ') : '—'
+}
 
 function compareFilesBySortNum(a, b) {
     const aNull = a?.sortNum == null
@@ -397,10 +483,10 @@ function formatSignedAmount(value) {
 
 function formatDate(value) {
     if (!value) return '—'
-    const date = new Date(value)
+    const normalized = String(value).replace(' ', 'T')
+    const date = new Date(normalized)
     if (Number.isNaN(date.getTime())) return String(value)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    return date.toLocaleDateString('ja-JP')
 }
 
 function linkifyNote(value) {
@@ -424,14 +510,50 @@ function getFilesApiBase() {
     return `${window.location.origin}${getApiBasePath()}/files`
 }
 
-function onSplitResized(panes) {
+function onSplitResized({ panes } = {}) {
     if (!Array.isArray(panes) || panes.length < 2) return
     leftPaneSize.value = panes[0].size
     rightPaneSize.value = panes[1].size
 }
 
+function onLeftVerticalResized({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    leftTopPaneSize.value = panes[0].size
+    leftNotesPaneSize.value = panes[1].size
+}
+
+function onPriceInfoResized({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    pricePaneSize.value = panes[0].size
+    infoPaneSize.value = panes[1].size
+}
+
 function openNoteCreate() {
     emit('open-dialog', 'NOTE', { mode: 'create', personal: false })
+}
+
+function openEmailNoteLink() {
+    emit('open-dialog', 'EMAIL_NOTE_LINK')
+}
+
+function openNoteEdit() {
+    const note = selectedNote.value
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ編集できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
+    emit('open-dialog', 'NOTE', { mode: 'edit', note })
+}
+
+function openNoteDelete() {
+    const note = selectedNote.value
+    if (!note) return
+    if (!isNoteOwner(note)) {
+        window.alert(`自分が書いた Note のみ削除できます。\nログイン: ${authUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`)
+        return
+    }
+    emit('open-dialog', 'D', { action: 'delete-note', note, noteId: note.id })
 }
 
 async function persistFileSortNum(fileId, sortNum) {
@@ -767,12 +889,22 @@ watch(() => props.files, (newFiles) => {
     }
 })
 
+watch(() => props.notes, () => {
+    if (
+        selectedNoteId.value != null
+        && !sharedNotes.value.some(n => Number(n.id) === Number(selectedNoteId.value))
+    ) {
+        selectedNoteId.value = null
+    }
+})
+
 watch(
     () => props.record?.orderID,
     () => {
         actionComment.value = ''
         actionMessage.value = ''
         selectedFileId.value = null
+        selectedNoteId.value = null
         closeFileDropzone()
     },
 )
@@ -814,14 +946,41 @@ watch(
     overflow: hidden;
 }
 
-.left-scroll {
+.left-column {
     height: 100%;
-    overflow: auto;
+    min-height: 0;
+    overflow: hidden;
     padding: 10px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     box-sizing: border-box;
+}
+
+.left-inner-splitpanes,
+.price-info-splitpanes {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.left-top-pane,
+.left-notes-pane,
+.price-pane,
+.info-pane {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+}
+
+.left-top-pane > .splitpanes,
+.price-pane > .panel,
+.info-pane > .panel,
+.left-notes-pane > .panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
 }
 
 .id-bar {
@@ -835,6 +994,7 @@ watch(
     font-size: 13px;
     font-weight: 700;
     color: #1e3a8a;
+    flex: 0 0 auto;
 }
 
 .panel {
@@ -842,10 +1002,213 @@ watch(
     border: 1px solid #94a3b8;
     border-radius: 6px;
     padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+}
+
+.panel-price {
+    padding: 8px;
 }
 
 .panel-info {
     background: #dbeafe;
+    overflow: auto;
+}
+
+.panel-notes,
+.notes-card {
+    min-height: 0;
+    border-color: #cbd5e1;
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #fff;
+}
+
+.notes-card .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+}
+
+.notes-card .section-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.notes-card .section-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.notes-card .action-btn {
+    padding: 4px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.notes-card .action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.notes-card .action-btn-primary {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.notes-card .action-btn-danger {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+}
+
+.notes-card .attachment-table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.notes-card .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.notes-card .data-table th,
+.notes-card .data-table td {
+    border: 1px solid #94a3b8;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.notes-card .data-table thead th {
+    background: #e2e8f0;
+    font-weight: 700;
+}
+
+.notes-card .table-row {
+    cursor: pointer;
+}
+
+.notes-card .table-row:hover td {
+    background: #dbeafe;
+}
+
+.notes-card .active-row td {
+    color: #fff !important;
+    background: #7e25eb !important;
+}
+
+.notes-card .table-row.active-row:hover td {
+    background: #7e25eb !important;
+}
+
+.notes-card .important-row td {
+    background: #fef3c7;
+}
+
+.notes-card .text-cell {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.notes-card :deep(.note-autolink) {
+    color: #1d4ed8;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.notes-card :deep(.active-row .note-autolink) {
+    color: #fff;
+}
+
+.notes-card .notes-table {
+    table-layout: fixed;
+}
+
+.notes-card .notes-table .col-note-date,
+.notes-card .notes-table .col-note-author {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-card .notes-table .col-note-body {
+    width: auto;
+}
+
+.notes-card .empty-message {
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.price-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    font-weight: 700;
+    table-layout: fixed;
+}
+
+.price-table th,
+.price-table td {
+    border-bottom: 1px solid #cbd5e1;
+    padding: 6px 8px;
+    text-align: left;
+    word-break: break-word;
+    font-weight: 700;
+}
+
+.price-table th {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.col-amount {
+    text-align: right !important;
+    white-space: nowrap;
+    width: 96px;
+}
+
+.row-summary td {
+    background: #f8fafc;
+    font-weight: 800;
+}
+
+.row-total td {
+    background: #e2e8f0;
+    font-weight: 800;
+}
+
+.info-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .panel h3,
@@ -865,15 +1228,12 @@ watch(
     margin-bottom: 8px;
 }
 
-.price-table,
 .data-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
 }
 
-.price-table th,
-.price-table td,
 .data-table th,
 .data-table td {
     border-bottom: 1px solid #cbd5e1;
@@ -881,44 +1241,128 @@ watch(
     text-align: left;
 }
 
-.col-amount {
-    text-align: right !important;
-    white-space: nowrap;
-    width: 120px;
-}
-
-.row-summary td {
-    background: #f8fafc;
-    font-weight: 700;
-}
-
-.row-total td {
-    background: #e2e8f0;
-    font-weight: 800;
-}
-
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.info-grid h4 {
+.info-block h4 {
     margin: 0 0 6px;
-    font-size: 12px;
-    color: #334155;
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
 }
 
-.info-grid p {
-    margin: 0 0 2px;
-    font-size: 12px;
-    color: #1e293b;
+.info-block p {
+    margin: 0 0 3px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
     word-break: break-word;
+    line-height: 1.35;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .notes-wrap {
-    max-height: 220px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: auto;
+}
+
+.table-row {
+    cursor: pointer;
+}
+
+.table-row:hover td {
+    background: #dbeafe;
+}
+
+.active-row td {
+    color: #fff !important;
+    background: #7e25eb !important;
+}
+
+.table-row.active-row:hover td {
+    background: #7e25eb !important;
+}
+
+.important-row td {
+    background: #fef3c7;
+}
+
+:deep(.note-autolink) {
+    color: #1d4ed8;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+:deep(.active-row .note-autolink) {
+    color: #fff;
+}
+
+.notes-table {
+    table-layout: fixed;
+}
+
+.notes-table .col-note-date,
+.notes-table .col-note-author {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-table .col-note-body {
+    width: auto;
+}
+
+.col-date,
+.col-author {
+    white-space: nowrap;
+    width: 96px;
+}
+
+.captured-images-panel {
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    overflow: hidden;
+}
+
+.captured-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border: none;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.captured-toggle:hover {
+    background: #cbd5e1;
+}
+
+.captured-toggle-icon {
+    font-size: 11px;
+    color: #475569;
+}
+
+.captured-images-body {
+    max-height: 200px;
+    overflow: auto;
+    padding: 8px;
 }
 
 .col-date,
@@ -1094,25 +1538,6 @@ watch(
     overflow: auto;
 }
 
-.files-type-label {
-    margin: 0 0 8px;
-}
-
-.type-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.type-badge-doc {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 1px solid #93c5fd;
-}
-
 .status-message {
     margin: 12px;
     color: #475569;
@@ -1126,11 +1551,5 @@ watch(
     margin: 0;
     color: #64748b;
     font-size: 13px;
-}
-
-@media (max-width: 960px) {
-    .info-grid {
-        grid-template-columns: 1fr;
-    }
 }
 </style>

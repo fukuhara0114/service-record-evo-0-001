@@ -25,6 +25,27 @@
                         </button>
                     </template>
                 </div>
+                <div
+                    v-if="mode === 'engineer'"
+                    class="engineer-header-meta"
+                >
+                    <div class="engineer-meta-item">
+                        <span class="engineer-meta-label">dealer</span>
+                        <strong>{{ record?.dealer || '—' }}</strong>
+                    </div>
+                    <div class="engineer-meta-item">
+                        <span class="engineer-meta-label">productName</span>
+                        <strong>{{ record?.productName || '—' }}</strong>
+                    </div>
+                    <div class="engineer-meta-item">
+                        <span class="engineer-meta-label">SN</span>
+                        <strong>{{ record?.SN || '—' }}</strong>
+                    </div>
+                    <div class="engineer-meta-item">
+                        <span class="engineer-meta-label">returnCode</span>
+                        <strong>{{ engineerReturnCodeLabel }}</strong>
+                    </div>
+                </div>
                 <div class="detail-meta">
                     <span>OrderID: {{ record?.orderID }}</span>
                     <p v-if="saveError" class="save-error">{{ saveError }}</p>
@@ -91,6 +112,7 @@
                     :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
+                    :current-user-kanji="currentUserKanji"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                     @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
                     @reload-attachments="$emit('reload-attachments')"
@@ -108,6 +130,7 @@
                     :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
+                    :current-user-kanji="currentUserKanji"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                     @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
                     @reload-attachments="$emit('reload-attachments')"
@@ -142,6 +165,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import DetailFormA from './DetailFormA.vue'
 import DetailFormB from './DetailFormB.vue'
 import DetailFormC from './DetailFormC.vue'
@@ -149,7 +174,7 @@ import DetailFormClosing from './DetailFormClosing.vue'
 import DetailFormInvoice from './DetailFormInvoice.vue'
 import DetailFormEngineer from './DetailFormEngineer.vue'
 
-defineProps({
+const props = defineProps({
     record: Object,
     draftRecord: Object,
     notes: {
@@ -200,9 +225,23 @@ defineProps({
         type: String,
         default: 'admin',
     },
+    currentUserKanji: {
+        type: String,
+        default: '',
+    },
 })
 
 defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', 'reload-attachments', 'workflow-done'])
+
+const page = usePage()
+
+const engineerReturnCodeLabel = computed(() => {
+    const id = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const master = props.record?.return_code_master
+    if (master?.description) return master.description
+    const found = (page.props.returnCodes ?? []).find(item => String(item.id) === String(id))
+    return found?.description || (id != null && id !== '' ? String(id) : '—')
+})
 </script>
 
 <style scoped>
@@ -228,7 +267,8 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 20px;
+    gap: 12px;
+    padding: 10px 16px;
     background: #1e293b;
     color: white;
     border-bottom: 2px solid #3b82f6;
@@ -238,12 +278,46 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
     display: flex;
     gap: 8px;
     align-items: center;
+    flex: 0 0 auto;
 }
 
 .engineer-title {
     font-size: 14px;
     font-weight: 700;
     color: #99f6e4;
+    white-space: nowrap;
+}
+
+.engineer-header-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 14px;
+    padding: 0 8px;
+}
+
+.engineer-meta-item {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.engineer-meta-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: none;
+}
+
+.engineer-meta-item strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f8fafc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .closing-title {

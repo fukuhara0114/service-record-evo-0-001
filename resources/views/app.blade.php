@@ -6,6 +6,7 @@
     <title>マイアプリ</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="app-base-url" content="{{ url('/') }}">
+    <meta name="auth-kanji-name" content="{{ auth()->user()?->kanji_name }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>

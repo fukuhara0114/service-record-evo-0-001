@@ -140,8 +140,8 @@
                                     <span>status</span>
                                     <select v-model="form.status">
                                         <option value="">選択してください</option>
-                                        <option v-for="status in statuses" :key="status.processID" :value="String(status.processID)">
-                                            {{ status.status }} ({{ status.processID }})
+                                        <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
+                                            {{ status.status }} ({{ status.processID_new }})
                                         </option>
                                     </select>
                                 </label>

@@ -15,7 +15,7 @@
       <div>
         <label class="block text-sm">状態</label>
         <select v-model="form.status">
-          <option v-for="s in statuses" :key="s.id" :value="s.status">
+          <option v-for="s in statuses" :key="s.processID_new" :value="s.processID_new">
             {{ s.status }}
           </option>
         </select>

@@ -119,26 +119,26 @@ class LoanerCalendarController extends Controller
     }
 
     /**
-     * loaner 案件のみ StatusLoaner の processID で色分けする。
-     * status 35: 期間仮予約 → 赤
-     * status 40以上: 期間予約済以降 → 青
+     * loaner 案件のみ StatusLoaner の processID_new で色分けする。
+     * status 20: 案件未登録 → 赤
+     * status 200以上: 出荷準備以降 → 青
      */
     private function resolveEventColors(?string $orderType, ?int $status): array
     {
         if ($orderType === 'loaner') {
-            if ($status === 35) {
+            if ($status === 20) {
                 return [
                     'background' => '#dc2626',
                     'border' => '#b91c1c',
-                    'class' => 'loaner-status-35',
+                    'class' => 'loaner-status-20',
                 ];
             }
 
-            if ($status !== null && $status >= 40) {
+            if ($status !== null && $status >= 200) {
                 return [
                     'background' => '#2563eb',
                     'border' => '#1d4ed8',
-                    'class' => 'loaner-status-40',
+                    'class' => 'loaner-status-200',
                 ];
             }
 

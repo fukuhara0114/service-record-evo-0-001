@@ -128,6 +128,7 @@
             :save-error="saveError"
             :layout="detailLayout"
             :mode="mode"
+            :current-user-kanji="currentUserKanji"
             @close="closeDetail"
             @switch-layout="switchDetailLayout"
             @open-dialog="openDialog"
@@ -248,6 +249,14 @@ const props = defineProps({
 
 const page = usePage()
 
+const currentUserKanji = computed(() => {
+    const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
+    if (fromPage) return fromPage
+    if (typeof document !== 'undefined') {
+        return String(document.querySelector('meta[name="auth-kanji-name"]')?.content ?? '').trim()
+    }
+    return ''
+})
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const shippingCalendarUrl = computed(() => {
     const base = getBasePath()
@@ -381,6 +390,19 @@ function getBasePath() {
     return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
 }
 
+function annotateNotesOwnership(notes) {
+    const me = currentUserKanji.value
+    return (Array.isArray(notes) ? notes : []).map((note) => {
+        const who = String(note?.whoWrote ?? '').trim()
+        const isMine = note?.is_mine === true || note?.is_mine === 1 || note?.is_mine === '1'
+            || (me !== '' && who !== '' && me === who)
+        return {
+            ...note,
+            is_mine: isMine,
+        }
+    })
+}
+
 function applyAttachmentData(data) {
     if (!data) {
         attachmentsError.value = '添付データが見つかりません。'
@@ -405,7 +427,7 @@ function applyAttachmentData(data) {
     }
 
     attachmentsError.value = ''
-    activeNotes.value = data.notes ?? []
+    activeNotes.value = annotateNotesOwnership(data.notes ?? [])
     activeFiles.value = data.files ?? []
     activeCapturedImages.value = data.capturedImages ?? []
     activeParts.value = data.parts ?? []
@@ -476,6 +498,14 @@ async function fetchRecord(orderID) {
 async function openSecondLayer(record) {
     if (!record?.orderID) {
         console.error('orderID が取得できません', record)
+        return
+    }
+
+    // loaner フィルター選択中は貸出案件詳細ページへ遷移
+    if (orderTypeFilter.value === 'loaner') {
+        const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+        const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
+        window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${record.orderID}${params}`
         return
     }
 
@@ -694,6 +724,7 @@ async function saveRecord() {
                 rmaNumOverSea: draftRecord.value.rmaNumOverSea,
                 shippingOut_requiredDate: draftRecord.value.shippingOut_requiredDate,
                 incident: draftRecord.value.incident,
+                symptoms: draftRecord.value.symptoms,
                 mapics_inv: draftRecord.value.mapics_inv,
                 mapics47: draftRecord.value.mapics47,
                 preData: draftRecord.value.preData,
@@ -713,10 +744,11 @@ async function saveRecord() {
             throw new Error(validationMessage || data.message || `保存に失敗しました。（HTTP ${response.status}）`)
         }
 
+        const previousReturnCode = activeRecord.value.returnCode
         Object.assign(activeRecord.value, draftRecord.value)
         if (activeRecord.value.order_type === 'loaner') {
             activeRecord.value.status_master_loaner = page.props.statusesLoaner?.find(
-                status => String(status.processID) === String(draftRecord.value.status),
+                status => String(status.processID_new) === String(draftRecord.value.status),
             ) ?? null
             activeRecord.value.status_master = null
         } else if (activeRecord.value.order_type === 'waiting_list') {
@@ -724,7 +756,7 @@ async function saveRecord() {
             activeRecord.value.status_master_loaner = null
         } else {
             activeRecord.value.status_master = page.props.statuses?.find(
-                status => String(status.processID) === String(draftRecord.value.status),
+                status => String(status.processID_new) === String(draftRecord.value.status),
             ) ?? null
         }
         activeRecord.value.return_code_master = page.props.returnCodes?.find(code => String(code.id) === String(draftRecord.value.returnCode)) ?? null
@@ -734,6 +766,24 @@ async function saveRecord() {
             entityID: draftRecord.value.entityID,
             serviceID: draftRecord.value.serviceID,
         })
+
+        // 作業内容(returnCode)変更時: 子 loaner の保存済み価格を反映
+        if (Array.isArray(data.loaners) && data.loaners.length) {
+            const priceByOrderId = new Map(
+                data.loaners.map(item => [String(item.orderID), item]),
+            )
+            activeLoaners.value = activeLoaners.value.map((loaner) => {
+                const updated = priceByOrderId.get(String(loaner.orderID))
+                if (!updated) return loaner
+                return {
+                    ...loaner,
+                    price: updated.price,
+                    masterPrice: updated.masterPrice ?? loaner.masterPrice,
+                }
+            })
+        } else if (String(draftRecord.value.returnCode ?? '') !== String(previousReturnCode ?? '')) {
+            onReloadAttachments()
+        }
     } catch (e) {
         saveError.value = e.message || '保存に失敗しました。'
     } finally {

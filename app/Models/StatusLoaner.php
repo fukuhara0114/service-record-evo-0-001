@@ -9,7 +9,7 @@ class StatusLoaner extends Model
 {
     protected $table = 'statusmaster_loaner';
 
-    protected $primaryKey = 'processID';
+    protected $primaryKey = 'processID_new';
 
     public $timestamps = false;
 
@@ -17,6 +17,6 @@ class StatusLoaner extends Model
 
     public function serviceRecords(): HasMany
     {
-        return $this->hasMany(ServiceRecord::class, 'status', 'processID');
+        return $this->hasMany(ServiceRecord::class, 'status', 'processID_new');
     }
 }
