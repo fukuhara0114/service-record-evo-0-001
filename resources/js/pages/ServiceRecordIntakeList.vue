@@ -5,8 +5,8 @@
                 <h1>未登録ファイル一覧</h1>
             </div>
             <div class="header-actions">
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
                 <a :href="adminUrl" class="btn btn-primary">既存案件一覧</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </div>
 
@@ -160,6 +160,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import { startFileImport } from '@/utils/startFileImport'
 

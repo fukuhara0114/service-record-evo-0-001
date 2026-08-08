@@ -133,7 +133,7 @@ const message = computed(() => {
 const confirmLabel = computed(() => (isDestructive.value ? '削除' : '保存'))
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 function getCsrfToken() {

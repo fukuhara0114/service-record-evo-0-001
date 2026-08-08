@@ -6,8 +6,8 @@
                 <p class="subtitle">撮影画像のサムネイル一覧です。クリックで本体を表示します。</p>
             </div>
             <div class="header-actions">
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
                 <a :href="cameraUrl" class="btn btn-primary">カメラ</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </header>
 
@@ -20,6 +20,7 @@
 <script setup>
 import { computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
 
 const page = usePage()

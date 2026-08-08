@@ -55,9 +55,12 @@
             <span>詳細</span>
         </div>
         <!-- ホームに戻るボタン（リンク） -->
-        <a href="{{ url('/home') }}"  
-           class="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow hover:bg-blue-700 transition">
-            Home
+        <a href="{{ url('/home') }}"
+           class="close-to-home-btn"
+           aria-label="閉じる"
+           title="閉じる"
+           style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #94a3b8;border-radius:6px;background:#fff;color:#0f172a;text-decoration:none;font-size:22px;font-weight:700;line-height:1;">
+            ×
         </a>
 
     </div>

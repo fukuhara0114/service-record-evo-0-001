@@ -1,6 +1,13 @@
 <template>
-    <BaseDialog :title="dialogTitle" large :plain="plain" :show-close="!plain" @close="onCancel">
-        <div class="shipping-dialog">
+    <BaseDialog
+        :title="dialogTitle"
+        large
+        :plain="plain"
+        :show-close="!plain"
+        :show-footer="showFooter"
+        @close="onCancel"
+    >
+        <div class="shipping-dialog" :class="{ 'shipping-dialog-compact': hideDetailPane }">
             <div v-if="mode === 'complete'" class="shipping-summary">
                 <div>
                     <strong>対象案件</strong>
@@ -18,13 +25,21 @@
             </div>
             <div v-else class="shipping-summary">
                 <div class="selected-line">
-                    <span class="hint">バーをドラッグで出荷予定日を変更／クリックで詳細。上限 {{ capacity }} 台/日を超えても登録可（超過日は赤表示）</span>
+                    <span class="hint">{{ browseHintText }}</span>
+                    <span v-if="showStatusColors" class="hint color-legend">
+                        <span v-if="legendShows(300)"><span class="legend-swatch legend-300"></span>300={{ statusCount300 }}</span>
+                        <span v-if="legendShows(350)"><span class="legend-swatch legend-350"></span>350={{ statusCount350 }}</span>
+                        <span v-if="legendShows(385)"><span class="legend-swatch legend-385"></span>385={{ statusCount385 }}</span>
+                    </span>
                 </div>
             </div>
 
             <p v-if="error" class="shipping-error">{{ error }}</p>
 
-            <Splitpanes class="default-theme shipping-split" horizontal @resized="onSplitResized">
+            <div v-if="hideDetailPane" class="calendar-shell calendar-shell-fill">
+                <FullCalendar ref="calendarRef" :options="calendarOptions" />
+            </div>
+            <Splitpanes v-else class="default-theme shipping-split" horizontal @resized="onSplitResized">
                 <Pane class="shipping-split-pane" :size="topPaneSize" :min-size="28">
                     <div class="calendar-shell">
                         <FullCalendar ref="calendarRef" :options="calendarOptions" />
@@ -130,14 +145,14 @@
                 {{ confirming ? '処理中...' : 'この日で完了（status=300）' }}
             </button>
         </template>
-        <template v-else-if="plain" #footer>
+        <template v-else-if="plain && showFooter" #footer>
             <a :href="listUrl" class="btn btn-secondary">一覧へ戻る</a>
         </template>
     </BaseDialog>
 </template>
 
 <script setup>
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, ref, watch, computed, onMounted, nextTick } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -152,6 +167,12 @@ import { getServiceRecordBasePath, serviceRecordUrl } from '@/utils/serviceRecor
 const props = defineProps({
     mode: { type: String, default: 'complete' }, // complete | browse
     plain: { type: Boolean, default: false },
+    showFooter: { type: Boolean, default: true },
+    hideDetailPane: { type: Boolean, default: false },
+    /** 単一 status、または "300,350" のようなカンマ区切り */
+    statusFilter: { type: [Number, String], default: null },
+    /** orderID → status のマップ（一覧側の値を優先して色分けする） */
+    statusByOrderId: { type: Object, default: () => ({}) },
     orderId: { type: [Number, String], default: null },
     productName: { type: String, default: '' },
     serialNumber: { type: String, default: '' },
@@ -159,9 +180,15 @@ const props = defineProps({
     contactPerson: { type: String, default: '' },
     previewRecord: { type: Object, default: null },
     confirming: { type: Boolean, default: false },
+    /** true のとき初期表示を「今日」にする（Logistics 一覧など） */
+    goToToday: { type: Boolean, default: false },
+    /** 初期ビュー: dayGridMonth | dayGridWeek | dayGridDay */
+    initialView: { type: String, default: 'dayGridMonth' },
+    /** false のときイベントのドラッグ＆ドロップを無効化 */
+    editable: { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['close', 'confirm'])
+const emit = defineEmits(['close', 'confirm', 'select-order'])
 const page = usePage()
 
 const calendarRef = ref(null)
@@ -182,6 +209,30 @@ const bottomPaneSize = ref(42)
 const dialogTitle = computed(() =>
     props.mode === 'browse' ? '出荷予定カレンダー' : '出荷予定日の選択',
 )
+
+const browseHintText = computed(() => {
+    if (props.editable) {
+        return `バーをドラッグで出荷予定日を変更／クリックで詳細。上限 ${capacity.value} 台/日を超えても登録可（超過日は赤表示）`
+    }
+    return `クリックで詳細を表示。上限 ${capacity.value} 台/日を超える日は赤表示`
+})
+
+const showStatusColors = computed(() =>
+    normalizeStatusFilter(props.statusFilter).length > 0
+    || Boolean(props.statusByOrderId && Object.keys(props.statusByOrderId).length > 0),
+)
+const statusCount300 = ref(0)
+const statusCount350 = ref(0)
+const statusCount385 = ref(0)
+
+const legendStatusCodes = computed(() => {
+    const list = normalizeStatusFilter(props.statusFilter)
+    return list.length > 0 ? list : [300, 350, 385]
+})
+
+function legendShows(code) {
+    return legendStatusCodes.value.includes(code)
+}
 
 const listUrl = computed(() => serviceRecordUrl('/administrator'))
 
@@ -398,6 +449,106 @@ async function persistShippingDate(orderId, dateStr) {
     return result.data
 }
 
+function normalizeStatusFilter(value) {
+    if (value === null || value === undefined || value === '') return []
+    return String(value)
+        .split(',')
+        .map((part) => Number(String(part).trim()))
+        .filter((num) => Number.isFinite(num) && num > 0)
+}
+
+function resolveRecordStatus(source) {
+    if (source == null || source === '') return NaN
+    if (typeof source === 'object') {
+        const nested = source.recordStatus ?? source.status ?? source.processID_new
+        return resolveRecordStatus(nested)
+    }
+    return Number.parseInt(String(source).trim(), 10)
+}
+
+function statusFromOrderMap(orderId) {
+    if (orderId == null || !props.statusByOrderId) return NaN
+    const map = props.statusByOrderId
+    const direct = map[orderId] ?? map[String(orderId)] ?? map[Number(orderId)]
+    return resolveRecordStatus(direct)
+}
+
+function resolveEventRecordStatus(eventLike) {
+    const propsX = eventLike?.extendedProps || eventLike || {}
+    const orderId = propsX.orderID ?? eventLike?.orderID ?? eventLike?.id
+    const fromMap = statusFromOrderMap(orderId)
+    if (Number.isFinite(fromMap)) return fromMap
+    return resolveRecordStatus(
+        propsX.recordStatus
+        ?? propsX.status
+        ?? eventLike?.recordStatus
+        ?? eventLike?.status,
+    )
+}
+
+function eventStyleByStatus(status) {
+    const code = resolveRecordStatus(status)
+    if (code === 300) {
+        return {
+            className: 'shipping-event-status-300',
+            backgroundColor: '#facc15',
+            borderColor: '#ca8a04',
+            textColor: '#422006',
+        }
+    }
+    if (code === 350) {
+        return {
+            className: 'shipping-event-status-350',
+            backgroundColor: '#16a34a',
+            borderColor: '#15803d',
+            textColor: '#ffffff',
+        }
+    }
+    if (code === 385) {
+        return {
+            className: 'shipping-event-status-385',
+            backgroundColor: '#2563eb',
+            borderColor: '#1d4ed8',
+            textColor: '#ffffff',
+        }
+    }
+    return {
+        className: '',
+        backgroundColor: undefined,
+        borderColor: undefined,
+        textColor: undefined,
+    }
+}
+
+function paintShippingEventElement(el, style) {
+    if (!el || !style?.backgroundColor) return
+
+    el.classList.remove('shipping-event-status-300', 'shipping-event-status-350', 'shipping-event-status-385')
+    if (style.className) el.classList.add(style.className)
+
+    el.style.setProperty('background-color', style.backgroundColor, 'important')
+    el.style.setProperty('border-color', style.borderColor, 'important')
+    el.style.setProperty('color', style.textColor, 'important')
+    el.style.setProperty('--fc-event-bg-color', style.backgroundColor, 'important')
+    el.style.setProperty('--fc-event-border-color', style.borderColor, 'important')
+    el.style.setProperty('--fc-event-text-color', style.textColor, 'important')
+
+    el.querySelectorAll('.fc-event-main, .fc-event-title, .shipping-event-chip, .shipping-event-bar, .shipping-event-line1, .shipping-event-line2').forEach((node) => {
+        node.style.setProperty('background-color', style.backgroundColor, 'important')
+        node.style.setProperty('border-color', style.borderColor, 'important')
+        node.style.setProperty('color', style.textColor, 'important')
+    })
+}
+
+function applyShippingEventColors(info) {
+    const recordStatus = resolveEventRecordStatus(info.event)
+    const style = eventStyleByStatus(recordStatus)
+    if (!style.backgroundColor) return
+    paintShippingEventElement(info.el, style)
+    // FullCalendar が描画後に上書きする場合があるため再適用
+    requestAnimationFrame(() => paintShippingEventElement(info.el, style))
+}
+
 async function fetchEvents(info, successCallback, failureCallback) {
     error.value = ''
     try {
@@ -405,6 +556,12 @@ async function fetchEvents(info, successCallback, failureCallback) {
             start: info.startStr.slice(0, 10),
             end: info.endStr.slice(0, 10),
         })
+        const statusList = normalizeStatusFilter(props.statusFilter)
+        if (statusList.length === 1) {
+            params.set('status', String(statusList[0]))
+        } else if (statusList.length > 1) {
+            params.set('statuses', statusList.join(','))
+        }
         const result = await apiFetch(
             `${window.location.origin}${getApiBasePath()}/shipping-calendar/events?${params}`,
         )
@@ -413,25 +570,68 @@ async function fetchEvents(info, successCallback, failureCallback) {
         }
 
         capacity.value = Number(result.data.capacity) || SHIPPING_DAILY_CAPACITY
-        dayCounts.value = result.data.counts || {}
+        const rawCounts = result.data.counts || {}
+        // 日付キーを YYYY-MM-DD に正規化
+        const normalizedCounts = {}
+        Object.entries(rawCounts).forEach(([key, value]) => {
+            const dateKey = toDateStr(key)
+            if (!dateKey) return
+            normalizedCounts[dateKey] = Number(value) || 0
+        })
+        dayCounts.value = normalizedCounts
 
+        let count300 = 0
+        let count350 = 0
+        let count385 = 0
         const events = (result.data.events || [])
             .filter((event) => props.mode !== 'complete' || String(event.id) !== String(props.orderId))
-            .map((event) => ({
-                ...event,
-                editable: true,
-                classNames: [
-                    ...(event.classNames || []),
-                    'shipping-event',
-                    String(selectedEventId.value) === String(event.id) ? 'shipping-event-selected' : '',
-                ].filter(Boolean),
-            }))
+            .map((event) => {
+                const orderId = event.extendedProps?.orderID ?? event.id
+                // API の status を主、一覧マップがあればそれで上書き
+                const apiStatus = resolveRecordStatus(
+                    event.extendedProps?.recordStatus ?? event.extendedProps?.status,
+                )
+                const mapStatus = statusFromOrderMap(orderId)
+                const recordStatus = Number.isFinite(mapStatus) ? mapStatus : apiStatus
+                if (recordStatus === 300) count300 += 1
+                if (recordStatus === 350) count350 += 1
+                if (recordStatus === 385) count385 += 1
+                const style = eventStyleByStatus(recordStatus)
+                return {
+                    ...event,
+                    editable: props.editable,
+                    backgroundColor: style.backgroundColor || event.backgroundColor || undefined,
+                    borderColor: style.borderColor || event.borderColor || undefined,
+                    textColor: style.textColor || event.textColor || undefined,
+                    color: style.backgroundColor || event.color || undefined,
+                    classNames: [
+                        'shipping-event',
+                        style.className,
+                        String(selectedEventId.value) === String(event.id) ? 'shipping-event-selected' : '',
+                    ].filter(Boolean),
+                    extendedProps: {
+                        ...(event.extendedProps || {}),
+                        orderID: orderId,
+                        status: recordStatus,
+                        recordStatus,
+                    },
+                }
+            })
+
+        statusCount300.value = count300
+        statusCount350.value = count350
+        statusCount385.value = count385
 
         if (props.mode === 'complete' && props.orderId && selectedDate.value) {
             events.push(buildPendingEvent(selectedDate.value))
         }
 
         successCallback(events)
+
+        // 日セルの 0/8 表示を events 取得後に再描画
+        requestAnimationFrame(() => {
+            calendarRef.value?.getApi?.()?.render()
+        })
     } catch (e) {
         error.value = e.message || '出荷予定の取得に失敗しました。'
         failureCallback(e)
@@ -447,16 +647,23 @@ function handleDateClick(arg) {
 function handleEventClick(info) {
     const isPending = info.event.id === PENDING_ID.value || info.event.extendedProps?.pending
     const orderId = info.event.extendedProps?.orderID ?? info.event.id
+    emit('select-order', { orderId, pending: isPending })
+    if (props.hideDetailPane) return
     loadDetailForOrder(orderId, isPending)
 }
 
 function handleEventAllow(dropInfo) {
+    if (!props.editable) return false
     const dateStr = toDateStr(dropInfo.start)
     if (!dateStr || isPastDate(dateStr)) return false
     return true
 }
 
 async function handleEventDrop(info) {
+    if (!props.editable) {
+        info.revert()
+        return
+    }
     if (dropSaving.value) {
         info.revert()
         return
@@ -532,16 +739,27 @@ function eventContent(arg) {
     const { line1, line2 } = formatEventLines(arg.event)
     const viewType = arg.view?.type || ''
     const detailed = viewType === 'dayGridWeek' || viewType === 'dayGridDay'
+    const recordStatus = resolveEventRecordStatus(arg.event)
+    const style = eventStyleByStatus(recordStatus)
+    const bg = style.backgroundColor || arg.event.backgroundColor
+    const border = style.borderColor || arg.event.borderColor
+    const text = style.textColor || arg.event.textColor
+    const styleAttr = bg
+        ? ` style="background-color:${bg} !important;border-color:${border} !important;color:${text} !important;display:block;width:100%;box-sizing:border-box;"`
+        : ''
+    const statusTag = Number.isFinite(recordStatus)
+        ? `<span class="shipping-status-tag">[${recordStatus}]</span> `
+        : ''
 
     if (!detailed) {
         return {
-            html: `<div class="shipping-event-chip" title="${escapeHtml(arg.event.title)}">${escapeHtml(line1)}${line2 ? ' / ' + escapeHtml(line2) : ''}</div>`,
+            html: `<div class="shipping-event-chip ${style.className}" title="${escapeHtml(arg.event.title)}"${styleAttr}>${statusTag}${escapeHtml(line1)}${line2 ? ' / ' + escapeHtml(line2) : ''}</div>`,
         }
     }
 
     return {
-        html: `<div class="shipping-event-bar" title="${escapeHtml(arg.event.title)}">`
-            + `<div class="shipping-event-line1">${escapeHtml(line1)}</div>`
+        html: `<div class="shipping-event-bar ${style.className}" title="${escapeHtml(arg.event.title)}"${styleAttr}>`
+            + `<div class="shipping-event-line1">${statusTag}${escapeHtml(line1)}</div>`
             + (line2 ? `<div class="shipping-event-line2">${escapeHtml(line2)}</div>` : '')
             + `</div>`,
     }
@@ -551,9 +769,14 @@ function handleDatesSet(info) {
     currentViewType.value = info.view?.type || 'dayGridMonth'
 }
 
+const resolvedInitialView = ['dayGridMonth', 'dayGridWeek', 'dayGridDay'].includes(props.initialView)
+    ? props.initialView
+    : 'dayGridMonth'
+
 const calendarOptions = reactive({
     plugins: [dayGridPlugin, interactionPlugin],
-    initialView: 'dayGridMonth',
+    initialView: resolvedInitialView,
+    initialDate: props.goToToday ? todayStr() : undefined,
     locale: 'ja',
     height: '100%',
     headerToolbar: {
@@ -581,7 +804,7 @@ const calendarOptions = reactive({
             eventDisplay: 'block',
         },
     },
-    editable: true,
+    editable: props.editable,
     selectable: false,
     dayMaxEvents: true,
     eventDisplay: 'block',
@@ -594,6 +817,31 @@ const calendarOptions = reactive({
     dayCellClassNames,
     dayCellContent,
     eventContent,
+    eventDidMount: applyShippingEventColors,
+    eventClassNames(arg) {
+        const style = eventStyleByStatus(resolveEventRecordStatus(arg.event))
+        return ['shipping-event', style.className].filter(Boolean)
+    },
+})
+
+function jumpToToday() {
+    const api = calendarRef.value?.getApi?.()
+    if (!api) return
+    if (api.view?.type !== resolvedInitialView) {
+        api.changeView(resolvedInitialView, props.goToToday ? todayStr() : undefined)
+    } else if (props.goToToday) {
+        api.today()
+    }
+    api.updateSize()
+}
+
+onMounted(() => {
+    if (!props.goToToday && resolvedInitialView === 'dayGridMonth') return
+    nextTick(() => {
+        jumpToToday()
+        // レイアウト確定後にもう一度（Splitpane 初期表示対策）
+        requestAnimationFrame(() => jumpToToday())
+    })
 })
 
 watch(selectedDate, () => {
@@ -601,6 +849,15 @@ watch(selectedDate, () => {
     if (!api) return
     // changeView は同一 view でもイベントソース再取得を誘発し、refetch と二重検索になるため使わない
     api.refetchEvents()
+})
+
+function refetchEvents() {
+    calendarRef.value?.getApi?.()?.refetchEvents()
+}
+
+defineExpose({
+    refetchEvents,
+    jumpToToday,
 })
 
 function onCancel() {
@@ -653,6 +910,37 @@ function onConfirm() {
     font-size: 12px;
 }
 
+.color-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+}
+
+.legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    display: inline-block;
+    border: 1px solid rgba(15, 23, 42, 0.35);
+}
+
+.legend-swatch.legend-300 {
+    background: #facc15;
+}
+
+.legend-swatch.legend-350 {
+    background: #16a34a;
+}
+
+.legend-swatch.legend-385 {
+    background: #2563eb;
+}
+
+.shipping-status-tag {
+    font-weight: 800;
+}
+
 .shipping-error {
     margin: 0;
     color: #b91c1c;
@@ -676,6 +964,14 @@ function onConfirm() {
     border-radius: 6px;
     overflow: hidden;
     background: #fff;
+}
+
+.calendar-shell-fill {
+    flex: 1;
+}
+
+.shipping-dialog-compact .shipping-summary {
+    margin-bottom: 0;
 }
 
 .detail-panel {
@@ -891,6 +1187,46 @@ a.btn {
 
 .fc .shipping-event {
     cursor: pointer;
+}
+
+.fc .shipping-event-status-300,
+.fc .shipping-event-status-300 .fc-event-main,
+.fc .shipping-event-status-300 .shipping-event-chip,
+.fc .shipping-event-status-300 .shipping-event-bar {
+    background-color: #facc15 !important;
+    border-color: #ca8a04 !important;
+    color: #422006 !important;
+    --fc-event-bg-color: #facc15 !important;
+    --fc-event-border-color: #ca8a04 !important;
+    --fc-event-text-color: #422006 !important;
+}
+
+.fc .shipping-event-status-350,
+.fc .fc-event.shipping-event-status-350,
+.fc .shipping-event-status-350 .fc-event-main,
+.fc .shipping-event-status-350 .shipping-event-chip,
+.fc .shipping-event-status-350 .shipping-event-bar,
+.fc a.fc-event.shipping-event-status-350 {
+    background-color: #16a34a !important;
+    border-color: #15803d !important;
+    color: #ffffff !important;
+    --fc-event-bg-color: #16a34a !important;
+    --fc-event-border-color: #15803d !important;
+    --fc-event-text-color: #ffffff !important;
+}
+
+.fc .shipping-event-status-385,
+.fc .fc-event.shipping-event-status-385,
+.fc .shipping-event-status-385 .fc-event-main,
+.fc .shipping-event-status-385 .shipping-event-chip,
+.fc .shipping-event-status-385 .shipping-event-bar,
+.fc a.fc-event.shipping-event-status-385 {
+    background-color: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    --fc-event-bg-color: #2563eb !important;
+    --fc-event-border-color: #1d4ed8 !important;
+    --fc-event-text-color: #ffffff !important;
 }
 
 .fc .shipping-event-selected {

@@ -73,13 +73,32 @@
                 選択解除
             </button>
             <button
-                v-if="canAssociate"
+                v-if="!selectionOnly"
+                type="button"
+                class="action-btn action-btn-danger"
+                :disabled="deletableSelectedCount === 0 || deleting"
+                :title="deleteButtonTitle"
+                @click="deleteSelected"
+            >
+                {{ deleting ? '削除中...' : `削除${deletableSelectedCount > 0 ? ` (${deletableSelectedCount})` : ''}` }}
+            </button>
+            <button
+                v-if="canAssociate && !selectionOnly"
                 type="button"
                 class="action-btn action-btn-primary"
                 :disabled="selectedCount === 0 || associating"
                 @click="associateSelected"
             >
                 {{ associating ? '紐づけ中...' : 'この案件に紐づける' }}
+            </button>
+            <button
+                v-if="selectionOnly"
+                type="button"
+                class="action-btn action-btn-primary"
+                :disabled="selectedCount === 0"
+                @click="confirmSelection"
+            >
+                選択した画像を使う ({{ selectedCount }})
             </button>
             <p v-if="associateMessage" class="associate-message" :class="{ error: associateError }">
                 {{ associateMessage }}
@@ -218,9 +237,14 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    /** true のとき削除・紐づけを隠し、選択確定ボタンを表示 */
+    selectionOnly: {
+        type: Boolean,
+        default: false,
+    },
 })
 
-const emit = defineEmits(['select', 'selection-change', 'associated'])
+const emit = defineEmits(['select', 'selection-change', 'associated', 'confirm-selection'])
 
 const page = usePage()
 const items = ref([])
@@ -243,11 +267,35 @@ const suppressDateWatch = ref(false)
 const associating = ref(false)
 const associateMessage = ref('')
 const associateError = ref(false)
+const deleting = ref(false)
 
 const periodOptions = PERIOD_OPTIONS
 const hasMore = computed(() => currentPage.value < lastPage.value)
 const selectedCount = computed(() => selectedMap.value.size)
 const selectedImages = computed(() => Array.from(selectedMap.value.values()))
+const currentUserKanji = computed(() => {
+    const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
+    if (fromPage) return fromPage.slice(0, 8)
+    if (typeof document !== 'undefined') {
+        return String(document.querySelector('meta[name="auth-kanji-name"]')?.content ?? '').trim().slice(0, 8)
+    }
+    return ''
+})
+const deletableSelectedImages = computed(() => {
+    const me = currentUserKanji.value
+    if (!me) return []
+    return selectedImages.value.filter((item) => String(item.captured_by ?? '') === me)
+})
+const deletableSelectedCount = computed(() => deletableSelectedImages.value.length)
+const deleteButtonTitle = computed(() => {
+    if (!currentUserKanji.value) return 'ログインユーザー情報を確認できません'
+    if (selectedCount.value === 0) return '画像を選択してください'
+    if (deletableSelectedCount.value === 0) return '自分がアップロードした画像のみ削除できます'
+    if (deletableSelectedCount.value < selectedCount.value) {
+        return `選択中 ${selectedCount.value} 件のうち、自分の ${deletableSelectedCount.value} 件のみ削除します`
+    }
+    return '選択した画像を削除します'
+})
 /** Resolved case orderID from either associatedID or associatedId prop. */
 const caseAssociatedId = computed(() => {
     const raw = props.associatedID ?? props.associatedId
@@ -371,6 +419,10 @@ function clearSelection() {
     emitSelectionChange()
 }
 
+function confirmSelection() {
+    emit('confirm-selection', selectedImages.value)
+}
+
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
 }
@@ -432,6 +484,62 @@ function listUrl(pageNum) {
     }
 
     return `${base}?${params.toString()}`
+}
+
+async function deleteSelected() {
+    if (deletableSelectedCount.value === 0 || deleting.value) return
+
+    const targets = deletableSelectedImages.value
+    const skipped = selectedCount.value - targets.length
+    const confirmMsg = skipped > 0
+        ? `自分の画像 ${targets.length} 件を削除しますか？（本人以外の ${skipped} 件は削除しません）`
+        : `選択した ${targets.length} 件の画像を削除しますか？`
+    if (!window.confirm(confirmMsg)) return
+
+    deleting.value = true
+    associateMessage.value = ''
+    associateError.value = false
+
+    try {
+        const response = await fetch(`${page.props.appBaseUrl}/servicerecord/camera/delete`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                ids: targets.map((item) => item.id),
+            }),
+        })
+
+        let data = {}
+        try {
+            data = await response.json()
+        } catch {
+            // ignore
+        }
+
+        if (!response.ok) {
+            throw new Error(data.message || `削除に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        associateMessage.value = data.message || '画像を削除しました。'
+        if (previewItem.value && targets.some((item) => item.id === previewItem.value.id)) {
+            closePreview()
+        }
+        if (editingItem.value && targets.some((item) => item.id === editingItem.value.id)) {
+            closeEditor()
+        }
+        await reload({ clearSelected: true })
+    } catch (e) {
+        associateError.value = true
+        associateMessage.value = e.message || '削除に失敗しました。'
+    } finally {
+        deleting.value = false
+    }
 }
 
 async function associateSelected() {
@@ -896,6 +1004,14 @@ defineExpose({
 
 .action-btn-secondary {
     background: #475569;
+}
+
+.action-btn-danger {
+    background: #dc2626;
+}
+
+.action-btn-danger:hover:not(:disabled) {
+    background: #b91c1c;
 }
 
 .preview-overlay {

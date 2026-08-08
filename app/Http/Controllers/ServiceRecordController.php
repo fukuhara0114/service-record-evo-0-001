@@ -108,6 +108,18 @@ class ServiceRecordController extends Controller
         return $this->renderServiceRecordList($request, 'engineer');
     }
 
+    // Logistics用表示（status = 350）
+    public function logistics(Request $request)
+    {
+        return $this->renderServiceRecordList($request, 'logistics');
+    }
+
+    // 出荷準備用表示（status = 300, 385）
+    public function shippingPrep(Request $request)
+    {
+        return $this->renderServiceRecordList($request, 'shippingPrep');
+    }
+
     private function renderServiceRecordList(Request $request, string $mode)
     {
         // 添付データだけ欲しい Inertia 部分リロード（一覧は再取得しない）
@@ -129,7 +141,11 @@ class ServiceRecordController extends Controller
 
         $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
 
-        if ($mode === 'engineer') {
+        if ($mode === 'logistics') {
+            $query->where('status', 350);
+        } elseif ($mode === 'shippingPrep') {
+            $query->whereIn('status', [300, 385]);
+        } elseif ($mode === 'engineer') {
             $query->where(function ($statusQuery) {
                 $statusQuery
                     ->where(function ($normalQuery) {
@@ -174,6 +190,9 @@ class ServiceRecordController extends Controller
             });
         }
 
+        if ($mode === 'shippingPrep') {
+            $query->orderBy('status', 'asc');
+        }
         $records = $query->orderBy('receivedDate', 'asc')->get();
 
         $records->each(function (ServiceRecord $record) {
@@ -1217,6 +1236,70 @@ class ServiceRecordController extends Controller
             'message' => "{$updated} 件の撮影画像の紐づけを解除しました。",
             'updated' => $updated,
             'associatedID' => -1,
+        ]);
+    }
+
+    /**
+     * 撮影画像の削除（ログインユーザー本人がアップロードしたもののみ）
+     */
+    public function deleteCapturedImages(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:captured_image,id',
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $validated['ids'])));
+        $ownerName = Str::limit((string) ($request->user()?->kanji_name ?: ''), 8, '');
+
+        if ($ownerName === '') {
+            return response()->json([
+                'message' => 'ログインユーザー情報を確認できませんでした。',
+            ], 403);
+        }
+
+        $images = CapturedImage::query()
+            ->whereIn('id', $ids)
+            ->get(['id', 'file_name', 'captured_by']);
+
+        $owned = $images->filter(fn (CapturedImage $image) => (string) $image->captured_by === $ownerName);
+        $skipped = $images->count() - $owned->count();
+
+        if ($owned->isEmpty()) {
+            return response()->json([
+                'message' => '削除できる画像がありません。自分がアップロードした画像のみ削除できます。',
+                'deleted' => 0,
+                'skipped' => $skipped,
+            ], 403);
+        }
+
+        $deleted = 0;
+        foreach ($owned as $image) {
+            $fileName = (string) $image->file_name;
+            if ($fileName !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $fileName)) {
+                $imagePath = $this->capturedImageDir('image') . DIRECTORY_SEPARATOR . $fileName;
+                $thumbPath = $this->capturedImageDir('thumbnail') . DIRECTORY_SEPARATOR . $fileName;
+                if (is_file($imagePath)) {
+                    @unlink($imagePath);
+                }
+                if (is_file($thumbPath)) {
+                    @unlink($thumbPath);
+                }
+            }
+
+            $image->delete();
+            $deleted++;
+        }
+
+        $message = "{$deleted} 件の撮影画像を削除しました。";
+        if ($skipped > 0) {
+            $message .= "（本人以外の {$skipped} 件は削除していません）";
+        }
+
+        return response()->json([
+            'message' => $message,
+            'deleted' => $deleted,
+            'skipped' => $skipped,
         ]);
     }
 
@@ -2511,11 +2594,13 @@ class ServiceRecordController extends Controller
         $validated = $request->validate([
             'start' => 'required|date',
             'end' => 'required|date',
+            'status' => 'nullable|integer',
+            'statuses' => 'nullable|string',
         ]);
 
         $capacity = $this->shippingDailyCapacity();
 
-        $records = ServiceRecord::query()
+        $query = ServiceRecord::query()
             ->whereNotNull('shippingOut_requiredDate')
             ->where('shippingOut_requiredDate', '!=', '')
             ->where(function ($typeQuery) {
@@ -2523,9 +2608,28 @@ class ServiceRecordController extends Controller
                     ->orWhere('order_type', '')
                     ->orWhere('order_type', 'service');
             })
-            ->where('status', '>=', 300)
             ->whereDate('shippingOut_requiredDate', '>=', $validated['start'])
-            ->whereDate('shippingOut_requiredDate', '<', $validated['end'])
+            ->whereDate('shippingOut_requiredDate', '<', $validated['end']);
+
+        $statusList = [];
+        if (!empty($validated['statuses'])) {
+            $statusList = collect(explode(',', $validated['statuses']))
+                ->map(fn ($value) => (int) trim($value))
+                ->filter(fn ($value) => $value > 0)
+                ->unique()
+                ->values()
+                ->all();
+        } elseif (array_key_exists('status', $validated) && $validated['status'] !== null) {
+            $statusList = [(int) $validated['status']];
+        }
+
+        if ($statusList !== []) {
+            $query->whereIn('status', $statusList);
+        } else {
+            $query->where('status', '>=', 300);
+        }
+
+        $records = $query
             ->orderBy('shippingOut_requiredDate')
             ->orderBy('orderID')
             ->limit(2000)
@@ -2551,6 +2655,8 @@ class ServiceRecordController extends Controller
 
             $counts[$date] = ($counts[$date] ?? 0) + 1;
 
+            $recordStatus = (int) $row->getRawOriginal('status');
+
             $titleParts = array_filter([
                 (string) $row->orderID,
                 $row->SN,
@@ -2560,12 +2666,38 @@ class ServiceRecordController extends Controller
                 $row->contactPerson,
             ], fn ($part) => $part !== null && $part !== '');
 
+            // 色分け: 300=黄 / 350=緑 / 385=青
+            $backgroundColor = null;
+            $borderColor = null;
+            $textColor = null;
+            $statusClass = null;
+            if ($recordStatus === 300) {
+                $backgroundColor = '#facc15';
+                $borderColor = '#ca8a04';
+                $textColor = '#422006';
+                $statusClass = 'shipping-event-status-300';
+            } elseif ($recordStatus === 350) {
+                $backgroundColor = '#16a34a';
+                $borderColor = '#15803d';
+                $textColor = '#ffffff';
+                $statusClass = 'shipping-event-status-350';
+            } elseif ($recordStatus === 385) {
+                $backgroundColor = '#2563eb';
+                $borderColor = '#1d4ed8';
+                $textColor = '#ffffff';
+                $statusClass = 'shipping-event-status-385';
+            }
+
             return [
                 'id' => (string) $row->orderID,
                 'title' => implode(' / ', $titleParts) ?: ('Order ' . $row->orderID),
                 'start' => $date,
                 'allDay' => true,
                 'editable' => true,
+                'backgroundColor' => $backgroundColor,
+                'borderColor' => $borderColor,
+                'textColor' => $textColor,
+                'classNames' => array_values(array_filter(['shipping-event', $statusClass])),
                 'extendedProps' => [
                     'orderID' => $row->orderID,
                     'SN' => $row->SN,
@@ -2575,7 +2707,8 @@ class ServiceRecordController extends Controller
                     'contactPerson' => $row->contactPerson,
                     'returnCode' => $row->returnCode,
                     'a2la' => $row->a2la,
-                    'status' => $row->status,
+                    'status' => $recordStatus,
+                    'recordStatus' => $recordStatus,
                     'shippingOut_requiredDate' => $date,
                     'pending' => false,
                 ],

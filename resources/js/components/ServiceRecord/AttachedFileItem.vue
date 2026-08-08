@@ -265,7 +265,7 @@ const fileUrl = computed(() => {
     if (props.fileBaseUrl) {
         return `${props.fileBaseUrl.replace(/\/$/, '')}/${props.file.id}`
     }
-    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}/files/${props.file.id}`
 })
 

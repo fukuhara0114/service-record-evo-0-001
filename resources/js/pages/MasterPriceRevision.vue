@@ -10,7 +10,7 @@
             </div>
             <div class="header-actions">
                 <a :href="adminUrl" class="btn btn-secondary">Admin一覧</a>
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </header>
 
@@ -172,6 +172,7 @@
 import { computed, reactive, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import Encoding from 'encoding-japanese'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({

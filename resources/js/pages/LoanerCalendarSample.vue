@@ -9,9 +9,9 @@
                 </p>
             </div>
             <div class="header-actions">
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
                 <a :href="loanerCreateUrl" class="btn btn-secondary">貸出機登録</a>
                 <a :href="adminUrl" class="btn btn-secondary">既存案件一覧</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </div>
 
@@ -95,6 +95,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'

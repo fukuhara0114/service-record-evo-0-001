@@ -114,7 +114,7 @@ const filteredNotes = computed(() => {
 })
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 function getCsrfToken() {

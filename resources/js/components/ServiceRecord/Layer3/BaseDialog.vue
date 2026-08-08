@@ -1,14 +1,21 @@
 <template>
-    <div class="dialog-overlay" @click.self="$emit('close')">
-        <div class="dialog-panel" :class="{ large }">
-            <div class="dialog-header">
+    <div
+        class="dialog-overlay"
+        :class="{ plain }"
+        @click.self="onOverlayClick"
+    >
+        <div class="dialog-panel" :class="{ large, plain }">
+            <div v-if="!plain" class="dialog-header">
                 <h3>{{ title }}</h3>
-                <button type="button" class="close-btn" @click="$emit('close')">×</button>
+                <button v-if="showClose" type="button" class="close-btn" @click="$emit('close')">×</button>
             </div>
-            <div class="dialog-body">
+            <div class="dialog-body" :class="{ plain }">
                 <slot />
             </div>
-            <div v-if="$slots.footer" class="dialog-footer">
+            <div v-if="$slots.footer && !plain" class="dialog-footer">
+                <slot name="footer" />
+            </div>
+            <div v-else-if="$slots.footer && plain && showFooter" class="dialog-footer plain">
                 <slot name="footer" />
             </div>
         </div>
@@ -16,7 +23,7 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
     title: {
         type: String,
         default: 'ダイアログ',
@@ -25,9 +32,26 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    plain: {
+        type: Boolean,
+        default: false,
+    },
+    showClose: {
+        type: Boolean,
+        default: true,
+    },
+    showFooter: {
+        type: Boolean,
+        default: true,
+    },
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+function onOverlayClick() {
+    if (props.plain) return
+    emit('close')
+}
 </script>
 
 <style scoped>
@@ -39,6 +63,17 @@ defineEmits(['close'])
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.dialog-overlay.plain {
+    position: relative;
+    inset: auto;
+    background: transparent;
+    z-index: auto;
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
 }
 
 .dialog-panel {
@@ -56,6 +91,18 @@ defineEmits(['close'])
     max-width: 96vw;
     display: flex;
     flex-direction: column;
+}
+
+.dialog-panel.plain {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+    overflow: hidden;
 }
 
 .dialog-header {
@@ -84,6 +131,15 @@ defineEmits(['close'])
     padding: 16px;
 }
 
+.dialog-body.plain {
+    padding: 8px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .dialog-panel.large .dialog-body {
     flex: 1;
     min-height: 0;
@@ -92,11 +148,19 @@ defineEmits(['close'])
     overflow: auto;
 }
 
+.dialog-panel.plain.large .dialog-body {
+    overflow: hidden;
+}
+
 .dialog-footer {
     padding: 12px 16px;
     border-top: 1px solid #e2e8f0;
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+}
+
+.dialog-footer.plain {
+    background: #fff;
 }
 </style>

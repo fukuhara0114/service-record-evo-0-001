@@ -148,7 +148,7 @@ function formatPrice(value) {
 }
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 function getCsrfToken() {

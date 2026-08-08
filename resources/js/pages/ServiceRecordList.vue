@@ -2,7 +2,7 @@
     <div class="list-page-container">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
-            <div v-if="mode !== 'engineer'" class="order-type-filters">
+            <div v-if="!isRestrictedListMode" class="order-type-filters">
                 <button
                     type="button"
                     class="order-type-btn"
@@ -43,6 +43,14 @@
                 >
                     waiting
                 </button>
+                <button
+                    type="button"
+                    class="order-type-btn"
+                    :class="{ active: orderTypeFilter === 'abroad' }"
+                    @click="orderTypeFilter = 'abroad'"
+                >
+                    abroad
+                </button>
             </div>
             <div class="search-area">
                 <label for="customSearchInput">Quick Filer:</label>
@@ -54,19 +62,227 @@
                 >
                 <button type="button" @click="clearSearch">Clear</button>
             </div>
+            <div v-if="isBoardMode" class="logistics-view-controls">
+                <button
+                    type="button"
+                    class="view-mode-btn"
+                    :class="{ active: logisticsViewMode === 'list' }"
+                    @click="logisticsViewMode = 'list'"
+                >
+                    一覧のみ
+                </button>
+                <button
+                    type="button"
+                    class="view-mode-btn"
+                    :class="{ active: logisticsViewMode === 'both' }"
+                    @click="logisticsViewMode = 'both'"
+                >
+                    一覧+カレンダー
+                </button>
+                <button
+                    type="button"
+                    class="view-mode-btn"
+                    :class="{ active: logisticsViewMode === 'calendar' }"
+                    @click="logisticsViewMode = 'calendar'"
+                >
+                    カレンダーのみ
+                </button>
+                <button
+                    type="button"
+                    class="view-mode-btn swap-btn"
+                    :disabled="logisticsViewMode !== 'both'"
+                    @click="logisticsCalendarOnLeft = !logisticsCalendarOnLeft"
+                >
+                    左右入替
+                </button>
+            </div>
             <div class="home-link-area">
                 <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
-                <a v-if="mode !== 'engineer'" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
-                <a v-if="mode !== 'engineer'" :href="priceRevisionUrl" class="calendar-link">価格改定</a>
-                <a :href="homeUrl">Home</a>
+                <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
+                <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
+                <a v-if="!isRestrictedListMode" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
+                <a v-if="!isRestrictedListMode" :href="priceRevisionUrl" class="calendar-link">価格改定</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </div>
 
-        <!-- 第1階層: テーブル -->
-        <div class="scrollable-table-zone">
+        <!-- 第1階層: テーブル / Logistics・出荷準備はカレンダー併用 -->
+        <template v-if="isBoardMode">
+            <div v-if="logisticsViewMode === 'list'" class="scrollable-table-zone">
+                <table id="myLargeTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px; text-align: center;">OrderID</th>
+                            <th>予定出荷日</th>
+                            <th>ステータス</th>
+                            <th>RMA#</th>
+                            <th>製品名</th>
+                            <th>S/N</th>
+                            <th>作業内容</th>
+                            <th>担当者</th>
+                            <th>販売店</th>
+                            <th>部署</th>
+                            <th>担当者</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="r in filteredRecords"
+                            :key="r.orderID"
+                            class="table-row"
+                            :class="{ 'active-row': selectedOrderId === r.orderID }"
+                            @click="selectedOrderId = r.orderID"
+                            @dblclick="openSecondLayer(r)"
+                        >
+                            <td
+                                style="text-align: center; font-weight: bold;"
+                                :class="orderIdUnderlineClass(r)"
+                            >{{ r.orderID }}</td>
+                            <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.email }}</td>
+                            <td>{{ r.phone }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div v-else-if="logisticsViewMode === 'calendar'" class="logistics-calendar-zone">
+                <ShippingOutDateDialog
+                    ref="logisticsCalendarRef"
+                    mode="browse"
+                    plain
+                    go-to-today
+                    initial-view="dayGridDay"
+                    hide-detail-pane
+                    :editable="false"
+                    :show-footer="false"
+                    :status-filter="boardStatusFilter"
+                    :status-by-order-id="boardStatusByOrderId"
+                    @select-order="onLogisticsCalendarSelect"
+                />
+            </div>
+            <Splitpanes
+                v-else
+                class="default-theme logistics-split"
+                @resized="onLogisticsSplitResized"
+            >
+                <Pane
+                    v-for="panel in logisticsPanels"
+                    :key="panel"
+                    class="logistics-split-pane"
+                    :size="50"
+                    :min-size="24"
+                >
+                    <div v-if="panel === 'list'" class="scrollable-table-zone logistics-pane-body">
+                        <table id="myLargeTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px; text-align: center;">OrderID</th>
+                                    <th>予定出荷日</th>
+                                    <th>ステータス</th>
+                                    <th>RMA#</th>
+                                    <th>製品名</th>
+                                    <th>S/N</th>
+                                    <th>作業内容</th>
+                                    <th>担当者</th>
+                                    <th>販売店</th>
+                                    <th>部署</th>
+                                    <th>担当者</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="r in filteredRecords"
+                                    :key="r.orderID"
+                                    class="table-row"
+                                    :class="{ 'active-row': selectedOrderId === r.orderID }"
+                                    @click="selectedOrderId = r.orderID"
+                                    @dblclick="openSecondLayer(r)"
+                                >
+                                    <td
+                                        style="text-align: center; font-weight: bold;"
+                                        :class="orderIdUnderlineClass(r)"
+                                    >{{ r.orderID }}</td>
+                                    <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
+                                    <td>{{ statusLabel(r) }}</td>
+                                    <td>{{ r.RMA }}</td>
+                                    <td>{{ r.productName }}</td>
+                                    <td>{{ r.SN }}</td>
+                                    <td>{{ r.return_code_master?.description || '' }}</td>
+                                    <td>{{ r.labor_master?.laborName || '' }}</td>
+                                    <td>{{ r.dealer }}</td>
+                                    <td>{{ r.dealer_depart }}</td>
+                                    <td>{{ r.contactPerson }}</td>
+                                    <td>{{ r.email }}</td>
+                                    <td>{{ r.phone }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else class="logistics-calendar-zone logistics-pane-body">
+                        <ShippingOutDateDialog
+                            ref="logisticsCalendarRef"
+                            mode="browse"
+                            plain
+                            go-to-today
+                            :show-footer="false"
+                            hide-detail-pane
+                            :editable="false"
+                            :status-filter="boardStatusFilter"
+                            :status-by-order-id="boardStatusByOrderId"
+                            @select-order="onLogisticsCalendarSelect"
+                        />
+                    </div>
+                </Pane>
+            </Splitpanes>
+        </template>
+        <div v-else class="scrollable-table-zone">
+            <div v-if="orderTypeFilter === 'abroad'" class="abroad-toolbar">
+                <button
+                    type="button"
+                    class="abroad-excel-btn"
+                    :disabled="abroadSelectedCount === 0"
+                    @click="openAbroadExcelPreview"
+                >
+                    Create Excel File{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                </button>
+                <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
+            </div>
             <table id="myLargeTable">
                 <thead>
-                    <tr>
+                    <tr v-if="orderTypeFilter === 'abroad'">
+                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <th style="width: 44px; text-align: center;">
+                            <input
+                                type="checkbox"
+                                :checked="abroadAllVisibleSelected"
+                                :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                title="表示中を全選択"
+                                @click.stop
+                                @change="toggleAbroadSelectAll($event)"
+                            >
+                        </th>
+                        <th>受領日</th>
+                        <th>ステータス</th>
+                        <th>製品名</th>
+                        <th>S/N</th>
+                        <th>作業内容</th>
+                        <th>販売店</th>
+                        <th>部署</th>
+                    </tr>
+                    <tr v-else>
                         <th style="width: 80px; text-align: center;">OrderID</th>
                         <th>受領日</th>
                         <th>ステータス</th>
@@ -91,22 +307,159 @@
                         @click="selectedOrderId = r.orderID"
                         @dblclick="openSecondLayer(r)"
                     >
-                        <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
-                        <td>{{ r.receivedDate }}</td>
-                        <td>{{ statusLabel(r) }}</td>
-                        <td>{{ r.RMA }}</td>
-                        <td>{{ r.productName }}</td>
-                        <td>{{ r.SN }}</td>
-                        <td>{{ r.return_code_master?.description || '' }}</td>
-                        <td>{{ r.labor_master?.laborName || '' }}</td>
-                        <td>{{ r.dealer }}</td>
-                        <td>{{ r.dealer_depart }}</td>
-                        <td>{{ r.contactPerson }}</td>
-                        <td>{{ r.email }}</td>
-                        <td>{{ r.phone }}</td>
+                        <template v-if="orderTypeFilter === 'abroad'">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
+                            <td>{{ formatListDate(r.receivedDate) }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                        </template>
+                        <template v-else>
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td>{{ r.receivedDate }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.email }}</td>
+                            <td>{{ r.phone }}</td>
+                        </template>
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <div
+            v-if="abroadExcelPreviewOpen"
+            class="abroad-preview-overlay"
+            @click.self="closeAbroadExcelPreview"
+        >
+            <div class="abroad-preview-panel abroad-preview-panel-wide" role="dialog" aria-modal="true" aria-labelledby="abroad-preview-title">
+                <header class="abroad-preview-header">
+                    <div>
+                        <h2 id="abroad-preview-title">Excel プレビュー / 編集</h2>
+                        <p>表と添付画像を確認・編集してからファイルを作成します（{{ abroadExcelPreviewRows.length }} 行 / 画像 {{ abroadAttachedImages.length }} 件）</p>
+                    </div>
+                    <button type="button" class="abroad-preview-close" aria-label="閉じる" @click="closeAbroadExcelPreview">×</button>
+                </header>
+                <div class="abroad-preview-body abroad-preview-body-split">
+                    <section class="abroad-preview-section">
+                        <div class="abroad-preview-section-head">
+                            <h3>Excel 内容</h3>
+                            <button type="button" class="abroad-preview-btn abroad-preview-btn-small" @click="addAbroadExcelRow">行を追加</button>
+                        </div>
+                        <div class="abroad-preview-table-wrap">
+                            <table class="abroad-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th v-for="header in abroadExcelHeaders" :key="header">{{ header }}</th>
+                                        <th style="width: 72px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(row, rowIndex) in abroadExcelPreviewRows" :key="`row-${rowIndex}`">
+                                        <td v-for="(_cell, cellIndex) in row" :key="cellIndex">
+                                            <input
+                                                v-model="abroadExcelPreviewRows[rowIndex][cellIndex]"
+                                                type="text"
+                                                class="abroad-cell-input"
+                                            >
+                                        </td>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                class="abroad-preview-btn abroad-preview-btn-small abroad-preview-btn-danger"
+                                                @click="removeAbroadExcelRow(rowIndex)"
+                                            >
+                                                削除
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="abroad-preview-section">
+                        <div class="abroad-preview-section-head">
+                            <h3>添付画像レイアウト</h3>
+                            <button type="button" class="abroad-preview-btn abroad-preview-btn-small" @click="abroadGalleryPickerOpen = true">
+                                Gallery から選択
+                            </button>
+                        </div>
+                        <p v-if="!abroadAttachedImages.length" class="abroad-preview-empty">
+                            まだ画像がありません。「Gallery から選択」で複数追加できます。
+                        </p>
+                        <div v-else class="abroad-image-grid">
+                            <div
+                                v-for="(image, imageIndex) in abroadAttachedImages"
+                                :key="image.id"
+                                class="abroad-image-card"
+                            >
+                                <img :src="image.thumbnail_url || image.image_url" :alt="image.title || image.file_name">
+                                <div class="abroad-image-meta">
+                                    <strong>{{ image.title || image.file_name }}</strong>
+                                    <span>{{ image.captured_by || '—' }}</span>
+                                </div>
+                                <div class="abroad-image-actions">
+                                    <button type="button" class="abroad-preview-btn abroad-preview-btn-small" :disabled="imageIndex === 0" @click="moveAbroadImage(imageIndex, -1)">↑</button>
+                                    <button type="button" class="abroad-preview-btn abroad-preview-btn-small" :disabled="imageIndex === abroadAttachedImages.length - 1" @click="moveAbroadImage(imageIndex, 1)">↓</button>
+                                    <button type="button" class="abroad-preview-btn abroad-preview-btn-small abroad-preview-btn-danger" @click="removeAbroadImage(imageIndex)">外す</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <footer class="abroad-preview-footer">
+                    <span v-if="abroadExcelCreating" class="abroad-excel-message">作成中...</span>
+                    <button type="button" class="abroad-preview-btn" :disabled="abroadExcelCreating" @click="closeAbroadExcelPreview">キャンセル</button>
+                    <button
+                        type="button"
+                        class="abroad-preview-btn abroad-preview-btn-primary"
+                        :disabled="abroadExcelCreating || !abroadExcelPreviewRows.length"
+                        @click="downloadAbroadExcelFile"
+                    >
+                        Excel File を作成
+                    </button>
+                </footer>
+            </div>
+        </div>
+
+        <div
+            v-if="abroadGalleryPickerOpen"
+            class="abroad-preview-overlay abroad-gallery-overlay"
+            @click.self="abroadGalleryPickerOpen = false"
+        >
+            <div class="abroad-gallery-panel" role="dialog" aria-modal="true" aria-label="Gallery から画像を選択">
+                <header class="abroad-preview-header">
+                    <div>
+                        <h2>Gallery から画像を選択</h2>
+                        <p>複数選択して「選択した画像を使う」を押してください</p>
+                    </div>
+                    <button type="button" class="abroad-preview-close" aria-label="閉じる" @click="abroadGalleryPickerOpen = false">×</button>
+                </header>
+                <div class="abroad-gallery-body">
+                    <CapturedImageGallery
+                        selection-only
+                        @confirm-selection="onAbroadGalleryConfirm"
+                    />
+                </div>
+            </div>
         </div>
 
         <!-- 第2階層: 詳細 A/B/C -->
@@ -221,11 +574,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
+import { Pane, Splitpanes } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
+import ExcelJS from 'exceljs'
 import { redirectToLogin } from '@/utils/auth'
 import { apiFetch } from '@/utils/apiFetch'
 import { findServiceMaster } from '@/utils/resolveServiceWorkPrice'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
 import InputDialogB from '@/components/ServiceRecord/Layer3/InputDialogB.vue'
@@ -238,6 +596,7 @@ import PartSelectDialog from '@/components/ServiceRecord/Layer3/PartSelectDialog
 import StockedPartSelectDialog from '@/components/ServiceRecord/Layer3/StockedPartSelectDialog.vue'
 import StockedPartQuantityDialog from '@/components/ServiceRecord/Layer3/StockedPartQuantityDialog.vue'
 import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/UnregisteredEmailNoteLinkDialog.vue'
+import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 
 const props = defineProps({
     initialRecords: Array,
@@ -249,6 +608,14 @@ const props = defineProps({
 })
 
 const page = usePage()
+
+const isBoardMode = computed(() => props.mode === 'logistics' || props.mode === 'shippingPrep')
+const isRestrictedListMode = computed(() =>
+    props.mode === 'engineer' || props.mode === 'logistics' || props.mode === 'shippingPrep',
+)
+const boardStatusFilter = computed(() => (
+    props.mode === 'shippingPrep' ? '300,385' : '300,350'
+))
 
 const currentUserKanji = computed(() => {
     const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
@@ -278,12 +645,92 @@ onMounted(() => {
     if (initialQuery) {
         searchQuery.value = initialQuery
     }
+
+    if (isBoardMode.value) {
+        startLogisticsAutoRefresh()
+    }
+})
+
+onUnmounted(() => {
+    stopLogisticsAutoRefresh()
 })
 
 // --- 第1階層 ---
 const searchQuery = ref('')
 const orderTypeFilter = ref('service')
 const selectedOrderId = ref(null)
+const abroadSelectedIds = ref(new Set())
+const abroadExcelMessage = ref('')
+const abroadExcelPreviewOpen = ref(false)
+const abroadGalleryPickerOpen = ref(false)
+const abroadExcelPreviewRows = ref([])
+const abroadAttachedImages = ref([])
+const abroadExcelCreating = ref(false)
+const abroadExcelHeaders = ['OrderID', '受領日', 'ステータス', '製品名', 'S/N', '作業内容', '販売店', '部署']
+// Home→Logistics / 出荷準備 遷移時は「カレンダーのみ / 日 / 今日」を初期表示
+const logisticsViewMode = ref(isBoardMode.value ? 'calendar' : 'both') // list | both | calendar
+const logisticsCalendarOnLeft = ref(false)
+const logisticsCalendarRef = ref(null)
+const logisticsAutoRefreshTimer = ref(null)
+const logisticsAutoRefreshing = ref(false)
+const LOGISTICS_AUTO_REFRESH_MS = 60 * 1000
+
+const logisticsPanels = computed(() => (
+    logisticsCalendarOnLeft.value ? ['calendar', 'list'] : ['list', 'calendar']
+))
+
+/** カレンダー色分けは一覧の orderID→status を優先する */
+const boardStatusByOrderId = computed(() => {
+    const map = {}
+    const fallback = props.mode === 'logistics' ? 350 : 0
+    for (const record of props.initialRecords ?? []) {
+        if (record?.orderID == null) continue
+        const status = Number(record.status)
+        const resolved = Number.isFinite(status) && status > 0 ? status : fallback
+        if (!resolved) continue
+        map[String(record.orderID)] = resolved
+        map[Number(record.orderID)] = resolved
+    }
+    return map
+})
+
+function orderIdUnderlineClass(record) {
+    if (props.mode !== 'shippingPrep') return ''
+    const status = Number(record?.status)
+    if (status === 300) return 'order-id-status-300'
+    if (status === 385) return 'order-id-status-385'
+    return ''
+}
+
+function onLogisticsSplitResized() {
+    nextTick(() => {
+        window.dispatchEvent(new Event('resize'))
+    })
+}
+
+watch([logisticsViewMode, logisticsCalendarOnLeft], () => {
+    nextTick(() => {
+        window.dispatchEvent(new Event('resize'))
+    })
+})
+
+async function onLogisticsCalendarSelect({ orderId, pending }) {
+    if (pending || !orderId) return
+    selectedOrderId.value = Number(orderId) || orderId
+    const record = (props.initialRecords ?? []).find(
+        (item) => String(item.orderID) === String(orderId),
+    )
+    if (record) {
+        await openSecondLayer(record)
+        return
+    }
+    try {
+        const fullRecord = await fetchRecord(orderId)
+        await openSecondLayer(fullRecord)
+    } catch (e) {
+        detailOpenError.value = e.message || '案件詳細の取得に失敗しました。'
+    }
+}
 
 const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
@@ -293,7 +740,7 @@ const filteredRecords = computed(() => {
             const orderType = r?.order_type ?? 'service'
             return orderType === 'service' || orderType === 'loaner'
         })
-    } else {
+    } else if (!isBoardMode.value) {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
     }
 
@@ -311,6 +758,8 @@ const filteredRecords = computed(() => {
         const rowText = [
             r.orderID?.toString(),
             r.receivedDate,
+            formatListDate(r.shippingOut_requiredDate),
+            r.shippingOut_requiredDate,
             statusLabel(r),
             r.RMA,
             r.productName,
@@ -330,6 +779,254 @@ const filteredRecords = computed(() => {
 
         return queries.every(q => rowText.includes(q))
     })
+})
+
+const abroadSelectedCount = computed(() => abroadSelectedIds.value.size)
+const abroadAllVisibleSelected = computed(() => {
+    const rows = filteredRecords.value
+    if (!rows.length) return false
+    return rows.every((r) => abroadSelectedIds.value.has(r.orderID))
+})
+const abroadSomeVisibleSelected = computed(() => {
+    const rows = filteredRecords.value
+    if (!rows.length) return false
+    return rows.some((r) => abroadSelectedIds.value.has(r.orderID))
+})
+
+function isAbroadSelected(orderID) {
+    return abroadSelectedIds.value.has(orderID)
+}
+
+function toggleAbroadSelect(orderID, event) {
+    const next = new Set(abroadSelectedIds.value)
+    if (event.target.checked) {
+        next.add(orderID)
+    } else {
+        next.delete(orderID)
+    }
+    abroadSelectedIds.value = next
+}
+
+function toggleAbroadSelectAll(event) {
+    const next = new Set(abroadSelectedIds.value)
+    if (event.target.checked) {
+        for (const r of filteredRecords.value) {
+            next.add(r.orderID)
+        }
+    } else {
+        for (const r of filteredRecords.value) {
+            next.delete(r.orderID)
+        }
+    }
+    abroadSelectedIds.value = next
+}
+
+function clearAbroadSelection() {
+    abroadSelectedIds.value = new Set()
+    abroadExcelMessage.value = ''
+    closeAbroadExcelPreview()
+}
+
+function buildAbroadExcelRows() {
+    return filteredRecords.value
+        .filter((r) => abroadSelectedIds.value.has(r.orderID))
+        .map((r) => [
+            String(r.orderID ?? ''),
+            String(formatListDate(r.receivedDate) || r.receivedDate || ''),
+            String(statusLabel(r) || ''),
+            String(r.productName || ''),
+            String(r.SN || ''),
+            String(r.return_code_master?.description || ''),
+            String(r.dealer || ''),
+            String(r.dealer_depart || ''),
+        ])
+}
+
+function openAbroadExcelPreview() {
+    abroadExcelMessage.value = ''
+    const rows = buildAbroadExcelRows()
+    if (!rows.length) {
+        abroadExcelMessage.value = '行を選択してください。'
+        return
+    }
+    abroadExcelPreviewRows.value = rows.map((row) => [...row])
+    abroadAttachedImages.value = []
+    abroadGalleryPickerOpen.value = false
+    abroadExcelPreviewOpen.value = true
+}
+
+function closeAbroadExcelPreview() {
+    abroadExcelPreviewOpen.value = false
+    abroadGalleryPickerOpen.value = false
+    abroadExcelPreviewRows.value = []
+    abroadAttachedImages.value = []
+    abroadExcelCreating.value = false
+}
+
+function addAbroadExcelRow() {
+    abroadExcelPreviewRows.value.push(abroadExcelHeaders.map(() => ''))
+}
+
+function removeAbroadExcelRow(index) {
+    abroadExcelPreviewRows.value.splice(index, 1)
+}
+
+function onAbroadGalleryConfirm(images) {
+    const incoming = Array.isArray(images) ? images : []
+    const next = [...abroadAttachedImages.value]
+    for (const image of incoming) {
+        if (!image?.id) continue
+        if (next.some((item) => item.id === image.id)) continue
+        next.push({
+            id: image.id,
+            file_name: image.file_name,
+            title: image.title,
+            image_url: image.image_url,
+            thumbnail_url: image.thumbnail_url,
+            captured_by: image.captured_by,
+            captured_at: image.captured_at,
+        })
+    }
+    abroadAttachedImages.value = next
+    abroadGalleryPickerOpen.value = false
+}
+
+function removeAbroadImage(index) {
+    abroadAttachedImages.value.splice(index, 1)
+}
+
+function moveAbroadImage(index, delta) {
+    const target = index + delta
+    if (target < 0 || target >= abroadAttachedImages.value.length) return
+    const next = [...abroadAttachedImages.value]
+    const [item] = next.splice(index, 1)
+    next.splice(target, 0, item)
+    abroadAttachedImages.value = next
+}
+
+async function fetchImageBlob(url) {
+    const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'image/*,application/octet-stream',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    if (!response.ok) {
+        throw new Error(`画像の取得に失敗しました。（HTTP ${response.status}）`)
+    }
+    return response.blob()
+}
+
+function resolveExcelImageExtension(fileName, mimeType) {
+    const name = String(fileName || '').toLowerCase()
+    if (name.endsWith('.png') || mimeType === 'image/png') return 'png'
+    if (name.endsWith('.gif') || mimeType === 'image/gif') return 'gif'
+    return 'jpeg'
+}
+
+async function downloadAbroadExcelFile() {
+    const rows = abroadExcelPreviewRows.value
+    if (!rows.length) {
+        abroadExcelMessage.value = '行を選択してください。'
+        return
+    }
+
+    abroadExcelCreating.value = true
+    abroadExcelMessage.value = ''
+
+    try {
+        const workbook = new ExcelJS.Workbook()
+        workbook.creator = 'ServiceRecord'
+        workbook.created = new Date()
+
+        const dataSheet = workbook.addWorksheet('Data', {
+            views: [{ state: 'frozen', ySplit: 1 }],
+        })
+        dataSheet.addRow([...abroadExcelHeaders])
+        rows.forEach((row) => {
+            dataSheet.addRow(row.map((cell) => (cell == null ? '' : String(cell))))
+        })
+
+        const headerRow = dataSheet.getRow(1)
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF0F766E' },
+        }
+        abroadExcelHeaders.forEach((_, index) => {
+            const column = dataSheet.getColumn(index + 1)
+            column.width = Math.max(12, String(abroadExcelHeaders[index]).length + 4)
+        })
+        dataSheet.columns.forEach((column) => {
+            let max = column.width || 12
+            column.eachCell({ includeEmpty: true }, (cell) => {
+                const len = String(cell.value ?? '').length
+                if (len + 2 > max) max = Math.min(40, len + 2)
+            })
+            column.width = max
+        })
+
+        // リストの下に画像のみを水平配置（ラベル・ファイル名・日付は付けない）
+        if (abroadAttachedImages.value.length) {
+            const imageHeightPx = 220
+            const imageWidthPx = 280
+            const colSpanPerImage = 3.2
+            // exceljs の tl は 0-based。データ最終行(1-based)=rows.length+1 の次行
+            const imageTopRow = rows.length + 1
+            let imageIndex = 0
+
+            for (let i = 0; i < abroadAttachedImages.value.length; i += 1) {
+                const image = abroadAttachedImages.value[i]
+                const sourceUrl = image.image_url || image.thumbnail_url
+                if (!sourceUrl) continue
+
+                const blob = await fetchImageBlob(sourceUrl)
+                const buffer = await blob.arrayBuffer()
+                const extension = resolveExcelImageExtension(image.file_name, blob.type)
+                const imageId = workbook.addImage({
+                    buffer,
+                    extension,
+                })
+                dataSheet.addImage(imageId, {
+                    tl: { col: imageIndex * colSpanPerImage, row: imageTopRow },
+                    ext: { width: imageWidthPx, height: imageHeightPx },
+                })
+                imageIndex += 1
+            }
+        }
+
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+        const xlsxBuffer = await workbook.xlsx.writeBuffer()
+        const blob = new Blob(
+            [xlsxBuffer],
+            { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+        )
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `abroad_${stamp}.xlsx`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(url)
+
+        abroadExcelMessage.value = `${rows.length} 行` +
+            (abroadAttachedImages.value.length ? ` + 画像 ${abroadAttachedImages.value.length} 件` : '') +
+            ' を 1 つの Excel ファイル（.xlsx）で出力しました。'
+        closeAbroadExcelPreview()
+    } catch (e) {
+        abroadExcelMessage.value = e.message || 'ファイル作成に失敗しました。'
+    } finally {
+        abroadExcelCreating.value = false
+    }
+}
+
+watch(orderTypeFilter, (value) => {
+    if (value !== 'abroad') {
+        clearAbroadSelection()
+    }
 })
 
 function matchesOrderTypeFilter(record, filter) {
@@ -355,6 +1052,10 @@ function matchesOrderTypeFilter(record, filter) {
     if (filter === 'waiting_list') {
         return orderType === 'waiting_list'
     }
+    if (filter === 'abroad') {
+        return Number(record?.rmaNumOverSea) === 123
+            || String(record?.rmaNumOverSea ?? '').trim() === '123'
+    }
     return true
 }
 
@@ -366,6 +1067,16 @@ function statusLabel(record) {
         return record.status_master_loaner?.status || ''
     }
     return record.status_master?.status || ''
+}
+
+function formatListDate(value) {
+    if (value == null || value === '') return ''
+    if (typeof value === 'string') return value.slice(0, 10)
+    if (value instanceof Date) {
+        const pad = (n) => String(n).padStart(2, '0')
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+    }
+    return String(value).slice(0, 10)
 }
 
 function clearSearch() {
@@ -392,7 +1103,7 @@ const detailLoading = ref(false)
 const detailOpenError = ref('')
 
 function getBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 function annotateNotesOwnership(notes) {
@@ -518,11 +1229,17 @@ async function openSecondLayer(record) {
     attachmentsError.value = ''
     activeRecord.value = record
     draftRecord.value = { ...record }
-    detailLayout.value = orderTypeFilter.value === 'closing'
-        ? 'closing'
-        : orderTypeFilter.value === 'invoice'
-            ? 'invoice'
-            : 'A'
+    if (props.mode === 'logistics') {
+        detailLayout.value = 'logistics'
+    } else if (props.mode === 'shippingPrep') {
+        detailLayout.value = 'invoice'
+    } else if (orderTypeFilter.value === 'closing') {
+        detailLayout.value = 'closing'
+    } else if (orderTypeFilter.value === 'invoice') {
+        detailLayout.value = 'invoice'
+    } else {
+        detailLayout.value = 'A'
+    }
     closeDialog()
     isDetailOpen.value = true
     detailLoading.value = true
@@ -544,7 +1261,7 @@ function switchDetailLayout(layout) {
     detailLayout.value = layout
 }
 
-function closeDetail() {
+function resetDetailState() {
     isDetailOpen.value = false
     activeRecord.value = null
     draftRecord.value = null
@@ -561,6 +1278,14 @@ function closeDetail() {
     saveError.value = ''
     isSavingRecord.value = false
     closeDialog()
+}
+
+async function closeDetail() {
+    resetDetailState()
+    // administrator: 詳細から一覧へ戻るたびに一覧を再取得
+    if (props.mode === 'admin') {
+        await reloadListRecords({ preserveState: true })
+    }
 }
 
 // --- 第3階層 ---
@@ -648,22 +1373,26 @@ async function onEngineerWorkflowDone() {
 }
 
 async function finishListWorkflow() {
-    closeDetail()
-    await reloadListRecords()
+    resetDetailState()
+    await reloadListRecords({ preserveState: true })
 }
 
 async function finishEngineerWorkflow() {
     await finishListWorkflow()
 }
 
-function reloadListRecords() {
+function reloadListRecords(options = {}) {
+    const {
+        preserveState = false,
+    } = options
+
     return new Promise((resolve) => {
         router.get(
             window.location.pathname,
             {},
             {
                 only: ['initialRecords'],
-                preserveState: false,
+                preserveState,
                 preserveScroll: true,
                 replace: true,
                 onFinish: () => resolve(),
@@ -674,6 +1403,35 @@ function reloadListRecords() {
 
 function reloadEngineerList() {
     return reloadListRecords()
+}
+
+async function refreshLogisticsData() {
+    if (!isBoardMode.value) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (logisticsAutoRefreshing.value) return
+
+    logisticsAutoRefreshing.value = true
+    try {
+        await reloadListRecords({ preserveState: true })
+        await nextTick()
+        logisticsCalendarRef.value?.refetchEvents?.()
+    } finally {
+        logisticsAutoRefreshing.value = false
+    }
+}
+
+function startLogisticsAutoRefresh() {
+    stopLogisticsAutoRefresh()
+    logisticsAutoRefreshTimer.value = window.setInterval(() => {
+        refreshLogisticsData()
+    }, LOGISTICS_AUTO_REFRESH_MS)
+}
+
+function stopLogisticsAutoRefresh() {
+    if (logisticsAutoRefreshTimer.value != null) {
+        window.clearInterval(logisticsAutoRefreshTimer.value)
+        logisticsAutoRefreshTimer.value = null
+    }
 }
 
 async function saveRecord() {
@@ -812,6 +1570,8 @@ async function saveRecord() {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
     padding: 14px 20px;
     box-sizing: border-box;
     background: #dbdbdb;
@@ -896,6 +1656,39 @@ async function saveRecord() {
     font-weight: 700;
 }
 
+.logistics-view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    padding: 0 8px;
+}
+
+.view-mode-btn {
+    padding: 6px 10px;
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.view-mode-btn.active {
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #fff;
+}
+
+.view-mode-btn.swap-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .home-link-area a {
     color: #1e3a8a;
     font-weight: 700;
@@ -918,10 +1711,327 @@ async function saveRecord() {
     background: #e2e8f0;
 }
 
+.abroad-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0 10px;
+    flex-shrink: 0;
+}
+
+.abroad-excel-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #0f766e;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.abroad-excel-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.abroad-excel-message {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f766e;
+}
+
+.abroad-preview-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 260;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.55);
+    box-sizing: border-box;
+}
+
+.abroad-preview-panel {
+    width: min(1100px, 100%);
+    max-height: min(85vh, 900px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+}
+
+.abroad-preview-panel-wide {
+    width: min(1280px, 100%);
+    max-height: min(92vh, 980px);
+}
+
+.abroad-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #cbd5e1;
+    background: #f8fafc;
+}
+
+.abroad-preview-header h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: #0f172a;
+}
+
+.abroad-preview-header p {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.abroad-preview-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 6px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.abroad-preview-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px 18px;
+    background: #fff;
+}
+
+.abroad-preview-body-split {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.abroad-preview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+
+.abroad-preview-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.abroad-preview-section-head h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.abroad-preview-table-wrap {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+.abroad-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.abroad-preview-table th,
+.abroad-preview-table td {
+    border: 1px solid #94a3b8;
+    padding: 6px 8px;
+    text-align: left;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.abroad-preview-table th {
+    position: sticky;
+    top: 0;
+    background: #0f766e;
+    color: #fff;
+    z-index: 1;
+}
+
+.abroad-preview-table tbody tr:nth-child(even) {
+    background: #f8fafc;
+}
+
+.abroad-cell-input {
+    width: 100%;
+    min-width: 88px;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 5px 6px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #fff;
+}
+
+.abroad-preview-empty {
+    margin: 0;
+    padding: 16px;
+    border: 1px dashed #94a3b8;
+    border-radius: 6px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 700;
+    background: #f8fafc;
+}
+
+.abroad-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.abroad-image-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px;
+    background: #fff;
+}
+
+.abroad-image-card img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #e2e8f0;
+}
+
+.abroad-image-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: #475569;
+}
+
+.abroad-image-meta strong {
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.abroad-image-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.abroad-preview-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid #cbd5e1;
+    background: #f8fafc;
+}
+
+.abroad-preview-btn {
+    padding: 9px 14px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.abroad-preview-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.abroad-preview-btn-small {
+    padding: 5px 8px;
+    font-size: 12px;
+}
+
+.abroad-preview-btn-primary {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+.abroad-preview-btn-danger {
+    border-color: #dc2626;
+    background: #dc2626;
+    color: #fff;
+}
+
+.abroad-gallery-overlay {
+    z-index: 270;
+}
+
+.abroad-gallery-panel {
+    width: min(1200px, 100%);
+    max-height: min(92vh, 980px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+}
+
+.abroad-gallery-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px 16px 16px;
+}
+
+.logistics-split {
+    flex: 1;
+    min-height: 0;
+}
+
+.logistics-split-pane {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.logistics-pane-body {
+    height: 100%;
+}
+
+.logistics-calendar-zone {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #e2e8f0;
+}
+
 #myLargeTable {
     width: 100%;
     border-collapse: collapse;
-    background: #d8d8d8;
+    background: #f0f0f0;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -942,7 +2052,12 @@ async function saveRecord() {
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 700;
+}
+
+#myLargeTable tbody td {
+    background: #f5f5f5;
+    font-weight: 700;
 }
 
 .table-row {
@@ -952,6 +2067,20 @@ async function saveRecord() {
 .active-row td {
     color: rgb(255, 255, 255) !important;
     background-color: #7e25eb !important;
+}
+
+#myLargeTable td.order-id-status-300 {
+    text-decoration: underline;
+    text-decoration-color: #facc15;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 3px;
+}
+
+#myLargeTable td.order-id-status-385 {
+    text-decoration: underline;
+    text-decoration-color: #2563eb;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 3px;
 }
 
 .global-loading {

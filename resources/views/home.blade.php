@@ -134,14 +134,16 @@
         <a href="{{ url('/servicerecord/loaner/create') }}" class="btn">貸出機登録</a>
         <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">貸出カレンダー</a>
         <a href="{{ url('/servicerecord/master-price-revision') }}" class="btn">価格改定</a>
-        <a href="{{ url('/servicerecord/camera') }}" class="btn">カメラ</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
+        <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
+        <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">出荷準備</a>
     </div>
 
     <div class="menu-container menu-tablet">
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
         <a href="{{ url('/servicerecord/camera') }}" class="btn">カメラ</a>
-        <button type="button" class="btn btn-muted" disabled title="未実装">Logistics</button>
+        <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
+        <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">出荷準備</a>
     </div>
 
     <p class="phone-redirect">カメラ画面へ移動しています…</p>

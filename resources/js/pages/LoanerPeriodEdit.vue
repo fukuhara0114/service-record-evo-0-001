@@ -8,7 +8,6 @@
             <div class="header-actions">
                 <a :href="calendarUrl" class="btn btn-secondary">カレンダー</a>
                 <a :href="adminUrl" class="btn btn-secondary">既存案件一覧</a>
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
                 <button
                     type="button"
                     class="btn btn-primary"
@@ -17,6 +16,7 @@
                 >
                     {{ saving ? '保存中...' : '保存' }}
                 </button>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </div>
 
@@ -234,6 +234,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 

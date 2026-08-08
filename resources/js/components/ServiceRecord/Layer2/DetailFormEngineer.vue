@@ -429,12 +429,12 @@ function getCsrfToken() {
 }
 
 function getRecordApiUrl() {
-    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}/${props.record?.orderID}`
 }
 
 function getFilesApiBase() {
-    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}/files`
 }
 

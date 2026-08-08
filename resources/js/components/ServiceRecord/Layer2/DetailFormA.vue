@@ -1097,7 +1097,7 @@ function closePriceAdjustDialog() {
 }
 
 function getNotesApiBase() {
-    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}/notes`
 }
 
@@ -1216,7 +1216,7 @@ function getCsrfToken() {
 }
 
 function getFilesApiBase() {
-    const basePath = window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}/files`
 }
 

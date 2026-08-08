@@ -2,7 +2,7 @@
  * Strip list-page suffixes so API paths resolve under /servicerecord.
  */
 export function getServiceRecordBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 export function getServiceRecordApiOriginBase() {

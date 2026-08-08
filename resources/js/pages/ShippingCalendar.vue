@@ -7,7 +7,7 @@
             </div>
             <div class="header-actions">
                 <a :href="listUrl" class="btn btn-secondary">一覧へ戻る</a>
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
+                <CloseToHomeButton :href="homeUrl" />
             </div>
         </header>
         <div class="board-host">
@@ -18,6 +18,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import { getServiceRecordBasePath, serviceRecordUrl } from '@/utils/serviceRecordPath'
 

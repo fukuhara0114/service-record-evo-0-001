@@ -4,16 +4,13 @@
             <span class="invoice-badge">起伝</span>
             <span class="invoice-meta">{{ draftRecord?.productName || record?.productName || '—' }}</span>
             <span class="invoice-meta">S/N: {{ draftRecord?.SN || record?.SN || '—' }}</span>
+            <span class="invoice-id-item">RMA#: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
+            <span class="invoice-id-item">Loaner: {{ loanerLabel }}</span>
+            <span class="invoice-id-item">受注#: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
+            <span class="invoice-id-item">注文#: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
+            <span class="invoice-id-item">Col: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
             <span class="invoice-meta invoice-meta-right">{{ returnCodeLabel }}</span>
         </header>
-
-        <section class="invoice-id-bar">
-            <span>RMA#: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
-            <span>Loaner: {{ loanerLabel }}</span>
-            <span>受注#: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
-            <span>注文#: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
-            <span>Col: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
-        </section>
 
         <section class="invoice-toolbar">
             <label class="toolbar-field">
@@ -86,7 +83,7 @@
         <Splitpanes v-else class="default-theme invoice-splitpanes" @resized="onSplitResized">
             <Pane class="invoice-pane invoice-pane-left" :size="leftPaneSize" :min-size="28">
                 <div class="left-scroll">
-                    <section class="panel">
+                    <section class="panel panel-price">
                         <table class="price-table">
                             <thead>
                                 <tr>
@@ -542,7 +539,7 @@ function toggleMapics47() {
 }
 
 function getApiBasePath() {
-    return window.location.pathname.replace(/\/(administrator|engineer)\/?$/, '')
+    return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
 }
 
 function getCsrfToken() {
@@ -954,21 +951,14 @@ watch(
     font-weight: 700;
 }
 
-.invoice-meta-right {
-    margin-left: auto;
-}
-
-.invoice-id-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
-    padding: 8px 14px;
-    background: #bfdbfe;
-    border-bottom: 1px solid #60a5fa;
+.invoice-id-item {
     font-size: 13px;
     font-weight: 700;
     color: #1e3a8a;
-    flex-shrink: 0;
+}
+
+.invoice-meta-right {
+    margin-left: auto;
 }
 
 .invoice-toolbar {
@@ -1111,6 +1101,11 @@ watch(
     font-size: 13px;
 }
 
+.panel-price .price-table {
+    font-size: 14px;
+    font-weight: 700;
+}
+
 .price-table th,
 .price-table td,
 .data-table th,
@@ -1144,13 +1139,15 @@ watch(
 
 .info-grid h4 {
     margin: 0 0 6px;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 700;
     color: #334155;
 }
 
 .info-grid p {
     margin: 0 0 2px;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 700;
     color: #1e293b;
     word-break: break-word;
 }

@@ -1,75 +1,52 @@
 <template>
     <div class="camera-page">
-        <header class="page-header">
-            <div>
-                <h1>カメラ</h1>
-                <p class="subtitle">{{ pageSubtitle }}</p>
-            </div>
-            <div class="header-actions">
-                <a :href="homeUrl" class="btn btn-secondary">Home</a>
-                <a :href="galleryUrl" class="btn btn-secondary">Gallery</a>
-                <a :href="intakeUrl" class="btn btn-secondary">未登録一覧</a>
-            </div>
-        </header>
+        <h1 class="cam-title">SR Cam</h1>
 
-        <section class="card">
-            <input
-                ref="inputRef"
-                type="file"
-                class="camera-input"
-                accept="image/*"
-                capture="environment"
-                @change="onFileChange"
+        <input
+            ref="inputRef"
+            type="file"
+            class="camera-input"
+            accept="image/*"
+            capture="environment"
+            @change="onFileChange"
+        >
+
+        <div class="preview-wrap">
+            <img
+                v-if="previewUrl"
+                :src="previewUrl"
+                alt="Preview"
+                class="preview-image"
             >
+            <p v-else class="preview-placeholder">Preview</p>
+        </div>
 
-            <label class="title-field">
-                タイトル
-                <input
-                    v-model="title"
-                    type="text"
-                    class="title-input"
-                    maxlength="255"
-                    placeholder="例: 外観写真"
-                    :disabled="busy"
-                >
-            </label>
+        <p v-if="error" class="status-message is-error">{{ error }}</p>
+        <p v-else-if="success" class="status-message is-success">{{ success }}</p>
 
-            <div class="preview-wrap">
-                <img
-                    v-if="previewUrl"
-                    :src="previewUrl"
-                    alt="撮影プレビュー"
-                    class="preview-image"
-                >
-                <p v-else class="preview-placeholder">まだ写真がありません</p>
-            </div>
+        <div class="action-stack">
+            <button
+                type="button"
+                class="cam-btn"
+                :disabled="busy || !selectedFile"
+                @click="uploadCapturedImage"
+            >
+                {{ busy && selectedFile ? 'Uploading...' : 'Upload' }}
+            </button>
+            <button
+                type="button"
+                class="cam-btn"
+                :disabled="busy"
+                @click="openCamera"
+            >
+                {{ previewUrl ? 'Capture again' : 'Capture' }}
+            </button>
+        </div>
 
-            <p v-if="compressInfo" class="info-message">{{ compressInfo }}</p>
-            <p v-if="error" class="error-message">{{ error }}</p>
-            <p v-if="success" class="success-message">{{ success }}</p>
-
-            <div class="actions">
-                <button type="button" class="btn btn-primary" :disabled="busy" @click="openCamera">
-                    {{ previewUrl ? '撮り直す' : 'カメラを開く' }}
-                </button>
-                <button
-                    type="button"
-                    class="btn btn-secondary"
-                    :disabled="busy || !selectedFile"
-                    @click="clearPreview"
-                >
-                    クリア
-                </button>
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    :disabled="busy || !selectedFile"
-                    @click="uploadCapturedImage"
-                >
-                    {{ busy ? 'アップロード中...' : '撮影画像を保存' }}
-                </button>
-            </div>
-        </section>
+        <form class="logout-form" method="POST" :action="logoutUrl">
+            <input type="hidden" name="_token" :value="csrfToken">
+            <button type="submit" class="cam-btn cam-btn-close" :disabled="busy">Close</button>
+        </form>
     </div>
 </template>
 
@@ -95,8 +72,6 @@ const previewUrl = ref('')
 const busy = ref(false)
 const error = ref('')
 const success = ref('')
-const compressInfo = ref('')
-const title = ref('')
 
 const maxEdge = computed(() => {
     const value = Number(props.imageMaxEdge)
@@ -111,24 +86,12 @@ const jpegQualityPercent = computed(() => {
 
 const jpegQualityRatio = computed(() => jpegQualityPercent.value / 100)
 
-const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
-const intakeUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake`)
-const galleryUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/gallery`)
+const logoutUrl = computed(() => `${page.props.appBaseUrl}/logout`)
 const uploadUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/camera/upload`)
-
-const pageSubtitle = computed(() =>
-    `モバイルではカメラが起動します。撮影画像は最大 ${maxEdge.value}px・JPEG 品質 ${jpegQualityPercent.value}% に圧縮してプレビューします。`,
-)
+const csrfToken = computed(() => getCsrfToken())
 
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
-}
-
-function formatBytes(bytes) {
-    if (!Number.isFinite(bytes) || bytes < 0) return '—'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
 function revokePreview() {
@@ -141,7 +104,6 @@ function revokePreview() {
 function openCamera() {
     error.value = ''
     success.value = ''
-    compressInfo.value = ''
     inputRef.value?.click()
 }
 
@@ -177,19 +139,18 @@ function canvasToJpegBlob(canvas, quality) {
     })
 }
 
-function calcFitSize(width, height, maxEdge) {
+function calcFitSize(width, height, maxEdgeValue) {
     const w = Number(width) || 0
     const h = Number(height) || 0
-    if (!w || !h) return { width: 0, height: 0, scaled: false }
+    if (!w || !h) return { width: 0, height: 0 }
     const longest = Math.max(w, h)
-    if (longest <= maxEdge) {
-        return { width: w, height: h, scaled: false }
+    if (longest <= maxEdgeValue) {
+        return { width: w, height: h }
     }
-    const scale = maxEdge / longest
+    const scale = maxEdgeValue / longest
     return {
         width: Math.max(1, Math.round(w * scale)),
         height: Math.max(1, Math.round(h * scale)),
-        scaled: true,
     }
 }
 
@@ -217,22 +178,15 @@ async function compressImageToJpeg(file, quality = jpegQualityRatio.value, edge 
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
 
     const blob = await canvasToJpegBlob(canvas, quality)
-    return {
-        file: new File([blob], 'preview.jpg', {
-            type: 'image/jpeg',
-            lastModified: Date.now(),
-        }),
-        width: fitted.width,
-        height: fitted.height,
-        sourceWidth: srcW,
-        sourceHeight: srcH,
-    }
+    return new File([blob], 'preview.jpg', {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+    })
 }
 
 async function onFileChange(event) {
     error.value = ''
     success.value = ''
-    compressInfo.value = ''
     const file = event.target.files?.[0] ?? null
     event.target.value = ''
 
@@ -248,22 +202,13 @@ async function onFileChange(event) {
     busy.value = true
     try {
         const compressed = await compressImageToJpeg(file, jpegQualityRatio.value, maxEdge.value)
-        selectedFile.value = compressed.file
-        previewUrl.value = URL.createObjectURL(compressed.file)
-        compressInfo.value = `最大 ${maxEdge.value}px / JPEG ${jpegQualityPercent.value}%: ${compressed.sourceWidth}×${compressed.sourceHeight} → ${compressed.width}×${compressed.height}（${formatBytes(file.size)} → ${formatBytes(compressed.file.size)}）`
+        selectedFile.value = compressed
+        previewUrl.value = URL.createObjectURL(compressed)
     } catch (e) {
         error.value = e.message || '画像の圧縮に失敗しました。'
     } finally {
         busy.value = false
     }
-}
-
-function clearPreview() {
-    error.value = ''
-    success.value = ''
-    compressInfo.value = ''
-    selectedFile.value = null
-    revokePreview()
 }
 
 async function uploadCapturedImage() {
@@ -276,7 +221,7 @@ async function uploadCapturedImage() {
     try {
         const formData = new FormData()
         formData.append('file', selectedFile.value)
-        formData.append('title', title.value.trim())
+        formData.append('title', '')
         formData.append('associatedID', '-1')
 
         const response = await fetch(uploadUrl.value, {
@@ -312,9 +257,7 @@ async function uploadCapturedImage() {
             )
         }
 
-        const savedName = data.image?.file_name ? `（${data.image.file_name}）` : ''
-        success.value = `${data.message || '撮影画像を保存しました。'}${savedName}`
-        compressInfo.value = ''
+        success.value = data.message || '撮影画像を保存しました。'
         selectedFile.value = null
         revokePreview()
     } catch (e) {
@@ -332,153 +275,137 @@ onBeforeUnmount(() => {
 <style scoped>
 .camera-page {
     min-height: 100vh;
-    padding: 20px;
-    box-sizing: border-box;
-    background: #e2e8f0;
-}
-
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 16px;
-}
-
-.page-header h1 {
-    margin: 0 0 6px;
-    font-size: 22px;
-    color: #1e293b;
-}
-
-.subtitle {
+    min-height: 100dvh;
+    width: 100%;
     margin: 0;
-    font-size: 13px;
-    color: #64748b;
-}
-
-.header-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.card {
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
     padding: 16px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    box-sizing: border-box;
+    background: #cccccc;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.cam-title {
+    margin: 0;
+    text-align: center;
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 700;
+    color: #0f172a;
+    flex: 0 0 auto;
 }
 
 .camera-input {
     display: none;
 }
 
-.title-field {
-    display: block;
-    margin-bottom: 12px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #334155;
-}
-
-.title-input {
-    display: block;
-    width: 100%;
-    margin-top: 6px;
-    padding: 8px 10px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    box-sizing: border-box;
-    font-size: 14px;
-}
-
 .preview-wrap {
     width: 100%;
-    min-height: 280px;
-    border: 1px dashed #94a3b8;
-    border-radius: 8px;
-    background: #f8fafc;
+    flex: 1 1 auto;
+    min-height: 220px;
+    border: 2px solid #0f172a;
+    background: #eff6ff;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    margin-bottom: 12px;
+    box-sizing: border-box;
 }
 
 .preview-image {
     display: block;
-    max-width: 100%;
-    max-height: 70vh;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
+    background: #fff;
 }
 
 .preview-placeholder {
     margin: 0;
-    color: #64748b;
+    color: #334155;
+    font-size: clamp(22px, 4vw, 32px);
+    font-weight: 600;
+}
+
+.status-message {
+    margin: 0;
     font-size: 14px;
+    text-align: center;
+    flex: 0 0 auto;
 }
 
-.actions {
+.status-message.is-error {
+    color: #b91c1c;
+}
+
+.status-message.is-success {
+    color: #047857;
+}
+
+.action-stack {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    flex: 0 0 auto;
 }
 
-.btn {
-    display: inline-flex;
+.cam-btn {
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 14px;
-    border: none;
-    border-radius: 4px;
-    text-decoration: none;
-    font-size: 14px;
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 16px;
+    border: 2px solid #0f172a;
+    border-radius: 0;
+    background: #fff;
+    color: #0f172a;
+    font-size: clamp(18px, 3.5vw, 24px);
     font-weight: 700;
+    text-decoration: none;
+    text-align: center;
+    box-sizing: border-box;
     cursor: pointer;
 }
 
-.btn:disabled {
-    opacity: 0.6;
+.action-stack .cam-btn {
+    min-height: 104px;
+}
+
+.cam-btn:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
 }
 
-.btn-primary {
-    background: #2563eb;
-    color: #fff;
+.logout-form {
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
 
-.btn-secondary {
-    background: #64748b;
-    color: #fff;
+.cam-btn-close {
+    margin-top: 50px;
+    min-height: 52px;
 }
 
-.error-message {
-    margin: 0 0 10px;
-    color: #b91c1c;
-    font-size: 13px;
-}
-
-.info-message {
-    margin: 0 0 10px;
-    color: #334155;
-    font-size: 13px;
-}
-
-.success-message {
-    margin: 0 0 10px;
-    color: #047857;
-    font-size: 13px;
-}
-
-@media (max-width: 640px) {
-    .page-header {
-        flex-direction: column;
+@media (orientation: landscape) {
+    .camera-page {
+        padding: 12px 16px;
+        gap: 10px;
     }
 
-    .actions .btn {
-        flex: 1 1 100%;
+    .preview-wrap {
+        min-height: 160px;
+    }
+
+    .action-stack .cam-btn {
+        min-height: 88px;
+    }
+
+    .cam-btn-close {
+        min-height: 44px;
     }
 }
 </style>

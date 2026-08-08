@@ -6,6 +6,9 @@
                     <template v-if="mode === 'engineer'">
                         <span class="engineer-title">Engineer 詳細</span>
                     </template>
+                    <template v-else-if="mode === 'logistics' || layout === 'logistics'">
+                        <span class="closing-title">Logistics 詳細</span>
+                    </template>
                     <template v-else-if="layout === 'closing'">
                         <span class="closing-title">Closing 詳細</span>
                     </template>
@@ -35,7 +38,7 @@
                     <span>OrderID: {{ record?.orderID }}</span>
                     <p v-if="saveError" class="save-error">{{ saveError }}</p>
                     <button
-                        v-if="mode !== 'engineer' && layout !== 'closing' && layout !== 'invoice'"
+                        v-if="mode !== 'engineer' && mode !== 'logistics' && layout !== 'closing' && layout !== 'invoice' && layout !== 'logistics'"
                         type="button"
                         class="save-btn"
                         :disabled="savingRecord"
@@ -43,7 +46,7 @@
                     >
                         {{ savingRecord ? '保存中...' : '保存' }}
                     </button>
-                    <button type="button" class="close-btn" @click="$emit('close')">× 閉じる</button>
+                    <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">×</button>
                 </div>
             </div>
 
@@ -51,7 +54,7 @@
                 class="detail-body"
                 :class="{
                     'detail-body-engineer': mode === 'engineer',
-                    'detail-body-closing': layout === 'closing' || layout === 'invoice',
+                    'detail-body-closing': layout === 'closing' || layout === 'invoice' || layout === 'logistics' || mode === 'logistics',
                 }"
             >
                 <DetailFormEngineer
@@ -68,6 +71,21 @@
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                     @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
                     @reload-attachments="$emit('reload-attachments')"
+                    @workflow-done="(payload) => $emit('workflow-done', payload)"
+                />
+                <DetailFormLogistics
+                    v-else-if="mode === 'logistics' || layout === 'logistics'"
+                    :record="record"
+                    :draft-record="draftRecord"
+                    :notes="notes"
+                    :files="files"
+                    :captured-images="capturedImages"
+                    :attachments-loading="attachmentsLoading"
+                    :attachments-error="attachmentsError"
+                    @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
+                    @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
+                    @reload-attachments="$emit('reload-attachments')"
+                    @save="$emit('save')"
                     @workflow-done="(payload) => $emit('workflow-done', payload)"
                 />
                 <DetailFormClosing
@@ -158,6 +176,7 @@ import DetailFormC from './DetailFormC.vue'
 import DetailFormClosing from './DetailFormClosing.vue'
 import DetailFormInvoice from './DetailFormInvoice.vue'
 import DetailFormEngineer from './DetailFormEngineer.vue'
+import DetailFormLogistics from './DetailFormLogistics.vue'
 
 const props = defineProps({
     record: Object,
@@ -368,6 +387,27 @@ const headerReturnCodeLabel = computed(() => {
     border: none;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.close-x-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.close-x-btn:hover {
+    background: #f8fafc;
 }
 
 .detail-body {
