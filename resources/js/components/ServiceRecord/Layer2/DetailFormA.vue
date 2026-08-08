@@ -347,7 +347,7 @@
                             <div class="left-top-section left-top-section-contacts">
                                 <div class="detail-bottom-grid">
                                 <section class="section-card detail-card detail-card-input">
-                                    <div class="section-header">
+                                    <div class="section-header dealer-header">
                                         <button type="button" class="action-btn action-btn-primary" @click="openDealerSelect">依頼社選択</button>
                                     </div>
                                     <div class="input-grid">
@@ -385,8 +385,10 @@
                                 </section>
 
                                 <section class="section-card detail-card detail-card-input">
-                                    <h3>E/U</h3>
-                                        <div class="input-grid">
+                                    <div class="section-header">
+                                        <h3>E/U</h3>
+                                    </div>
+                                    <div class="input-grid">
                                         <label class="input-field">
                                             <input type="text" placeholder="E/U会社名" :value="draftRecord?.endUser ?? record?.endUser ?? ''" @input="updateDraftValue('endUser', $event.target.value)">
                                         </label>
@@ -421,7 +423,17 @@
                                 </section>
 
                                 <section class="section-card detail-card detail-card-input">
-                                    <h3>発送先</h3>
+                                    <div class="section-header delivery-header">
+                                        <h3>発送先</h3>
+                                        <div class="section-actions">
+                                            <button type="button" class="action-btn" @click="copyStakeholderToDelivery('dealer')">
+                                                Copy Dealer
+                                            </button>
+                                            <button type="button" class="action-btn" @click="copyStakeholderToDelivery('endUser')">
+                                                Copy EndUser
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div class="input-grid">
                                         <label class="input-field">
                                             <input type="text" placeholder="発送先会社名" :value="draftRecord?.deliveryDestination_company ?? record?.deliveryDestination_company ?? ''" @input="updateDraftValue('deliveryDestination_company', $event.target.value)">
@@ -538,7 +550,7 @@
                                                         <td>{{ part.partID }}</td>
                                                         <td>{{ part.part_master?.partName || '—' }}</td>
                                                         <td class="text-cell">{{ part.part_master?.description || '—' }}</td>
-                                                        <td>{{ formatPrice(part.part_master?.price_discounted) }}</td>
+                                                        <td>{{ formatPrice(partVersionPrice(part)) }}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -707,7 +719,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
-import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -725,6 +737,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
+
+/** 受注日あり: その日の版 / 未定: 最新版 */
+const priceAsOfDate = computed(() =>
+    props.draftRecord?.orderDate ?? props.record?.orderDate ?? null,
+)
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
@@ -841,7 +858,7 @@ const displayEntityId = computed(() => {
         productName: props.draftRecord?.productName ?? props.record?.productName,
         entityID: props.draftRecord?.entityID ?? props.record?.entityID,
         serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
-    })
+    }, priceAsOfDate.value)
     return service?.entityID ?? '—'
 })
 
@@ -963,6 +980,39 @@ function updateDraftValue(field, value) {
     props.draftRecord[field] = value
 }
 
+function fieldValue(field) {
+    const draft = props.draftRecord?.[field]
+    if (draft !== undefined && draft !== null) return draft
+    return props.record?.[field] ?? ''
+}
+
+function copyStakeholderToDelivery(source) {
+    if (!props.draftRecord) return
+
+    if (source === 'dealer') {
+        updateDraftValue('deliveryDestination_company', fieldValue('dealer'))
+        updateDraftValue('deliveryDestination_depart', fieldValue('dealer_depart'))
+        updateDraftValue('deliveryDestination_contactPerson', fieldValue('contactPerson'))
+        updateDraftValue('deliveryDestination_phone', fieldValue('phone'))
+        updateDraftValue('deliveryDestination_email', fieldValue('email'))
+        updateDraftValue('deliveryDestination_zipcode', fieldValue('zipcode'))
+        updateDraftValue('deliveryDestination_address1', fieldValue('address1'))
+        updateDraftValue('deliveryDestination_address2', fieldValue('address2'))
+        return
+    }
+
+    if (source === 'endUser') {
+        updateDraftValue('deliveryDestination_company', fieldValue('endUser'))
+        updateDraftValue('deliveryDestination_depart', fieldValue('endUser_depart'))
+        updateDraftValue('deliveryDestination_contactPerson', fieldValue('endUser_contactPerson'))
+        updateDraftValue('deliveryDestination_phone', fieldValue('endUser_phone'))
+        updateDraftValue('deliveryDestination_email', fieldValue('endUser_email'))
+        updateDraftValue('deliveryDestination_zipcode', fieldValue('endUser_zipcode'))
+        updateDraftValue('deliveryDestination_address1', fieldValue('endUser_address1'))
+        updateDraftValue('deliveryDestination_address2', fieldValue('endUser_address2'))
+    }
+}
+
 function updateNumericDraftValue(field, value) {
     if (!props.draftRecord) return
     props.draftRecord[field] = value === '' ? null : Number(value)
@@ -978,7 +1028,7 @@ const selectedServiceMaster = computed(() => {
         productName: props.draftRecord?.productName ?? props.record?.productName,
         entityID: props.draftRecord?.entityID ?? props.record?.entityID,
         serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
-    })
+    }, priceAsOfDate.value)
 })
 
 const workPrice = computed(() => {
@@ -994,7 +1044,15 @@ const a2laPrice = computed(() => {
 
 const partsPriceTotal = computed(() =>
     (props.parts ?? []).reduce((sum, part) => {
-        const value = Number(part.part_master?.price_discounted)
+        const versioned = findPartMaster(
+            page.props.partsMaster,
+            part.partID,
+            priceAsOfDate.value,
+        )
+        const raw = versioned?.price_discounted
+            ?? part.part_master?.price_discounted
+            ?? part.partMaster?.price_discounted
+        const value = Number(raw)
         return sum + (Number.isNaN(value) ? 0 : value)
     }, 0),
 )
@@ -1014,7 +1072,7 @@ const displayPrice = computed(() => {
     return basePrice.value - discountValue
 })
 
-watch(workPrice, (value) => {
+watch(basePrice, (value) => {
     if (!props.draftRecord) return
     props.draftRecord.price = value
 }, { immediate: true })
@@ -1429,16 +1487,31 @@ function formatPrice(value) {
     return num.toLocaleString('ja-JP')
 }
 
-const PAID_LOANER_RETURN_CODES = [1, 2, 7, 13]
+const PAID_LOANER_RETURN_CODES_LOCAL = PAID_LOANER_RETURN_CODES
 const currentReturnCode = computed(() => {
     const value = props.draftRecord?.returnCode ?? props.record?.returnCode
     const num = Number(value)
     return Number.isFinite(num) ? num : null
 })
 
+function partVersionPrice(part) {
+    const versioned = findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
+    const raw = versioned?.price_discounted
+        ?? part.part_master?.price_discounted
+        ?? part.partMaster?.price_discounted
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : null
+}
+
 function loanerDisplayPrice(loaner) {
-    if (!PAID_LOANER_RETURN_CODES.includes(currentReturnCode.value)) {
+    if (!PAID_LOANER_RETURN_CODES_LOCAL.includes(currentReturnCode.value)) {
         return 0
+    }
+    const asOf = loaner?.orderDate || priceAsOfDate.value
+    if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+        const picked = pickMasterVersion(loaner.priceVersions, asOf)
+        const value = Number(picked?.price)
+        if (Number.isFinite(value)) return value
     }
     const master = Number(loaner?.masterPrice)
     if (Number.isFinite(master)) return master
@@ -1699,7 +1772,7 @@ function formatDate(value) {
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: flex-start;
     margin-top: 0;
 }
@@ -1875,6 +1948,8 @@ function formatDate(value) {
 }
 
 .detail-bottom-grid > .detail-card {
+    display: flex;
+    flex-direction: column;
     flex: 0 1 500px;
     width: 500px;
     max-width: min(500px, 100%);
@@ -1985,6 +2060,26 @@ function formatDate(value) {
     align-items: center;
     gap: 12px;
     margin-bottom: 2px;
+}
+
+.detail-card-input .section-header {
+    min-height: 26px;
+    margin-bottom: 6px;
+}
+
+.detail-card-input .section-header h3 {
+    margin: 0;
+    line-height: 1.2;
+}
+
+.detail-card-input .section-header .action-btn {
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.dealer-header {
+    justify-content: flex-start;
 }
 
 .section-actions {
@@ -2261,26 +2356,27 @@ function formatDate(value) {
 .detail-card-input .input-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 12px;
+    gap: 6px 12px;
 }
 
 .input-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     font-size: 14px;
     color: #475569;
 }
 
 .input-field input {
     width: 100%;
-    padding: 6px 8px;
+    padding: 5px 7px;
     border: 1px solid #94a3b8;
     border-radius: 4px;
     box-sizing: border-box;
     color: #1e293b;
     background: white;
     font-weight: bold;
+    line-height: 1.2;
 }
 
 .input-field input::placeholder {

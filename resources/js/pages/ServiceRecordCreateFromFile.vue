@@ -14,7 +14,6 @@
         </div>
 
         <p v-if="error" class="global-error">{{ error }}</p>
-        <p v-if="importStatus" class="global-info">{{ importStatus }}</p>
 
         <div class="create-layout">
             <Splitpanes class="default-theme create-splitpanes" @resized="syncPaneSizes">
@@ -115,132 +114,167 @@
                 <div v-show="activeTab === 'basic'" class="tab-panel">
                     <div class="form-stack">
                         <section class="info-card info-card-main">
-                            <div class="form-row row-product">
-                                <div class="field">
-                                    <span>productName</span>
-                                    <button type="button" class="field-button" @click="openSelectDialog('serviceMaster')">
-                                        {{ selectedProductLabel }}
-                                    </button>
-                                </div>
-                                <label class="field">
-                                    <span>entityID</span>
-                                    <input :value="form.entityID || ''" type="text" readonly>
-                                </label>
-                                <label class="field">
-                                    <span>SN</span>
-                                    <input v-model="form.SN" type="text" placeholder="SN">
-                                </label>
-                            </div>
-                            <div class="form-row row-3">
-                                <label class="field">
-                                    <span>receivedDate</span>
-                                    <input v-model="form.receivedDate" type="date">
-                                </label>
-                                <label class="field">
-                                    <span>status</span>
-                                    <select v-model="form.status">
-                                        <option value="">選択してください</option>
-                                        <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
-                                            {{ status.status }} ({{ status.processID_new }})
-                                        </option>
-                                    </select>
-                                </label>
-                                <label class="field">
-                                    <span>returnCode</span>
-                                    <select v-model="form.returnCode">
-                                        <option value="">選択してください</option>
-                                        <option v-for="returnCode in returnCodes" :key="returnCode.id" :value="String(returnCode.id)">
-                                            {{ returnCode.description }} ({{ returnCode.id }})
-                                        </option>
-                                    </select>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section class="info-card info-card-dealer">
-                            <h3 class="card-title">dealer</h3>
-                            <div class="form-row row-2">
+                            <div class="form-row row-product-top">
                                 <button
                                     type="button"
                                     class="field-button"
-                                    :class="{ placeholder: !form.dealer }"
-                                    @click="openSelectDialog('dealer')"
+                                    :class="{ placeholder: !form.productName }"
+                                    @click="openSelectDialog('serviceMaster')"
                                 >
-                                    {{ form.dealer || 'company' }}
+                                    {{ selectedProductLabel }}
                                 </button>
-                                <input v-model="form.dealer_depart" type="text" placeholder="depart">
+                                <input :value="form.entityID || ''" type="text" placeholder="entityID" readonly>
                             </div>
-                            <div class="form-row row-3">
-                                <input v-model="form.contactPerson" type="text" placeholder="contactPerson">
-                                <input v-model="form.phone" type="text" placeholder="phone">
-                                <input v-model="form.email" type="text" placeholder="email">
+                            <div class="form-row row-product-sn">
+                                <input v-model="form.SN" type="text" placeholder="SN">
                             </div>
-                            <div class="form-row row-zip">
-                                <input
-                                    v-model="form.zipcode"
-                                    type="text"
-                                    inputmode="numeric"
-                                    maxlength="8"
-                                    placeholder="zipcode"
-                                    @input="onZipcodeInput('dealer')"
-                                >
-                            </div>
-                            <div class="form-row row-address">
-                                <input v-model="form.address1" type="text" placeholder="address1">
-                                <input v-model="form.address2" type="text" placeholder="address2">
-                            </div>
-                        </section>
-
-                        <section class="info-card info-card-enduser">
-                            <h3 class="card-title">endUser</h3>
-                            <div class="form-row row-2">
-                                <input v-model="form.endUser" type="text" placeholder="company">
-                                <input v-model="form.endUser_depart" type="text" placeholder="depart">
-                            </div>
-                            <div class="form-row row-3">
-                                <input v-model="form.endUser_contactPerson" type="text" placeholder="contactPerson">
-                                <input v-model="form.endUser_phone" type="text" placeholder="phone">
-                                <input v-model="form.endUser_email" type="text" placeholder="email">
-                            </div>
-                            <div class="form-row row-zip">
-                                <input
-                                    v-model="form.endUser_zipcode"
-                                    type="text"
-                                    inputmode="numeric"
-                                    maxlength="8"
-                                    placeholder="zipcode"
-                                    @input="onZipcodeInput('endUser')"
-                                >
-                            </div>
-                            <div class="form-row row-address">
-                                <input v-model="form.endUser_address1" type="text" placeholder="address1">
-                                <input v-model="form.endUser_address2" type="text" placeholder="address2">
+                            <div class="form-row row-product-meta">
+                                <input v-model="form.receivedDate" type="date" class="w-received">
+                                <select v-model="form.status" class="w-status">
+                                    <option value="">status</option>
+                                    <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
+                                        {{ status.status }} ({{ status.processID_new }})
+                                    </option>
+                                </select>
+                                <select v-model="form.returnCode" class="w-return">
+                                    <option value="">returnCode</option>
+                                    <option v-for="returnCode in returnCodes" :key="returnCode.id" :value="String(returnCode.id)">
+                                        {{ returnCode.description }} ({{ returnCode.id }})
+                                    </option>
+                                </select>
                             </div>
                         </section>
 
-                        <section class="info-card info-card-delivery">
-                            <h3 class="card-title">delivery</h3>
-                            <div class="form-row row-2">
-                                <input v-model="form.deliveryDestination_company" type="text" placeholder="company">
-                                <input v-model="form.deliveryDestination_depart" type="text" placeholder="depart">
+                        <section class="info-card info-card-dealer stakeholder-card">
+                            <aside class="stakeholder-side">
+                                <div class="stakeholder-label">dealer</div>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
+                                    switch E/U
+                                </button>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
+                                    switch delivery
+                                </button>
+                            </aside>
+                            <div class="stakeholder-body">
+                                <div class="form-row row-full">
+                                    <button
+                                        type="button"
+                                        class="field-button"
+                                        :class="{ placeholder: !form.dealer }"
+                                        @click="openSelectDialog('dealer')"
+                                    >
+                                        {{ form.dealer || 'dealer' }}
+                                    </button>
+                                </div>
+                                <div class="form-row row-full">
+                                    <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
+                                </div>
+                                <div class="form-row row-contact">
+                                    <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                </div>
+                                <div class="form-row row-phone-email">
+                                    <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
+                                    <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
+                                </div>
+                                <div class="form-row row-zip">
+                                    <input
+                                        v-model="form.zipcode"
+                                        type="text"
+                                        class="w-zip"
+                                        inputmode="numeric"
+                                        maxlength="8"
+                                        placeholder="Zipcode"
+                                        @input="onZipcodeInput('dealer')"
+                                    >
+                                </div>
+                                <div class="form-row row-address">
+                                    <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
+                                    <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
+                                </div>
                             </div>
-                            <div class="form-row row-2">
-                                <input v-model="form.deliveryDestination_contactPerson" type="text" placeholder="contactPerson">
-                                <input v-model="form.deliveryDestination_phone" type="text" placeholder="phone">
+                        </section>
+
+                        <section class="info-card info-card-enduser stakeholder-card">
+                            <aside class="stakeholder-side">
+                                <div class="stakeholder-label">endUser</div>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
+                                    switch dealer
+                                </button>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
+                                    switch delivery
+                                </button>
+                            </aside>
+                            <div class="stakeholder-body">
+                                <div class="form-row row-full">
+                                    <input v-model="form.endUser" type="text" placeholder="endUser">
+                                </div>
+                                <div class="form-row row-full">
+                                    <input v-model="form.endUser_depart" type="text" placeholder="endUser_depart">
+                                </div>
+                                <div class="form-row row-contact">
+                                    <input v-model="form.endUser_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                </div>
+                                <div class="form-row row-phone-email">
+                                    <input v-model="form.endUser_phone" type="text" class="w-phone" placeholder="Phone">
+                                    <input v-model="form.endUser_email" type="text" class="w-email" placeholder="EMail">
+                                </div>
+                                <div class="form-row row-zip">
+                                    <input
+                                        v-model="form.endUser_zipcode"
+                                        type="text"
+                                        class="w-zip"
+                                        inputmode="numeric"
+                                        maxlength="8"
+                                        placeholder="Zipcode"
+                                        @input="onZipcodeInput('endUser')"
+                                    >
+                                </div>
+                                <div class="form-row row-address">
+                                    <input v-model="form.endUser_address1" type="text" class="w-address1" placeholder="address1">
+                                    <input v-model="form.endUser_address2" type="text" class="w-address2" placeholder="address2">
+                                </div>
                             </div>
-                            <div class="form-row row-zip">
-                                <input
-                                    v-model="form.deliveryDestination_zipcode"
-                                    type="text"
-                                    inputmode="numeric"
-                                    maxlength="8"
-                                    placeholder="zipcode"
-                                    @input="onZipcodeInput('delivery')"
-                                >
-                            </div>
-                            <div class="form-row row-address">
-                                <input v-model="form.deliveryDestination_address1" type="text" placeholder="address1">
-                                <input v-model="form.deliveryDestination_address2" type="text" placeholder="address2">
+                        </section>
+
+                        <section class="info-card info-card-delivery stakeholder-card">
+                            <aside class="stakeholder-side">
+                                <div class="stakeholder-label">delivery</div>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                    switch dealer
+                                </button>
+                                <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                    switch E/U
+                                </button>
+                            </aside>
+                            <div class="stakeholder-body">
+                                <div class="form-row row-full">
+                                    <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                </div>
+                                <div class="form-row row-full">
+                                    <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
+                                </div>
+                                <div class="form-row row-contact">
+                                    <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                </div>
+                                <div class="form-row row-phone-email">
+                                    <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
+                                    <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
+                                </div>
+                                <div class="form-row row-zip">
+                                    <input
+                                        v-model="form.deliveryDestination_zipcode"
+                                        type="text"
+                                        class="w-zip"
+                                        inputmode="numeric"
+                                        maxlength="8"
+                                        placeholder="Zipcode"
+                                        @input="onZipcodeInput('delivery')"
+                                    >
+                                </div>
+                                <div class="form-row row-address">
+                                    <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
+                                    <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -406,6 +440,7 @@ import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
 import { startFileImport } from '@/utils/startFileImport'
+import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
@@ -444,7 +479,6 @@ const props = defineProps({
 const page = usePage()
 const saving = ref(false)
 const error = ref('')
-const importStatus = ref('')
 const activeTab = ref('basic')
 const activeSelectKind = ref(null)
 const previewFile = ref(null)
@@ -496,16 +530,53 @@ const form = reactive({
     deliveryDestination_depart: '',
     deliveryDestination_contactPerson: '',
     deliveryDestination_phone: '',
+    deliveryDestination_email: '',
     deliveryDestination_zipcode: '',
     deliveryDestination_address1: '',
     deliveryDestination_address2: '',
     additionalFileIds: [],
 })
 
+const STAKEHOLDER_FIELDS = {
+    dealer: ['dealer', 'dealer_depart', 'contactPerson', 'phone', 'email', 'zipcode', 'address1', 'address2'],
+    endUser: ['endUser', 'endUser_depart', 'endUser_contactPerson', 'endUser_phone', 'endUser_email', 'endUser_zipcode', 'endUser_address1', 'endUser_address2'],
+    delivery: [
+        'deliveryDestination_company',
+        'deliveryDestination_depart',
+        'deliveryDestination_contactPerson',
+        'deliveryDestination_phone',
+        'deliveryDestination_email',
+        'deliveryDestination_zipcode',
+        'deliveryDestination_address1',
+        'deliveryDestination_address2',
+    ],
+}
+
+function readStakeholder(kind) {
+    const fields = STAKEHOLDER_FIELDS[kind] || []
+    return fields.map(field => form[field] ?? '')
+}
+
+function writeStakeholder(kind, values) {
+    const fields = STAKEHOLDER_FIELDS[kind] || []
+    fields.forEach((field, index) => {
+        form[field] = values[index] ?? ''
+    })
+}
+
+function swapStakeholders(left, right) {
+    if (left === right) return
+    if (!STAKEHOLDER_FIELDS[left] || !STAKEHOLDER_FIELDS[right]) return
+    const leftValues = readStakeholder(left)
+    const rightValues = readStakeholder(right)
+    writeStakeholder(left, rightValues)
+    writeStakeholder(right, leftValues)
+}
+
 const statuses = computed(() => props.statuses ?? [])
 const returnCodes = computed(() => props.returnCodes ?? [])
 const dealers = computed(() => props.dealersMaster ?? [])
-const services = computed(() => props.servicesMaster ?? [])
+const services = computed(() => latestMastersByKey(props.servicesMaster ?? [], 'serviceID'))
 
 const zipLookupTimers = {
     dealer: null,
@@ -540,7 +611,7 @@ const selectedProductLabel = computed(() => {
     if (form.productName) {
         return `${form.productName} (${form.serviceID})`
     }
-    return '製品名を選択してください'
+    return 'productName'
 })
 const existingSearchTerms = computed(() =>
     [
@@ -931,23 +1002,19 @@ async function linkToExistingRecord(payload) {
     }
 }
 
-onMounted(async () => {
-    const result = await startFileImport({
+onMounted(() => {
+    // 同期キューでも UI を塞がないよう、待たずに起動する
+    startFileImport({
         appBaseUrl: page.props.appBaseUrl,
         associatedID: -1,
+    }).then((result) => {
+        // 「処理を開始しました」等の情報カードは表示しない。ロック時のみエラー表示。
+        if (result.status === 423) {
+            error.value = result.message || '他の処理が実行中です。'
+        }
+    }).catch(() => {
+        // 取込開始失敗は入力を妨げない
     })
-    if (result.status === 423) {
-        importStatus.value = result.message
-        return
-    }
-    if (result.ok) {
-        importStatus.value = result.message
-        return
-    }
-    // キュー未起動などは画面利用を止めない（情報表示のみ）
-    if (result.message) {
-        importStatus.value = result.message
-    }
 })
 
 onBeforeUnmount(() => {
@@ -1010,6 +1077,7 @@ async function save() {
                 deliveryDestination_depart: form.deliveryDestination_depart || null,
                 deliveryDestination_contactPerson: form.deliveryDestination_contactPerson || null,
                 deliveryDestination_phone: form.deliveryDestination_phone || null,
+                deliveryDestination_email: form.deliveryDestination_email || null,
                 deliveryDestination_zipcode: form.deliveryDestination_zipcode || null,
                 deliveryDestination_address1: form.deliveryDestination_address1 || null,
                 deliveryDestination_address2: form.deliveryDestination_address2 || null,
@@ -1083,15 +1151,6 @@ async function save() {
     border-radius: 6px;
     background: #fef2f2;
     color: #b91c1c;
-}
-
-.global-info {
-    margin: 0 0 16px;
-    padding: 10px 14px;
-    border: 1px solid #93c5fd;
-    border-radius: 6px;
-    background: #eff6ff;
-    color: #1d4ed8;
 }
 
 .create-layout {
@@ -1357,12 +1416,51 @@ async function save() {
     background: #aaaaaa;
 }
 
-.card-title {
-    margin: 0 0 6px;
+.stakeholder-card {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.stakeholder-side {
+    flex: 0 0 92px;
+    width: 92px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stakeholder-label {
     font-size: 12px;
     font-weight: 700;
-    color: #334155;
-    letter-spacing: 0.02em;
+    color: #1e293b;
+    line-height: 1.2;
+}
+
+.switch-btn {
+    width: 100%;
+    padding: 5px 4px;
+    border: 1px solid #64748b;
+    border-radius: 3px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+    text-align: center;
+}
+
+.switch-btn:hover {
+    background: #cbd5e1;
+}
+
+.stakeholder-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.stakeholder-body > .form-row:first-child {
+    margin-top: 0;
 }
 
 .form-row {
@@ -1377,41 +1475,78 @@ async function save() {
     margin-top: 0;
 }
 
-.row-product {
-    grid-template-columns: minmax(0, 1.3fr) minmax(90px, 0.7fr) minmax(0, 1.3fr);
+.row-product-top {
+    grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.7fr);
 }
 
-.row-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.row-product-sn {
+    grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.7fr);
 }
 
-.row-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.row-product-sn > input {
+    grid-column: 1;
 }
 
-.row-zip {
-    grid-template-columns: minmax(88px, 120px);
-}
-
-.row-address {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-}
-
-.field {
+.row-product-meta {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 11px;
-    color: #64748b;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.row-product-meta .w-received,
+.row-product-meta .w-status {
+    flex: 0 0 200px;
+    width: 200px;
+    max-width: 100%;
+}
+
+.row-product-meta .w-return {
+    flex: 0 0 400px;
+    width: 400px;
+    max-width: 100%;
+}
+
+.row-full {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.row-contact,
+.row-phone-email,
+.row-zip,
+.row-address {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.w-contact,
+.w-phone,
+.w-zip {
+    flex: 0 0 200px;
+    width: 200px;
+    max-width: 100%;
+}
+
+.w-email {
+    flex: 0 0 400px;
+    width: 400px;
+    max-width: 100%;
+}
+
+.w-address1 {
+    flex: 0 0 150px;
+    width: 150px;
+    max-width: 100%;
+}
+
+.w-address2 {
+    flex: 1 1 220px;
     min-width: 0;
 }
 
 .info-card input,
 .info-card select,
-.info-card .field-button,
-.field input,
-.field select,
-.field-button {
+.info-card .field-button {
     width: 100%;
     min-width: 0;
     padding: 6px 8px;
@@ -1423,7 +1558,21 @@ async function save() {
     font-size: 13px;
 }
 
-.field input[readonly] {
+.info-card .w-contact,
+.info-card .w-phone,
+.info-card .w-zip {
+    width: 200px;
+}
+
+.info-card .w-email {
+    width: 400px;
+}
+
+.info-card .w-address1 {
+    width: 150px;
+}
+
+.info-card input[readonly] {
     background: #f8fafc;
     color: #475569;
 }
@@ -1441,7 +1590,9 @@ async function save() {
     color: #94a3b8;
 }
 
-.info-card input::placeholder {
+.info-card input::placeholder,
+.info-card select:invalid,
+.info-card select option[value=""] {
     color: #94a3b8;
 }
 

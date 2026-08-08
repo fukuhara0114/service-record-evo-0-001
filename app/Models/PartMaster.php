@@ -9,6 +9,7 @@ class PartMaster extends Model
 {
     protected $table = 'partmaster';
 
+    // 版ごとのサロゲートキー（業務キーは partID）
     protected $primaryKey = 'id';
 
     public $incrementing = true;
@@ -27,8 +28,18 @@ class PartMaster extends Model
         'associatedInstruments',
         'type',
         'note',
+        'validDateMin',
+        'validDateMax',
     ];
 
+    protected $casts = [
+        'validDateMin' => 'date',
+        'validDateMax' => 'date',
+    ];
+
+    /**
+     * 業務キー partID で紐づく添付部品（版をまたぐ）。
+     */
     public function attachedParts(): HasMany
     {
         return $this->hasMany(AttachedPart::class, 'partID', 'partID');

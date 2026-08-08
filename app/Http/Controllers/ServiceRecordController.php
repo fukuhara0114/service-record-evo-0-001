@@ -17,6 +17,7 @@ use App\Models\UnregisteredEmailNote;
 use App\Models\CapturedImage;
 use App\Models\LoanerMaster;
 use App\Services\EmlReplyDraftService;
+use App\Services\MasterPriceVersionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -191,14 +192,38 @@ class ServiceRecordController extends Controller
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
+        // 価格版解決用に全版を渡す（選択UI側で最新版のみ表示）
         $services = ServiceMaster::query()
-            ->select(['id', 'serviceID', 'productName', 'entityID', 'priceC_0', 'priceR_0', 'priceR_onSite', 'price_a2la'])
+            ->select([
+                'id',
+                'serviceID',
+                'productName',
+                'entityID',
+                'priceC_0',
+                'priceR_0',
+                'priceR_onSite',
+                'price_a2la',
+                'validDateMin',
+                'validDateMax',
+            ])
             ->where('productName', 'NOT LIKE', '*%')
             ->orderBy('productName')
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
             ->get();
         $partsMaster = PartMaster::query()
-            ->select(['partID', 'partName', 'description', 'price_discounted', 'type'])
+            ->select([
+                'partID',
+                'partName',
+                'description',
+                'price_discounted',
+                'type',
+                'validDateMin',
+                'validDateMax',
+            ])
             ->orderBy('partName')
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
             ->get();
         $stockedPartsMaster = StockedPartMaster::query()
             ->select(['partID', 'partName', 'description'])
@@ -299,12 +324,22 @@ class ServiceRecordController extends Controller
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all(['laborID', 'laborName']);
         $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
-        $partsMaster = \App\Models\PartMaster::query()
+        $partsMaster = PartMaster::query()
+            ->select([
+                'partID',
+                'partName',
+                'description',
+                'price_discounted',
+                'type',
+                'validDateMin',
+                'validDateMax',
+            ])
             ->orderBy('partName')
-            ->get(['partID', 'partName', 'description', 'price_discounted', 'type']);
-        $services = \App\Models\ServiceMaster::query()
-            ->orderBy('productName')
-            ->get([
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
+            ->get();
+        $services = ServiceMaster::query()
+            ->select([
                 'id',
                 'serviceID',
                 'productName',
@@ -313,7 +348,17 @@ class ServiceRecordController extends Controller
                 'priceR_0',
                 'priceR_onSite',
                 'price_a2la',
-            ]);
+                'validDateMin',
+                'validDateMax',
+            ])
+            ->where(function ($query) {
+                $query->whereNull('productName')
+                    ->orWhere('productName', 'not like', '*%');
+            })
+            ->orderBy('productName')
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
+            ->get();
 
         return Inertia::render('ServiceRecords.detail', [
             'initialRecord' => $record,
@@ -1530,11 +1575,12 @@ class ServiceRecordController extends Controller
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
-        $services = ServiceMaster::query()
-            ->select(['id', 'serviceID', 'productName', 'entityID'])
-            ->where('productName', 'NOT LIKE', '*%')
-            ->orderBy('productName')
-            ->get();
+        $services = app(MasterPriceVersionResolver::class)->latestByKey(
+            ServiceMaster::query()
+                ->select(['id', 'serviceID', 'productName', 'entityID', 'validDateMin', 'validDateMax'])
+                ->where('productName', 'NOT LIKE', '*%'),
+            'serviceID'
+        )->sortBy('productName', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
         return Inertia::render('ServiceRecordCreateFromFile', [
             'sourceFile' => $sourceFile,
@@ -1554,27 +1600,32 @@ class ServiceRecordController extends Controller
         }
 
         try {
+            $parentRecord = ServiceRecord::query()
+                ->where('orderID', $orderID)
+                ->first(['orderID', 'orderDate', 'returnCode']);
+            $resolver = app(MasterPriceVersionResolver::class);
+            $asOfDate = $parentRecord?->orderDate;
+
             $linkedLoaners = ServiceRecord::query()
                 ->with(['statusMasterLoaner'])
                 ->where('parentID', $orderID)
                 ->whereIn('order_type', ['loaner', 'waiting_list'])
                 ->orderBy('orderID')
                 ->get()
-                ->map(function (ServiceRecord $loaner) {
+                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord, $asOfDate) {
                     $attached = AttachedLoaner::query()
                         ->where('associatedID', $loaner->orderID)
                         ->orderByDesc('id')
                         ->first();
 
-                    $masterPrice = 0.0;
-                    if ($loaner->loanerID !== null && $loaner->loanerID !== '') {
-                        $masterPrice = (float) (LoanerMaster::query()
-                            ->where(function ($query) use ($loaner) {
-                                $query->where('loanerID', $loaner->loanerID)
-                                    ->orWhere('id', $loaner->loanerID);
-                            })
-                            ->value('price') ?? 0);
-                    }
+                    // 受注日あり: その日の版 / 未定: 最新版
+                    $loanerAsOf = $loaner->orderDate ?: $asOfDate;
+                    $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
+                    $masterPrice = $resolver->loanerChargePrice(
+                        $parentRecord?->returnCode,
+                        $loaner->loanerID,
+                        $loanerAsOf,
+                    );
 
                     return [
                         'orderID' => $loaner->orderID,
@@ -1586,7 +1637,9 @@ class ServiceRecordController extends Controller
                         'productName' => $loaner->productName,
                         'SN' => $loaner->SN,
                         'price' => $loaner->price,
+                        'orderDate' => optional($loaner->orderDate)->format('Y-m-d') ?? $loaner->orderDate,
                         'masterPrice' => $masterPrice,
+                        'priceVersions' => $priceVersions,
                         'loanerID' => $loaner->loanerID,
                         'dealer' => $loaner->dealer,
                         'dealer_depart' => $loaner->dealer_depart,
@@ -1607,6 +1660,18 @@ class ServiceRecordController extends Controller
                 ->map(fn (CapturedImage $item) => $this->serializeCapturedImage($item))
                 ->values();
 
+            $parts = AttachedPart::where('associatedID', $orderID)
+                ->orderBy('id')
+                ->get()
+                ->map(function (AttachedPart $part) use ($resolver, $asOfDate) {
+                    $master = $resolver->partMaster($part->partID, $asOfDate);
+                    $part->setRelation('part_master', $master);
+                    $part->setRelation('partMaster', $master);
+
+                    return $part;
+                })
+                ->values();
+
             return [
                 'notes' => $this->serializeNotes(
                     AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
@@ -1618,16 +1683,14 @@ class ServiceRecordController extends Controller
                     ->orderBy('id')
                     ->get(),
                 'capturedImages' => $capturedImages,
-                'parts' => AttachedPart::where('associatedID', $orderID)
-                    ->with('partMaster')
-                    ->orderBy('id')
-                    ->get(),
+                'parts' => $parts,
                 'stockedParts' => AttachedStockedPart::where('associatedID', $orderID)
                     ->with('stockedPartMaster')
                     ->orderBy('id')
                     ->get(),
                 'loaner' => $linkedLoaners->first(),
                 'loaners' => $linkedLoaners,
+                'priceAsOfDate' => $resolver->normalizeDate($asOfDate),
             ];
         } catch (\Throwable $e) {
             report($e);
@@ -1999,7 +2062,13 @@ class ServiceRecordController extends Controller
             'partID' => $validated['partID'],
         ]);
 
-        $part->load('partMaster');
+        $asOfDate = ServiceRecord::query()
+            ->where('orderID', $validated['associatedID'])
+            ->value('orderDate');
+        $master = app(MasterPriceVersionResolver::class)
+            ->partMaster($validated['partID'], $asOfDate);
+        $part->setRelation('part_master', $master);
+        $part->setRelation('partMaster', $master);
 
         return response()->json([
             'message' => '部品を追加しました。',
@@ -2118,6 +2187,7 @@ class ServiceRecordController extends Controller
             'deliveryDestination_depart' => 'nullable|string|max:255',
             'deliveryDestination_contactPerson' => 'nullable|string|max:255',
             'deliveryDestination_phone' => 'nullable|string|max:255',
+            'deliveryDestination_email' => 'nullable|string|max:255',
             'deliveryDestination_zipcode' => 'nullable|string|max:20',
             'deliveryDestination_address1' => 'nullable|string|max:255',
             'deliveryDestination_address2' => 'nullable|string|max:255',
@@ -2229,6 +2299,7 @@ class ServiceRecordController extends Controller
                 'deliveryDestination_depart' => $validated['deliveryDestination_depart'] ?? null,
                 'deliveryDestination_contactPerson' => $validated['deliveryDestination_contactPerson'] ?? null,
                 'deliveryDestination_phone' => $validated['deliveryDestination_phone'] ?? null,
+                'deliveryDestination_email' => $validated['deliveryDestination_email'] ?? null,
                 'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
                 'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
                 'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
@@ -2317,12 +2388,14 @@ class ServiceRecordController extends Controller
 
         $returnCodeChanged = array_key_exists('returnCode', $data)
             && (string) ($data['returnCode'] ?? '') !== (string) ($record->returnCode ?? '');
+        $orderDateChanged = array_key_exists('orderDate', $data)
+            && (string) ($data['orderDate'] ?? '') !== (string) ($record->orderDate ?? '');
 
         $record->update($data);
 
         $updatedLoaners = [];
         if (
-            $returnCodeChanged
+            ($returnCodeChanged || $orderDateChanged)
             && ! in_array($record->order_type, ['loaner', 'waiting_list'], true)
         ) {
             $updatedLoaners = $this->syncChildLoanerPrices(
@@ -2355,26 +2428,22 @@ class ServiceRecordController extends Controller
      */
     private function syncChildLoanerPrices(int $parentOrderId, mixed $returnCode): array
     {
-        $isPaid = in_array((int) $returnCode, [1, 2, 7, 13], true);
+        $resolver = app(MasterPriceVersionResolver::class);
+        $parentOrderDate = ServiceRecord::query()
+            ->where('orderID', $parentOrderId)
+            ->value('orderDate');
 
         $children = ServiceRecord::query()
             ->where('parentID', $parentOrderId)
             ->whereIn('order_type', ['loaner', 'waiting_list'])
-            ->get(['orderID', 'loanerID', 'price', 'order_type', 'productName', 'SN']);
+            ->get(['orderID', 'loanerID', 'price', 'order_type', 'productName', 'SN', 'orderDate']);
 
         $updated = [];
         foreach ($children as $child) {
-            $price = 0.0;
-            $masterPrice = 0.0;
-            if ($isPaid && $child->loanerID !== null && $child->loanerID !== '') {
-                $masterPrice = (float) (LoanerMaster::query()
-                    ->where(function ($query) use ($child) {
-                        $query->where('loanerID', $child->loanerID)
-                            ->orWhere('id', $child->loanerID);
-                    })
-                    ->value('price') ?? 0);
-                $price = $masterPrice;
-            }
+            // 受注日あり: その日の版 / 未定: 最新版
+            $asOf = $child->orderDate ?: $parentOrderDate;
+            $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
+            $price = $masterPrice;
 
             if ((float) ($child->price ?? 0) !== $price) {
                 $child->price = $price;
@@ -2391,9 +2460,11 @@ class ServiceRecordController extends Controller
                 'order_type' => $child->order_type,
                 'price' => $price,
                 'masterPrice' => $masterPrice,
+                'priceVersions' => $resolver->loanerPriceVersions($child->loanerID),
                 'productName' => $child->productName,
                 'SN' => $child->SN,
                 'loanerID' => $child->loanerID,
+                'orderDate' => optional($child->orderDate)->format('Y-m-d') ?? $child->orderDate,
                 'attachedLoanerId' => $attached?->id,
                 'plannedSentDate' => optional($attached?->plannedSentDate ?? $attached?->sentDate)->format('Y-m-d'),
                 'plannedReturnedDate' => optional($attached?->plannedReturnedDate ?? $attached?->returnedDate)->format('Y-m-d'),

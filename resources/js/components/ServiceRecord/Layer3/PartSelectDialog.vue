@@ -36,7 +36,7 @@
                 </thead>
                 <tbody>
                     <tr
-                        v-for="item in filteredItems"
+                        v-for="item in visibleItems"
                         :key="item.partID"
                         class="table-row"
                         :class="{ selected: selectedPartId === item.partID, disabled: isAlreadyAttached(item.partID) }"
@@ -51,6 +51,10 @@
                 </tbody>
             </table>
             <p v-if="!filteredItems.length" class="empty-message">該当する部品がありません。</p>
+            <p v-else-if="filteredItems.length > visibleItems.length" class="empty-message">
+                {{ filteredItems.length }}件中 {{ visibleItems.length }}件を表示中。検索で絞り込むか「さらに表示」を押してください。
+                <button type="button" class="btn-secondary more-btn" @click="showMore">さらに表示</button>
+            </p>
         </div>
     </BaseDialog>
 </template>
@@ -60,6 +64,7 @@ import { computed, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import BaseDialog from './BaseDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -73,10 +78,20 @@ const searchQuery = ref('')
 const selectedPartId = ref(null)
 const saving = ref(false)
 const error = ref('')
+const displayLimit = ref(150)
+const DISPLAY_STEP = 150
+let latestPartsCache = null
+let latestPartsCacheLen = -1
 
 const attachedPartIds = computed(() => new Set((props.payload?.attachedPartIds ?? []).map(String)))
 
-const items = computed(() => page.props.partsMaster ?? [])
+const items = computed(() => {
+    const rows = page.props.partsMaster ?? []
+    if (latestPartsCache && latestPartsCacheLen === rows.length) return latestPartsCache
+    latestPartsCache = latestMastersByKey(rows, 'partID')
+    latestPartsCacheLen = rows.length
+    return latestPartsCache
+})
 
 const filteredItems = computed(() => {
     const tokens = searchQuery.value
@@ -101,6 +116,12 @@ const filteredItems = computed(() => {
         return tokens.every(token => text.includes(token))
     })
 })
+
+const visibleItems = computed(() => filteredItems.value.slice(0, displayLimit.value))
+
+function showMore() {
+    displayLimit.value += DISPLAY_STEP
+}
 
 const selectedItem = computed(() =>
     items.value.find(item => String(item.partID) === String(selectedPartId.value)),
@@ -307,5 +328,11 @@ async function save() {
 .btn-secondary {
     background: #6b7280;
     color: white;
+}
+
+.more-btn {
+    margin-left: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
 }
 </style>

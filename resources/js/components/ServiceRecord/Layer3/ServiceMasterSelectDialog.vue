@@ -42,7 +42,7 @@
                 </thead>
                 <tbody>
                     <tr
-                        v-for="item in filteredItems"
+                        v-for="item in visibleItems"
                         :key="itemKey(item)"
                         class="table-row"
                         :class="{ selected: selectedValue === itemValue(item) }"
@@ -56,6 +56,10 @@
                 </tbody>
             </table>
             <p v-if="!filteredItems.length" class="empty-message">該当する項目がありません。</p>
+            <p v-else-if="filteredItems.length > visibleItems.length" class="empty-message">
+                {{ filteredItems.length }}件中 {{ visibleItems.length }}件を表示中。検索で絞り込むか「さらに表示」を押してください。
+                <button type="button" class="btn-secondary more-btn" @click="showMore">さらに表示</button>
+            </p>
         </div>
     </BaseDialog>
 </template>
@@ -64,6 +68,7 @@
 import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import BaseDialog from './BaseDialog.vue'
+import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -76,22 +81,35 @@ const page = usePage()
 const searchQuery = ref('')
 const selectedValue = ref(null)
 const error = ref('')
+const displayLimit = ref(150)
+const DISPLAY_STEP = 150
+const latestCache = new Map()
 
 function toText(value) {
     return value == null ? '' : String(value)
+}
+
+function cachedLatest(rows, key) {
+    const list = Array.isArray(rows) ? rows : []
+    const cacheKey = `${key}:${list.length}:${list[0]?.id ?? ''}:${list[list.length - 1]?.id ?? ''}`
+    if (latestCache.has(cacheKey)) return latestCache.get(cacheKey)
+    const result = latestMastersByKey(list, key)
+    latestCache.clear()
+    latestCache.set(cacheKey, result)
+    return result
 }
 
 const configs = {
     serviceMaster: {
         title: '製品名選択',
         searchPlaceholder: 'productName / entityID で検索',
-        items: propsValue => propsValue.servicesMaster ?? [],
+        items: propsValue => cachedLatest(propsValue.servicesMaster ?? [], 'serviceID'),
         columns: [
             { label: 'id', getter: item => item?.id ?? '—' },
             { label: 'productName', getter: item => item?.productName ?? '—' },
             { label: 'entityID', getter: item => item?.entityID ?? '—' },
         ],
-        // serviceID はマスタ上で重複し得るため、一意キーは id を使う
+        // 最新版のみ表示。行キーは surrogate id
         valueGetter: item => item?.id,
         initialValue: () => null,
         searchFields: item => [item?.id, item?.serviceID, item?.productName, item?.entityID],
@@ -215,15 +233,22 @@ const filteredItems = computed(() => {
     })
 })
 
+const visibleItems = computed(() => filteredItems.value.slice(0, displayLimit.value))
+
+function showMore() {
+    displayLimit.value += DISPLAY_STEP
+}
+
 const selectedItem = computed(() =>
     items.value.find(item => String(itemValue(item)) === String(selectedValue.value)),
 )
 
 watch(
-    [kind, items, () => props.payload, () => props.record],
+    [kind, () => props.payload?.kind, () => props.payload?.dealer, () => props.payload?.productName, () => props.payload?.entityID, () => props.payload?.incident, () => props.record?.orderID],
     () => {
         searchQuery.value = ''
         error.value = ''
+        displayLimit.value = DISPLAY_STEP
         if (kind.value === 'dealer') {
             const desiredDealer = props.payload?.dealer ?? props.record?.dealer ?? ''
             const matchedDealer = items.value.find(item =>
@@ -444,5 +469,11 @@ function save() {
 .btn-secondary {
     background: #6b7280;
     color: white;
+}
+
+.more-btn {
+    margin-left: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
 }
 </style>

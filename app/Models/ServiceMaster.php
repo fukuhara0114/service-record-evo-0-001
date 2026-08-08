@@ -2,27 +2,27 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
 class ServiceMaster extends Authenticatable
 {
-    // テーブル名
     protected $table = 'servicemaster';
 
-    // 主キー（重要）
-    protected $primaryKey = 'serviceID';
+    // 版ごとのサロゲートキー（業務キーは serviceID）
+    protected $primaryKey = 'id';
 
-    // オートインクリメント
-    public $incrementing = false;
+    public $incrementing = true;
 
-    // 主キーの型
     protected $keyType = 'int';
 
-    // timestamps無効（created_at, updated_at無し）
     public $timestamps = false;
 
-    // 代入可能カラム
     protected $fillable = [
+        'serviceID',
+        'productName',
+        'productType',
+        'entityID',
         'priceC_0',
         'priceR_0',
         'priceC_1',
@@ -37,10 +37,17 @@ class ServiceMaster extends Authenticatable
         'validDateMin',
         'validDateMax',
         'note',
-        'entityID',
     ];
 
-    public function serviceRecords()
+    protected $casts = [
+        'validDateMin' => 'date',
+        'validDateMax' => 'date',
+    ];
+
+    /**
+     * 業務キー serviceID で紐づく案件（版をまたぐ）。
+     */
+    public function serviceRecords(): HasMany
     {
         return $this->hasMany(ServiceRecord::class, 'serviceID', 'serviceID');
     }

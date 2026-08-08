@@ -25,26 +25,11 @@
                         </button>
                     </template>
                 </div>
-                <div
-                    v-if="mode === 'engineer'"
-                    class="engineer-header-meta"
-                >
-                    <div class="engineer-meta-item">
-                        <span class="engineer-meta-label">dealer</span>
-                        <strong>{{ record?.dealer || '—' }}</strong>
-                    </div>
-                    <div class="engineer-meta-item">
-                        <span class="engineer-meta-label">productName</span>
-                        <strong>{{ record?.productName || '—' }}</strong>
-                    </div>
-                    <div class="engineer-meta-item">
-                        <span class="engineer-meta-label">SN</span>
-                        <strong>{{ record?.SN || '—' }}</strong>
-                    </div>
-                    <div class="engineer-meta-item">
-                        <span class="engineer-meta-label">returnCode</span>
-                        <strong>{{ engineerReturnCodeLabel }}</strong>
-                    </div>
+                <div class="engineer-header-meta">
+                    <span class="header-summary-item">{{ headerDealer }}</span>
+                    <span class="header-summary-item">{{ headerProductName }}</span>
+                    <span class="header-summary-item"> SN: {{ headerSn }}</span>
+                    <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
                 </div>
                 <div class="detail-meta">
                     <span>OrderID: {{ record?.orderID }}</span>
@@ -235,10 +220,29 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
 
 const page = usePage()
 
-const engineerReturnCodeLabel = computed(() => {
+function headerText(field) {
+    const draft = props.draftRecord?.[field]
+    if (draft !== undefined && draft !== null && draft !== '') return String(draft)
+    const value = props.record?.[field]
+    if (value !== undefined && value !== null && value !== '') return String(value)
+    return '—'
+}
+
+const headerDealer = computed(() => headerText('dealer'))
+const headerProductName = computed(() => headerText('productName'))
+const headerSn = computed(() => headerText('SN'))
+
+const headerReturnCodeLabel = computed(() => {
     const id = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const draftId = props.draftRecord?.returnCode
+    const recordId = props.record?.returnCode
     const master = props.record?.return_code_master
-    if (master?.description) return master.description
+    if (
+        master?.description
+        && (draftId === undefined || draftId === null || String(draftId) === String(recordId))
+    ) {
+        return master.description
+    }
     const found = (page.props.returnCodes ?? []).find(item => String(item.id) === String(id))
     return found?.description || (id != null && id !== '' ? String(id) : '—')
 })
@@ -291,30 +295,18 @@ const engineerReturnCodeLabel = computed(() => {
 .engineer-header-meta {
     flex: 1 1 auto;
     min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px 14px;
-    padding: 0 8px;
-}
-
-.engineer-meta-item {
-    min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 20px;
+    padding: 0 12px;
+    overflow: hidden;
 }
 
-.engineer-meta-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: none;
-}
-
-.engineer-meta-item strong {
-    font-size: 13px;
-    font-weight: 700;
-    color: #f8fafc;
+.header-summary-item {
+    min-width: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -343,8 +335,10 @@ const engineerReturnCodeLabel = computed(() => {
 
 .detail-meta {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 16px;
+    white-space: nowrap;
 }
 
 .save-error {

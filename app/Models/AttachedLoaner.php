@@ -53,6 +53,9 @@ class AttachedLoaner extends Model
         return $this->belongsTo(ServiceRecord::class, 'associatedID', 'orderID');
     }
 
+    /**
+     * 業務キー loanerID で紐づく（版をまたぐ。価格版の解決は MasterPriceVersionResolver を使う）。
+     */
     public function loanerMaster(): BelongsTo
     {
         return $this->belongsTo(LoanerMaster::class, 'loanerID', 'loanerID');

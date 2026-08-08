@@ -27,6 +27,9 @@ class AttachedPart extends Model
         return $this->belongsTo(ServiceRecord::class, 'associatedID', 'orderID');
     }
 
+    /**
+     * 業務キー partID で紐づく（版をまたぐ。価格版の解決は MasterPriceVersionResolver を使う）。
+     */
     public function partMaster(): BelongsTo
     {
         return $this->belongsTo(PartMaster::class, 'partID', 'partID');

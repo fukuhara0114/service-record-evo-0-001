@@ -434,7 +434,7 @@ const selectedServiceMaster = computed(() => {
         productName: props.draftRecord?.productName ?? props.record?.productName,
         entityID: props.draftRecord?.entityID ?? props.record?.entityID,
         serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
-    })
+    }, props.draftRecord?.orderDate ?? props.record?.orderDate ?? null)
 })
 
 const workPrice = computed(() => {

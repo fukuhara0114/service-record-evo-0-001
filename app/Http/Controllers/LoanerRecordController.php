@@ -9,6 +9,7 @@ use App\Models\Dealer;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use App\Services\MasterPriceVersionResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,20 +22,28 @@ class LoanerRecordController extends Controller
     {
         $statusColumn = $this->resolveStatusColumn();
 
-        $loaners = LoanerMaster::query()
-            ->whereNotNull('productName')
-            ->where('productName', '!=', '')
-            ->orderBy('productName')
-            ->orderBy('loanerID')
-            ->get([
-                'loanerID',
-                'productName',
-                'SN',
-                'manageNum',
-                'item',
-                'groupName',
-                $statusColumn,
-            ]);
+        $loaners = app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->whereNotNull('productName')
+                ->where('productName', '!=', '')
+                ->select([
+                    'id',
+                    'loanerID',
+                    'productName',
+                    'SN',
+                    'manageNum',
+                    'item',
+                    'groupName',
+                    'validDateMin',
+                    'validDateMax',
+                    $statusColumn,
+                ]),
+            'loanerID'
+        )->sortBy([
+            ['productName', 'asc'],
+            ['loanerID', 'asc'],
+        ])->values();
 
         $loanerProducts = $loaners
             ->groupBy('productName')
@@ -199,6 +208,8 @@ class LoanerRecordController extends Controller
                 'manageNum',
                 'groupName',
                 'price',
+                'validDateMin',
+                'validDateMax',
             ]),
             'files' => AttachedFile::query()
                 ->where('associatedID', $record->orderID)
@@ -216,10 +227,13 @@ class LoanerRecordController extends Controller
             ),
             'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
+            // 価格版解決用に同一 loanerID の全版を渡す
             'loanerUnits' => LoanerMaster::query()
                 ->whereNotNull('loanerID')
                 ->orderBy('productName')
                 ->orderBy('loanerID')
+                ->orderByDesc('validDateMin')
+                ->orderByDesc('id')
                 ->get([
                     'id',
                     'loanerID',
@@ -229,6 +243,8 @@ class LoanerRecordController extends Controller
                     'manageNum',
                     'groupName',
                     'price',
+                    'validDateMin',
+                    'validDateMax',
                     $this->resolveStatusColumn(),
                 ]),
             'dateFields' => [
@@ -349,14 +365,17 @@ class LoanerRecordController extends Controller
                 unset($recordPayload['status']);
             }
 
-            // 価格: parent の returnCode が 1,2,7,13 のときだけ loanermaster.price、それ以外/親なしは 0
+            // 価格: parent の returnCode が有償のとき loanermaster 版価格、それ以外/親なしは 0
             $parentId = array_key_exists('parentID', $validated)
                 ? $validated['parentID']
                 : $record->parentID;
             $loanerId = array_key_exists('loanerID', $validated)
                 ? $validated['loanerID']
                 : ($attached->loanerID ?? $record->loanerID);
-            $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId);
+            $orderDate = array_key_exists('orderDate', $validated)
+                ? $validated['orderDate']
+                : $record->orderDate;
+            $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId, $orderDate);
 
             $record->fill($recordPayload);
             $record->lastEditPerson = $request->user()?->kanji_name;
@@ -1045,11 +1064,14 @@ class LoanerRecordController extends Controller
     {
         $statusColumn = $this->resolveStatusColumn();
 
-        return LoanerMaster::query()
-            ->where('productName', $productName)
-            ->where($statusColumn, 0)
-            ->orderBy('loanerID')
-            ->first();
+        return app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('productName', $productName),
+            'loanerID'
+        )->first(function (LoanerMaster $row) use ($statusColumn) {
+            return (int) ($row->{$statusColumn} ?? -1) === 0;
+        });
     }
 
     private function resolveUnregisteredStatus(): ?StatusLoaner
@@ -1072,34 +1094,27 @@ class LoanerRecordController extends Controller
 
     /**
      * 貸出案件の課金価格を算出する。
-     * parent の returnCode が 1,2,7,13 のとき loanermaster.price、それ以外／親なしは 0。
+     * parent の returnCode が 1,2,7,13 のとき loanermaster の版価格、それ以外／親なしは 0。
+     * 受注日は loaner 自身 → 親案件の順。未設定なら最新版。
      */
-    private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId): float
+    private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId, mixed $orderDate = null): float
     {
         if ($parentId === null || $parentId === '') {
             return 0.0;
         }
 
-        $returnCode = ServiceRecord::query()
+        $parent = ServiceRecord::query()
             ->where('orderID', $parentId)
-            ->value('returnCode');
+            ->first(['returnCode', 'orderDate']);
 
-        if (! in_array((int) $returnCode, [1, 2, 7, 13], true)) {
+        if (! $parent) {
             return 0.0;
         }
 
-        if ($loanerId === null || $loanerId === '') {
-            return 0.0;
-        }
+        $asOf = $orderDate ?: $parent->orderDate;
 
-        $master = LoanerMaster::query()
-            ->where(function ($query) use ($loanerId) {
-                $query->where('loanerID', $loanerId)
-                    ->orWhere('id', $loanerId);
-            })
-            ->first(['price']);
-
-        return (float) ($master->price ?? 0);
+        return app(MasterPriceVersionResolver::class)
+            ->loanerChargePrice($parent->returnCode, $loanerId, $asOf);
     }
 
     private function serializeLoanerNotes($notes)

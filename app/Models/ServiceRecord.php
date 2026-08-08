@@ -106,20 +106,21 @@ class ServiceRecord extends Model
     //   リレーションの設定
     // **********************************************************************************************************************
     
+    /**
+     * 業務キー serviceID で紐づく（版をまたぐ。価格版の解決は getServiceAtOrderedDate() を使う）。
+     */
     public function serviceMaster()
     {
         return $this->belongsTo(ServiceMaster::class, 'serviceID', 'serviceID');
     }
 
     /**
-     * 【本命】現在の受注日（orderDate）に合致する「価格バージョン」のマスタを1件だけ取得するメソッド
+     * 受注日に合致する価格版（未設定なら最新版）。
      */
     public function getServiceAtOrderedDate()
     {
-        return ServiceMaster::where('serviceID', $this->serviceID)
-            ->where('validDateMin', '<=', $this->orderDate)
-            ->where('validDateMax', '>=', $this->orderDate)
-            ->first(); // 確実に1件だけを取得
+        return app(\App\Services\MasterPriceVersionResolver::class)
+            ->serviceMaster($this->serviceID, $this->orderDate);
     }
     // returnCode
     public function returnCodeMaster()

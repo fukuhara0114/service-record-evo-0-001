@@ -93,19 +93,29 @@
                         @click="openPreview(file)"
                     >
                         <div class="file-preview-wrap">
-                            <iframe
-                                v-if="isPdf(file)"
-                                :src="fileUrl(file.id)"
-                                class="file-preview"
-                                :title="`file preview ${file.id}`"
-                                tabindex="-1"
-                            />
+                            <template v-if="isPdf(file)">
+                                <iframe
+                                    v-if="loadedPreviewIds.has(file.id)"
+                                    :src="fileUrl(file.id)"
+                                    class="file-preview"
+                                    :title="`file preview ${file.id}`"
+                                    tabindex="-1"
+                                />
+                                <div v-else class="file-preview-fallback file-preview-lazy">
+                                    <p>{{ file.documentName || '（名称なし）' }}</p>
+                                    <p class="fallback-type">PDF（クリックでプレビュー）</p>
+                                </div>
+                            </template>
                             <img
-                                v-else-if="isImage(file)"
+                                v-else-if="isImage(file) && loadedPreviewIds.has(file.id)"
                                 :src="fileUrl(file.id)"
                                 :alt="file.documentName || '画像'"
                                 class="file-preview-image"
                             >
+                            <div v-else-if="isImage(file)" class="file-preview-fallback file-preview-lazy">
+                                <p>{{ file.documentName || '（名称なし）' }}</p>
+                                <p class="fallback-type">画像（クリックでプレビュー）</p>
+                            </div>
                             <div v-else class="file-preview-fallback">
                                 <p>{{ file.documentName || '（名称なし）' }}</p>
                                 <p class="fallback-type">{{ file.fileType || 'プレビュー非対応' }}</p>
@@ -170,6 +180,7 @@ const uploadError = ref('')
 const uploadDropActive = ref(false)
 const uploadDragDepth = ref(0)
 const files = ref([...(props.unregisteredFiles ?? [])])
+const loadedPreviewIds = ref(new Set())
 const deletingFileId = ref(null)
 const deleteError = ref('')
 const importStatus = ref('')
@@ -184,37 +195,40 @@ watch(
     },
 )
 
-onMounted(async () => {
+onMounted(() => {
     if (importProgressHideTimer) {
         clearTimeout(importProgressHideTimer)
         importProgressHideTimer = null
     }
 
+    // 取込はバックグラウンドで起動し、UI（ファイル選択ダイアログ含む）を塞がない
     importBusy.value = true
     showImportProgress.value = true
     importStatus.value = '処理を開始しています...'
 
-    const result = await startFileImport({
+    startFileImport({
         appBaseUrl: page.props.appBaseUrl,
         associatedID: -1,
-    })
-
-    importStatus.value = result.message || ''
-    importBusy.value = false
-
-    // 完了表示（100%）を見せてからバナーごと消し、対象ファイル一覧を再取得する。
-    importProgressHideTimer = setTimeout(() => {
+    }).then((result) => {
+        importStatus.value = result.message || ''
+        importBusy.value = false
+        importProgressHideTimer = setTimeout(() => {
+            showImportProgress.value = false
+            if (result.ok) {
+                importStatus.value = ''
+                router.reload({
+                    only: ['unregisteredFiles'],
+                    preserveScroll: true,
+                    preserveState: true,
+                })
+            }
+            importProgressHideTimer = null
+        }, 500)
+    }).catch(() => {
+        importBusy.value = false
         showImportProgress.value = false
-        if (result.ok) {
-            importStatus.value = ''
-            router.reload({
-                only: ['unregisteredFiles'],
-                preserveScroll: true,
-                preserveState: true,
-            })
-        }
-        importProgressHideTimer = null
-    }, 500)
+        importStatus.value = '取込開始に失敗しました。'
+    })
 })
 
 onBeforeUnmount(() => {
@@ -246,6 +260,11 @@ function isImage(file) {
 }
 
 function openPreview(file) {
+    if (file?.id != null) {
+        const next = new Set(loadedPreviewIds.value)
+        next.add(file.id)
+        loadedPreviewIds.value = next
+    }
     previewFile.value = file
 }
 

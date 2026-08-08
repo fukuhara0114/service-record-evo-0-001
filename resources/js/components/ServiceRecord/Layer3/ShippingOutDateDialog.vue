@@ -599,8 +599,8 @@ const calendarOptions = reactive({
 watch(selectedDate, () => {
     const api = calendarRef.value?.getApi?.()
     if (!api) return
+    // changeView は同一 view でもイベントソース再取得を誘発し、refetch と二重検索になるため使わない
     api.refetchEvents()
-    api.changeView(api.view.type, api.getDate())
 })
 
 function onCancel() {

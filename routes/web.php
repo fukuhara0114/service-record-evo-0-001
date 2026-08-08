@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\FileImportController;
 use App\Http\Controllers\LoanerCalendarController;
 use App\Http\Controllers\LoanerRecordController;
+use App\Http\Controllers\MasterPriceRevisionController;
 use App\Http\Controllers\ServiceRecordController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth; // ✨ 追加
@@ -79,6 +80,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
     Route::get('/servicerecord/shipping-calendar', [ServiceRecordController::class, 'shippingCalendar'])->name('servicerecord.shipping-calendar');
     Route::get('/servicerecord/shipping-calendar/events', [ServiceRecordController::class, 'shippingCalendarEvents'])->name('servicerecord.shipping-calendar.events');
+    Route::get('/servicerecord/master-price-revision', [MasterPriceRevisionController::class, 'index'])->name('servicerecord.master-price-revision');
+    Route::post('/servicerecord/master-price-revision', [MasterPriceRevisionController::class, 'store'])->name('servicerecord.master-price-revision.store');
     Route::post('/servicerecord/notes', [ServiceRecordController::class, 'storeNote'])->name('servicerecord.notes.store');
     Route::put('/servicerecord/notes/{id}', [ServiceRecordController::class, 'updateNote'])->name('servicerecord.notes.update');
     Route::delete('/servicerecord/notes/{id}', [ServiceRecordController::class, 'destroyNote'])->name('servicerecord.notes.destroy');

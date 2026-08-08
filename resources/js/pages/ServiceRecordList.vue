@@ -57,6 +57,7 @@
             <div class="home-link-area">
                 <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
                 <a v-if="mode !== 'engineer'" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
+                <a v-if="mode !== 'engineer'" :href="priceRevisionUrl" class="calendar-link">価格改定</a>
                 <a :href="homeUrl">Home</a>
             </div>
         </div>
@@ -261,6 +262,10 @@ const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/h
 const shippingCalendarUrl = computed(() => {
     const base = getBasePath()
     return `${window.location.origin}${base}/shipping-calendar`
+})
+const priceRevisionUrl = computed(() => {
+    const base = getBasePath()
+    return `${window.location.origin}${base}/master-price-revision`
 })
 
 onMounted(() => {
@@ -765,7 +770,7 @@ async function saveRecord() {
             productName: draftRecord.value.productName,
             entityID: draftRecord.value.entityID,
             serviceID: draftRecord.value.serviceID,
-        })
+        }, draftRecord.value.orderDate)
 
         // 作業内容(returnCode)変更時: 子 loaner の保存済み価格を反映
         if (Array.isArray(data.loaners) && data.loaners.length) {

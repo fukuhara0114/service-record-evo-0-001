@@ -183,7 +183,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import CapturedImageEditor from './CapturedImageEditor.vue'
 
@@ -482,7 +482,12 @@ async function associateSelected() {
     }
 }
 
+let fetchSeq = 0
+let reloadTimer = null
+let pendingReloadOptions = null
+
 async function fetchPage(pageNum, { append = false, clearSelected = false } = {}) {
+    const seq = ++fetchSeq
     loading.value = true
     error.value = ''
 
@@ -496,6 +501,9 @@ async function fetchPage(pageNum, { append = false, clearSelected = false } = {}
             },
             credentials: 'same-origin',
         })
+
+        // 後から始まった検索があれば、古い結果は捨てる（重複検索の結果競合を防ぐ）
+        if (seq !== fetchSeq) return
 
         let data = {}
         try {
@@ -522,6 +530,7 @@ async function fetchPage(pageNum, { append = false, clearSelected = false } = {}
             clearSelection()
         }
     } catch (e) {
+        if (seq !== fetchSeq) return
         error.value = e.message || '画像一覧の取得に失敗しました。'
         if (!append) {
             items.value = []
@@ -530,12 +539,27 @@ async function fetchPage(pageNum, { append = false, clearSelected = false } = {}
             lastPage.value = 1
         }
     } finally {
-        loading.value = false
+        if (seq === fetchSeq) {
+            loading.value = false
+        }
     }
 }
 
 function reload({ clearSelected = true } = {}) {
-    return fetchPage(1, { append: false, clearSelected })
+    // 連続 watch / mount からの重複 reload をまとめる
+    pendingReloadOptions = {
+        clearSelected: (pendingReloadOptions?.clearSelected ?? false) || clearSelected,
+    }
+    if (reloadTimer != null) return Promise.resolve()
+    return new Promise((resolve) => {
+        reloadTimer = window.setTimeout(async () => {
+            const options = pendingReloadOptions || { clearSelected: true }
+            pendingReloadOptions = null
+            reloadTimer = null
+            await fetchPage(1, { append: false, clearSelected: options.clearSelected })
+            resolve()
+        }, 0)
+    })
 }
 
 function loadMore() {
@@ -597,8 +621,22 @@ watch(
 )
 
 onMounted(() => {
-    applyPeriodToDates('today')
+    // periodFilter 初期値 today の日付範囲だけ整え、reload は1回に限定
+    suppressPeriodWatch.value = true
+    applyPeriodToDates(periodFilter.value || 'today')
+    queueMicrotask(() => {
+        suppressPeriodWatch.value = false
+    })
     reload()
+})
+
+onBeforeUnmount(() => {
+    fetchSeq += 1
+    if (reloadTimer != null) {
+        clearTimeout(reloadTimer)
+        reloadTimer = null
+    }
+    pendingReloadOptions = null
 })
 
 defineExpose({

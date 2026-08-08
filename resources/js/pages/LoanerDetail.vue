@@ -425,8 +425,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
-
-const PAID_RETURN_CODES = [1, 2, 7, 13]
+import { pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     attached: { type: Object, required: true },
@@ -551,10 +550,20 @@ const form = reactive({
     deliveryDestination_address2: stringValue(props.record.deliveryDestination_address2),
 })
 
-const selectedUnit = computed(() =>
-    props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID)) ?? null,
-)
+const selectedUnit = computed(() => {
+    const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
+    if (!units.length) return null
+    return pickMasterVersion(units, form.orderDate || null)
+        ?? props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID))
+        ?? null
+})
 const masterPrice = computed(() => {
+    const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
+    if (units.length) {
+        const picked = pickMasterVersion(units, form.orderDate || null)
+        const fromVersion = Number(picked?.price)
+        if (Number.isFinite(fromVersion)) return fromVersion
+    }
     const raw = selectedUnit.value?.price ?? props.loanerMaster?.price ?? 0
     const num = Number(raw)
     return Number.isFinite(num) ? num : 0
@@ -562,7 +571,7 @@ const masterPrice = computed(() => {
 const basePrice = computed(() => {
     if (!form.parentID) return 0
     const code = Number(parentReturnCode.value)
-    if (!PAID_RETURN_CODES.includes(code)) return 0
+    if (!PAID_LOANER_RETURN_CODES.includes(code)) return 0
     return masterPrice.value
 })
 const discountAmount = computed(() => {
