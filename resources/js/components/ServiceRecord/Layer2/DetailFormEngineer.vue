@@ -18,14 +18,15 @@
                     </div>
 
                     <div class="captured-images-panel">
-                        <button
-                            type="button"
-                            class="captured-toggle"
-                            @click="capturedImagesOpen = !capturedImagesOpen"
-                        >
-                            <span>撮影画像（{{ capturedImages.length }}件）</span>
-                            <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
-                        </button>
+                            <button
+                                type="button"
+                                class="captured-toggle"
+                                :class="{ 'has-images': capturedImages.length > 0 }"
+                                @click="capturedImagesOpen = !capturedImagesOpen"
+                            >
+                                <span>撮影画像（{{ capturedImages.length }}件）</span>
+                                <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                            </button>
                         <div v-show="capturedImagesOpen" class="captured-images-body">
                             <AssociatedCapturedImages
                                 :images="capturedImages"
@@ -254,7 +255,7 @@
                         </aside>
                         <div class="card-main">
                             <div v-if="parts.length" class="table-wrap">
-                                <table class="data-table">
+                                <table class="data-table parts-table">
                                     <thead>
                                         <tr>
                                             <th>Part ID</th>
@@ -335,7 +336,7 @@ const fileSortSaving = ref(false)
 const flagSaving = ref(false)
 const statusActionSaving = ref(false)
 const showGalleryDialog = ref(false)
-const capturedImagesOpen = ref(true)
+const capturedImagesOpen = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const actionMessage = ref('')
 
@@ -743,6 +744,19 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     background: #cbd5e1;
 }
 
+.captured-toggle.has-images {
+    background: #86efac;
+    color: #14532d;
+}
+
+.captured-toggle.has-images:hover {
+    background: #4ade80;
+}
+
+.captured-toggle.has-images .captured-toggle-icon {
+    color: #166534;
+}
+
 .captured-toggle-icon {
     font-size: 11px;
     color: #475569;
@@ -1002,6 +1016,13 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 .col-note-author {
     width: 100px;
     white-space: nowrap;
+}
+
+.notes-table th,
+.notes-table td,
+.parts-table th,
+.parts-table td {
+    font-weight: 700;
 }
 
 .empty-message {

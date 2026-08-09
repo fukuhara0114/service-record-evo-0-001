@@ -39,4 +39,14 @@ return [
         'api_key' => env('POWER_AUTOMATE_API_KEY'),
     ],
 
+    /*
+    | Microsoft Purview 秘密度ラベル（abroad Excel 出力用）
+    | Public ラベル付き既存 .xlsx を解凍し docMetadata/LabelInfo.xml の
+    | id / siteId を設定する。
+    */
+    'msip' => [
+        'public_label_id' => env('MSIP_PUBLIC_LABEL_ID'),
+        'site_id' => env('MSIP_SITE_ID'),
+    ],
+
 ];

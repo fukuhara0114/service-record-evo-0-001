@@ -754,6 +754,54 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function emailDraftPreview(Request $request, $orderID, EmlReplyDraftService $draftService)
+    {
+        $this->assertEngineerAccessIfNeeded($request, $orderID);
+
+        $validated = $request->validate([
+            'templateType' => 'required|string|in:receipt,quote,work_change',
+            'fileId' => 'nullable|integer',
+        ]);
+
+        $record = ServiceRecord::query()->where('orderID', $orderID)->first();
+        if (!$record) {
+            return response()->json([
+                'message' => '案件が見つかりません。',
+            ], 404);
+        }
+
+        $binary = null;
+        if (!empty($validated['fileId'])) {
+            $file = AttachedFile::find($validated['fileId']);
+            if (!$file || !$this->isEmlFile($file)) {
+                return response()->json([
+                    'message' => 'EML ファイルではありません。',
+                ], 422);
+            }
+            try {
+                $binary = $this->decodeAttachedFileBinary($file);
+            } catch (\Throwable $e) {
+                report($e);
+
+                return response()->json([
+                    'message' => '元メールの読み込みに失敗しました: ' . $e->getMessage(),
+                ], 422);
+            }
+        }
+
+        try {
+            $preview = $draftService->buildPreview($record, $validated['templateType'], $binary);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'メールプレビューの作成に失敗しました: ' . $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json($preview);
+    }
+
     private function isEmlFile(AttachedFile $file): bool
     {
         $name = strtolower((string) ($file->documentName ?? ''));
@@ -1574,9 +1622,9 @@ class ServiceRecordController extends Controller
         }
     }
 
-    public function createWithoutFile()
+    public function createWithoutFile(Request $request)
     {
-        return $this->renderCreateFromFilePage(null);
+        return $this->renderCreateFromFilePage(null, $request);
     }
 
     public function uploadForIntake(Request $request)
@@ -1623,14 +1671,14 @@ class ServiceRecordController extends Controller
         ], 201);
     }
 
-    public function createFromFile($fileId)
+    public function createFromFile(Request $request, $fileId)
     {
         $sourceFile = AttachedFile::query()
             ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
             ->where('associatedID', -1)
             ->findOrFail($fileId);
 
-        return $this->renderCreateFromFilePage($sourceFile);
+        return $this->renderCreateFromFilePage($sourceFile, $request);
     }
 
     private function guessDocumentType(string $originalName, string $fileType): string
@@ -1652,8 +1700,13 @@ class ServiceRecordController extends Controller
         return '添付ファイル';
     }
 
-    private function renderCreateFromFilePage($sourceFile)
+    private function renderCreateFromFilePage($sourceFile, ?Request $request = null)
     {
+        $orderType = $request?->input('order_type');
+        if (!in_array($orderType, ['service', 'loaner'], true)) {
+            $orderType = 'service';
+        }
+
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
@@ -1665,6 +1718,47 @@ class ServiceRecordController extends Controller
             'serviceID'
         )->sortBy('productName', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
+        $loanerStatusColumn = Schema::hasColumn('loanermaster', 'currentStatus')
+            ? 'currentStatus'
+            : 'currentStatus';
+        $loaners = app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->whereNotNull('productName')
+                ->where('productName', '!=', '')
+                ->select([
+                    'id',
+                    'loanerID',
+                    'productName',
+                    'SN',
+                    'manageNum',
+                    'item',
+                    'groupName',
+                    'validDateMin',
+                    'validDateMax',
+                    $loanerStatusColumn,
+                ]),
+            'loanerID'
+        )->sortBy([
+            ['productName', 'asc'],
+            ['loanerID', 'asc'],
+        ])->values();
+
+        $loanerProducts = $loaners
+            ->groupBy('productName')
+            ->map(function ($rows, $productName) use ($loanerStatusColumn) {
+                $availableCount = $rows->where($loanerStatusColumn, 0)->count();
+
+                return [
+                    'productName' => $productName,
+                    'totalCount' => $rows->count(),
+                    'availableCount' => $availableCount,
+                    'available' => $availableCount > 0,
+                    'order_type' => $availableCount > 0 ? 'loaner' : 'waiting_list',
+                ];
+            })
+            ->values();
+
         return Inertia::render('ServiceRecordCreateFromFile', [
             'sourceFile' => $sourceFile,
             'unregisteredFiles' => $this->fetchUnregisteredFiles(),
@@ -1673,6 +1767,10 @@ class ServiceRecordController extends Controller
             'labors' => $labors,
             'dealersMaster' => $dealers,
             'servicesMaster' => $services,
+            'orderType' => $orderType,
+            'loanerProducts' => $loanerProducts,
+            'loaners' => $loaners,
+            'loanerStatusColumn' => $loanerStatusColumn,
         ]);
     }
 
@@ -2276,7 +2374,10 @@ class ServiceRecordController extends Controller
             'deliveryDestination_address2' => 'nullable|string|max:255',
             'loanerOrderIds' => 'nullable|array',
             'loanerOrderIds.*' => 'integer',
+            'order_type' => 'nullable|string|in:service,loaner',
         ]);
+
+        $orderType = ($validated['order_type'] ?? 'service') === 'loaner' ? 'loaner' : 'service';
 
         $fileIds = collect()
             ->when(!empty($validated['sourceFileId']), fn ($c) => $c->push((int) $validated['sourceFileId']))
@@ -2314,6 +2415,11 @@ class ServiceRecordController extends Controller
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
+
+        // Loaner 案件作成時は「親に子を紐づける」操作は行わない
+        if ($orderType === 'loaner') {
+            $loanerOrderIds = collect();
+        }
 
         if ($loanerOrderIds->isNotEmpty()) {
             if (
@@ -2353,6 +2459,7 @@ class ServiceRecordController extends Controller
             $user,
             $fileIds,
             $loanerOrderIds,
+            $orderType,
         ) {
             $record = ServiceRecord::create([
                 'receivedDate' => $validated['receivedDate'] ?? null,
@@ -2386,7 +2493,7 @@ class ServiceRecordController extends Controller
                 'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
                 'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
                 'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
-                'order_type' => 'service',
+                'order_type' => $orderType,
                 'lastEditPerson' => $user?->kanji_name,
                 'lastEditDate' => now(),
             ]);

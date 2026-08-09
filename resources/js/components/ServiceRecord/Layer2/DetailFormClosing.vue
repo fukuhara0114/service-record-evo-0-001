@@ -211,6 +211,7 @@
                             <button
                                 type="button"
                                 class="captured-toggle"
+                                :class="{ 'has-images': capturedImages.length > 0 }"
                                 @click="capturedImagesOpen = !capturedImagesOpen"
                             >
                                 <span>撮影画像（{{ capturedImages.length }}件）</span>
@@ -344,7 +345,7 @@ const pricePaneSize = ref(40)
 const infoPaneSize = ref(60)
 const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
-const capturedImagesOpen = ref(true)
+const capturedImagesOpen = ref(false)
 const actionComment = ref('')
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
@@ -1145,6 +1146,11 @@ watch(
     table-layout: fixed;
 }
 
+.notes-card .notes-table th,
+.notes-card .notes-table td {
+    font-weight: 700;
+}
+
 .notes-card .notes-table .col-note-date,
 .notes-card .notes-table .col-note-author {
     width: 100px;
@@ -1305,6 +1311,11 @@ watch(
     table-layout: fixed;
 }
 
+.notes-table th,
+.notes-table td {
+    font-weight: 700;
+}
+
 .notes-table .col-note-date,
 .notes-table .col-note-author {
     width: 100px;
@@ -1352,6 +1363,19 @@ watch(
 
 .captured-toggle:hover {
     background: #cbd5e1;
+}
+
+.captured-toggle.has-images {
+    background: #86efac;
+    color: #14532d;
+}
+
+.captured-toggle.has-images:hover {
+    background: #4ade80;
+}
+
+.captured-toggle.has-images .captured-toggle-icon {
+    color: #166534;
 }
 
 .captured-toggle-icon {

@@ -137,49 +137,22 @@
             このファイル形式はプレビュー非対応です。「別タブで開く」から確認してください。
         </p>
 
-        <div v-if="showDraftDialog" class="draft-overlay" @click.self="closeDraftDialog">
-            <div class="draft-panel" @click.stop>
-                <div class="draft-header">
-                    <h3>メールドラフト作成</h3>
-                    <button type="button" class="draft-close" @click="closeDraftDialog">×</button>
-                </div>
-                <div class="draft-body">
-                    <p class="draft-help">
-                        定型文に案件情報（dealer / contactPerson / productName / SN）を差し込み、
-                        元の .eml へ返信ドラフトとして合成してダウンロードします。
-                    </p>
-                    <div class="draft-options">
-                        <label
-                            v-for="option in draftOptions"
-                            :key="option.value"
-                            class="draft-option"
-                            :class="{ active: selectedDraftType === option.value }"
-                        >
-                            <input v-model="selectedDraftType" type="radio" :value="option.value">
-                            <span>{{ option.label }}</span>
-                        </label>
-                    </div>
-                    <p v-if="draftError" class="draft-error">{{ draftError }}</p>
-                </div>
-                <div class="draft-actions">
-                    <button type="button" class="action-btn" :disabled="draftCreating" @click="closeDraftDialog">キャンセル</button>
-                    <button
-                        type="button"
-                        class="action-btn action-btn-primary"
-                        :disabled="draftCreating || !selectedDraftType"
-                        @click="createReplyDraft"
-                    >
-                        {{ draftCreating ? '作成中...' : 'ドラフト作成してダウンロード' }}
-                    </button>
-                </div>
-            </div>
-        </div>
+        <EmailDraftTypeDialog
+            v-if="showDraftDialog"
+            :creating="draftCreating"
+            :error="draftError"
+            :initial-type="selectedDraftType"
+            confirm-label="ドラフト作成してダウンロード"
+            @close="closeDraftDialog"
+            @confirm="createReplyDraft"
+        />
     </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { apiFetch } from '@/utils/apiFetch'
+import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTypeDialog.vue'
 
 const props = defineProps({
     file: {
@@ -236,12 +209,6 @@ const showDraftDialog = ref(false)
 const selectedDraftType = ref('receipt')
 const draftCreating = ref(false)
 const draftError = ref('')
-
-const draftOptions = [
-    { value: 'receipt', label: '① 受領メール' },
-    { value: 'quote', label: '② 見積添付メール' },
-    { value: 'work_change', label: '③ 作業内容変更メール' },
-]
 
 watch(
     () => props.file.sortNum,
@@ -345,11 +312,13 @@ function parseFilenameFromDisposition(headerValue) {
     return (match?.[1] || match?.[2] || '').trim() || null
 }
 
-async function createReplyDraft() {
-    if (!selectedDraftType.value) {
+async function createReplyDraft(templateType) {
+    const type = templateType || selectedDraftType.value
+    if (!type) {
         draftError.value = '定型メールの種類を選択してください。'
         return
     }
+    selectedDraftType.value = type
 
     draftCreating.value = true
     draftError.value = ''
@@ -365,7 +334,7 @@ async function createReplyDraft() {
             },
             credentials: 'same-origin',
             body: JSON.stringify({
-                templateType: selectedDraftType.value,
+                templateType: type,
                 orderID: props.orderId != null ? Number(props.orderId) : null,
             }),
         })
@@ -549,112 +518,6 @@ function commitSortNum() {
     color: #2563eb;
 }
 
-.draft-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 430;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    background: rgba(15, 23, 42, 0.45);
-}
-
-.draft-panel {
-    width: min(460px, 100%);
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
-}
-
-.draft-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 16px;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.draft-header h3 {
-    margin: 0;
-    font-size: 16px;
-    color: #0f172a;
-}
-
-.draft-close {
-    border: none;
-    background: transparent;
-    font-size: 22px;
-    line-height: 1;
-    color: #64748b;
-    cursor: pointer;
-}
-
-.draft-body {
-    padding: 14px 16px;
-}
-
-.draft-help {
-    margin: 0 0 12px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #475569;
-}
-
-.draft-options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.draft-option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #1e293b;
-}
-
-.draft-option.active {
-    border-color: #0f766e;
-    background: #f0fdfa;
-}
-
-.draft-error {
-    margin: 10px 0 0;
-    color: #b91c1c;
-    font-size: 13px;
-}
-
-.draft-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 12px 16px 16px;
-}
-
-.action-btn {
-    padding: 6px 12px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    background: #fff;
-    color: #1e293b;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.action-btn-primary {
-    background: #0f766e;
-    border-color: #0f766e;
-    color: #fff;
-}
-
-.action-btn:disabled,
-.action-btn-primary:disabled,
 .draft-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;

@@ -2,107 +2,192 @@
     <div class="list-page-container">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
-            <div v-if="!isRestrictedListMode" class="order-type-filters">
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'service' }"
-                    @click="orderTypeFilter = 'service'"
-                >
-                    service
-                </button>
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'closing' }"
-                    @click="orderTypeFilter = 'closing'"
-                >
-                    closing
-                </button>
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'invoice' }"
-                    @click="orderTypeFilter = 'invoice'"
-                >
-                    invoice
-                </button>
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'loaner' }"
-                    @click="orderTypeFilter = 'loaner'"
-                >
-                    loaner
-                </button>
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'waiting_list' }"
-                    @click="orderTypeFilter = 'waiting_list'"
-                >
-                    waiting
-                </button>
-                <button
-                    type="button"
-                    class="order-type-btn"
-                    :class="{ active: orderTypeFilter === 'abroad' }"
-                    @click="orderTypeFilter = 'abroad'"
-                >
-                    abroad
-                </button>
+            <div class="header-left">
+                <div v-if="!isRestrictedListMode" class="order-type-filters">
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'service' }"
+                        @click="orderTypeFilter = 'service'"
+                    >
+                        service
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'tech_comp' }"
+                        @click="orderTypeFilter = 'tech_comp'"
+                    >
+                        Tech Comp.
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'closing' }"
+                        @click="orderTypeFilter = 'closing'"
+                    >
+                        closing
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'invoice' }"
+                        @click="orderTypeFilter = 'invoice'"
+                    >
+                        Invoice
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'loaner' }"
+                        @click="orderTypeFilter = 'loaner'"
+                    >
+                        loaner
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'waiting_list' }"
+                        @click="orderTypeFilter = 'waiting_list'"
+                    >
+                        waiting
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: orderTypeFilter === 'abroad' }"
+                        @click="orderTypeFilter = 'abroad'"
+                    >
+                        abroad
+                    </button>
+                </div>
             </div>
-            <div class="search-area">
-                <label for="customSearchInput">Quick Filer:</label>
-                <input
-                    type="text"
-                    id="customSearchInput"
-                    v-model="searchQuery"
-                    placeholder="複数キーワードはスペース区切り（例: sony 修理）"
-                >
-                <button type="button" @click="clearSearch">Clear</button>
+            <!-- グループB: 日付フィルタ + Quick Filter + Clear + RMA + Update SM -->
+            <div class="header-center">
+                <div v-if="!isRestrictedListMode" class="arrival-date-filters">
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === 'all' }"
+                        @click="arrivalFilter = 'all'"
+                    >
+                        All
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === 'hide_future' }"
+                        @click="arrivalFilter = 'hide_future'"
+                    >
+                        Hide Future
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === 'today' }"
+                        @click="arrivalFilter = 'today'"
+                    >
+                        Today
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === '1day' }"
+                        @click="arrivalFilter = '1day'"
+                    >
+                        1Day
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === '2day' }"
+                        @click="arrivalFilter = '2day'"
+                    >
+                        2Day
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === '3day' }"
+                        @click="arrivalFilter = '3day'"
+                    >
+                        3Day
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: arrivalFilter === '1wk' }"
+                        @click="arrivalFilter = '1wk'"
+                    >
+                        1Wk
+                    </button>
+                </div>
+                <div class="search-area">
+                    <input
+                        type="text"
+                        id="customSearchInput"
+                        v-model="searchQuery"
+                        placeholder="Quick Filter : 複数キーワードはスペース区切り（例: sony 修理）"
+                    >
+                    <button type="button" @click="clearSearch">Clear</button>
+                    <button
+                        v-if="!isRestrictedListMode"
+                        type="button"
+                        class="sm-mode-btn"
+                        :class="{ active: orderTypeFilter === 'rma' }"
+                        @click="orderTypeFilter = 'rma'"
+                    >RMA</button>
+                    <button
+                        v-if="!isRestrictedListMode"
+                        type="button"
+                        class="sm-mode-btn"
+                        :class="{ active: orderTypeFilter === 'update_sm' }"
+                        @click="orderTypeFilter = 'update_sm'"
+                    >Update SM</button>
+                </div>
             </div>
-            <div v-if="isBoardMode" class="logistics-view-controls">
-                <button
-                    type="button"
-                    class="view-mode-btn"
-                    :class="{ active: logisticsViewMode === 'list' }"
-                    @click="logisticsViewMode = 'list'"
-                >
-                    一覧のみ
-                </button>
-                <button
-                    type="button"
-                    class="view-mode-btn"
-                    :class="{ active: logisticsViewMode === 'both' }"
-                    @click="logisticsViewMode = 'both'"
-                >
-                    一覧+カレンダー
-                </button>
-                <button
-                    type="button"
-                    class="view-mode-btn"
-                    :class="{ active: logisticsViewMode === 'calendar' }"
-                    @click="logisticsViewMode = 'calendar'"
-                >
-                    カレンダーのみ
-                </button>
-                <button
-                    type="button"
-                    class="view-mode-btn swap-btn"
-                    :disabled="logisticsViewMode !== 'both'"
-                    @click="logisticsCalendarOnLeft = !logisticsCalendarOnLeft"
-                >
-                    左右入替
-                </button>
-            </div>
-            <div class="home-link-area">
-                <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
-                <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
-                <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
-                <a v-if="!isRestrictedListMode" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
-                <a v-if="!isRestrictedListMode" :href="priceRevisionUrl" class="calendar-link">価格改定</a>
-                <CloseToHomeButton :href="homeUrl" />
+            <div class="header-right">
+                <div v-if="isBoardMode" class="logistics-view-controls">
+                    <button
+                        type="button"
+                        class="view-mode-btn"
+                        :class="{ active: logisticsViewMode === 'list' }"
+                        @click="logisticsViewMode = 'list'"
+                    >
+                        一覧のみ
+                    </button>
+                    <button
+                        type="button"
+                        class="view-mode-btn"
+                        :class="{ active: logisticsViewMode === 'both' }"
+                        @click="logisticsViewMode = 'both'"
+                    >
+                        一覧+カレンダー
+                    </button>
+                    <button
+                        type="button"
+                        class="view-mode-btn"
+                        :class="{ active: logisticsViewMode === 'calendar' }"
+                        @click="logisticsViewMode = 'calendar'"
+                    >
+                        カレンダーのみ
+                    </button>
+                    <button
+                        type="button"
+                        class="view-mode-btn swap-btn"
+                        :disabled="logisticsViewMode !== 'both'"
+                        @click="logisticsCalendarOnLeft = !logisticsCalendarOnLeft"
+                    >
+                        左右入替
+                    </button>
+                </div>
+                <div class="home-link-area">
+                    <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
+                    <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
+                    <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
+                    <a v-if="!isRestrictedListMode" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
+                    <CloseToHomeButton :href="homeUrl" />
+                </div>
             </div>
         </div>
 
@@ -249,6 +334,7 @@
             </Splitpanes>
         </template>
         <div v-else class="scrollable-table-zone">
+            <!-- abroad: Excel 作成画面 -->
             <div v-if="orderTypeFilter === 'abroad'" class="abroad-toolbar">
                 <button
                     type="button"
@@ -259,6 +345,32 @@
                     Create Excel File{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
                 </button>
                 <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
+            </div>
+            <!-- RMA / Update SM: Sync SM + Auto update -->
+            <div v-else-if="isSmListMode" class="abroad-toolbar abroad-toolbar-sm">
+                <div class="abroad-toolbar-main">
+                    <button
+                        type="button"
+                        class="abroad-excel-btn abroad-sync-sm-btn"
+                        :disabled="abroadSelectedCount === 0 || abroadSyncSmBusy"
+                        @click="syncSmSelected"
+                    >
+                        Sync SM{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                    </button>
+                    <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
+                </div>
+                <label class="auto-update-toggle" :class="{ on: smListAutoUpdate }">
+                    <span>Auto update</span>
+                    <input
+                        type="checkbox"
+                        role="switch"
+                        :checked="smListAutoUpdate"
+                        @change="smListAutoUpdate = $event.target.checked"
+                    >
+                    <span class="auto-update-track" aria-hidden="true">
+                        <span class="auto-update-thumb" />
+                    </span>
+                </label>
             </div>
             <table id="myLargeTable">
                 <thead>
@@ -274,13 +386,36 @@
                                 @change="toggleAbroadSelectAll($event)"
                             >
                         </th>
-                        <th>受領日</th>
-                        <th>ステータス</th>
-                        <th>製品名</th>
-                        <th>S/N</th>
+                        <th>receivedDate</th>
+                        <th>status</th>
+                        <th>productName</th>
+                        <th>SN</th>
                         <th>作業内容</th>
-                        <th>販売店</th>
-                        <th>部署</th>
+                        <th>dealer</th>
+                        <th>A2LA</th>
+                        <th>symptoms</th>
+                    </tr>
+                    <tr v-else-if="isSmListMode">
+                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <th style="width: 44px; text-align: center;">
+                            <input
+                                type="checkbox"
+                                :checked="abroadAllVisibleSelected"
+                                :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                title="表示中を全選択"
+                                @click.stop
+                                @change="toggleAbroadSelectAll($event)"
+                            >
+                        </th>
+                        <th>RMA#</th>
+                        <th>sm_workorder</th>
+                        <th>productName</th>
+                        <th>SN</th>
+                        <th>entityID</th>
+                        <th>作業内容</th>
+                        <th>incident</th>
+                        <th style="width: 96px; text-align: center;">symptomsNum</th>
+                        <th>symptoms</th>
                     </tr>
                     <tr v-else>
                         <th style="width: 80px; text-align: center;">OrderID</th>
@@ -322,7 +457,37 @@
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
                             <td>{{ r.dealer }}</td>
-                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ abroadA2laLabel(r.a2la) }}</td>
+                            <td>{{ r.symptoms }}</td>
+                        </template>
+                        <template v-else-if="isSmListMode">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ r.sm_workorder }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="entity-id-input"
+                                    :value="r.entityID ?? ''"
+                                    :disabled="entityIdSavingOrderId === r.orderID"
+                                    @focus="onEntityIdFocus(r, $event)"
+                                    @keydown.enter.prevent="$event.target.blur()"
+                                    @blur="onEntityIdBlur(r, $event)"
+                                >
+                            </td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.incident }}</td>
+                            <td style="text-align: center;">{{ symptomsNumForRecord(r) }}</td>
+                            <td>{{ r.symptoms }}</td>
                         </template>
                         <template v-else>
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -367,7 +532,11 @@
                             <table class="abroad-preview-table">
                                 <thead>
                                     <tr>
-                                        <th v-for="header in abroadExcelHeaders" :key="header">{{ header }}</th>
+                                        <th
+                                            v-for="(header, headerIndex) in abroadExcelHeaders"
+                                            :key="header"
+                                            :class="{ 'abroad-rma-header': headerIndex === ABROAD_RMA_HEADER_INDEX }"
+                                        >{{ header }}</th>
                                         <th style="width: 72px;">操作</th>
                                     </tr>
                                 </thead>
@@ -378,6 +547,8 @@
                                                 v-model="abroadExcelPreviewRows[rowIndex][cellIndex]"
                                                 type="text"
                                                 class="abroad-cell-input"
+                                                :readonly="cellIndex === ABROAD_RMA_HEADER_INDEX"
+                                                :title="cellIndex === ABROAD_RMA_HEADER_INDEX ? 'RMA# は常に空欄です' : undefined"
                                             >
                                         </td>
                                         <td>
@@ -581,6 +752,7 @@ import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
 import { redirectToLogin } from '@/utils/auth'
 import { apiFetch } from '@/utils/apiFetch'
+import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 import { findServiceMaster } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -630,10 +802,6 @@ const shippingCalendarUrl = computed(() => {
     const base = getBasePath()
     return `${window.location.origin}${base}/shipping-calendar`
 })
-const priceRevisionUrl = computed(() => {
-    const base = getBasePath()
-    return `${window.location.origin}${base}/master-price-revision`
-})
 
 onMounted(() => {
     if (!page.props.authUser) {
@@ -653,11 +821,39 @@ onMounted(() => {
 
 onUnmounted(() => {
     stopLogisticsAutoRefresh()
+    stopSmListAutoRefresh()
 })
 
 // --- 第1階層 ---
 const searchQuery = ref('')
 const orderTypeFilter = ref('service')
+const isSmListMode = computed(() =>
+    orderTypeFilter.value === 'rma' || orderTypeFilter.value === 'update_sm',
+)
+const ARRIVAL_FILTER_STORAGE_KEY = 'serviceRecordArrivalFilter'
+const ARRIVAL_FILTERS = ['all', 'hide_future', 'today', '1day', '2day', '3day', '1wk']
+
+function loadArrivalFilter() {
+    if (typeof sessionStorage === 'undefined') return 'hide_future'
+    try {
+        const raw = sessionStorage.getItem(ARRIVAL_FILTER_STORAGE_KEY)
+        if (ARRIVAL_FILTERS.includes(raw)) return raw
+    } catch {
+        // private mode 等は無視
+    }
+    return 'hide_future'
+}
+
+function saveArrivalFilter(value) {
+    if (typeof sessionStorage === 'undefined') return
+    try {
+        sessionStorage.setItem(ARRIVAL_FILTER_STORAGE_KEY, value)
+    } catch {
+        // quota / private mode 等は無視
+    }
+}
+
+const arrivalFilter = ref(loadArrivalFilter())
 const selectedOrderId = ref(null)
 const abroadSelectedIds = ref(new Set())
 const abroadExcelMessage = ref('')
@@ -666,10 +862,170 @@ const abroadGalleryPickerOpen = ref(false)
 const abroadExcelPreviewRows = ref([])
 const abroadAttachedImages = ref([])
 const abroadExcelCreating = ref(false)
-const abroadExcelHeaders = ['OrderID', '受領日', 'ステータス', '製品名', 'S/N', '作業内容', '販売店', '部署']
+const abroadSyncSmBusy = ref(false)
+const entityIdSavingOrderId = ref(null)
+const entityIdEditOriginal = new Map()
+const smListAutoUpdate = ref(false)
+const smListAutoRefreshTimer = ref(null)
+const smListAutoRefreshing = ref(false)
+const SM_LIST_AUTO_REFRESH_MS = 60 * 1000
+/** 詳細オープン直後の誤 close（dblclick の残存 click / Inertia 競合）を無視する */
+const detailCloseGuardUntil = ref(0)
+const SYMPTOMS_NUM_RECAL_DESCRIPTIONS = new Set(['再校正', '保守内再校正', '新台再校正'])
+const abroadExcelHeaders = [
+    'Product Name',
+    'S/N',
+    'PO#',
+    'RMA#',
+    'Request Type (Repair/Recertification)',
+    'ISO/A2LA Required ?',
+    'Pre-Test Results Required ?',
+    'Post-Test Results Required ?',
+    'Customer Failure Description',
+    'Other requests, etc.',
+]
+const ABROAD_RMA_HEADER_INDEX = 3
+const ABROAD_PRETEST_HEADER_INDEX = 6
+const ABROAD_POSTTEST_HEADER_INDEX = 7
+
+function symptomsNumForRecord(record) {
+    const description = String(record?.return_code_master?.description ?? '').trim()
+    return SYMPTOMS_NUM_RECAL_DESCRIPTIONS.has(description) ? 3 : 0
+}
+
+function onEntityIdFocus(record, event) {
+    entityIdEditOriginal.set(record.orderID, String(event.target.value ?? ''))
+}
+
+async function onEntityIdBlur(record, event) {
+    const next = String(event.target.value ?? '')
+    const prev = String(entityIdEditOriginal.get(record.orderID) ?? record.entityID ?? '')
+    entityIdEditOriginal.delete(record.orderID)
+    record.entityID = next
+    if (next === prev || entityIdSavingOrderId.value === record.orderID) return
+
+    entityIdSavingOrderId.value = record.orderID
+    abroadExcelMessage.value = ''
+    const url = `${window.location.origin}${getBasePath()}/${record.orderID}`
+    try {
+        const result = await apiFetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({ entityID: next }),
+        })
+        if (!result) {
+            record.entityID = prev
+            event.target.value = prev
+            return
+        }
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `entityID の保存に失敗しました。（HTTP ${response.status}）`)
+        }
+        if (activeRecord.value?.orderID === record.orderID) {
+            activeRecord.value.entityID = next
+            if (draftRecord.value) draftRecord.value.entityID = next
+        }
+    } catch (e) {
+        record.entityID = prev
+        event.target.value = prev
+        abroadExcelMessage.value = e.message || 'entityID の保存に失敗しました。'
+    } finally {
+        entityIdSavingOrderId.value = null
+    }
+}
+
+async function syncSmSelected() {
+    if (abroadSelectedIds.value.size === 0 || abroadSyncSmBusy.value) return
+    abroadSyncSmBusy.value = true
+    abroadExcelMessage.value = ''
+    try {
+        // Sync SM API 未接続: UI と選択件数のみ反映
+        abroadExcelMessage.value = `Sync SM: ${abroadSelectedIds.value.size} 件を選択中（同期処理は未接続）`
+    } finally {
+        abroadSyncSmBusy.value = false
+    }
+}
+
+async function refreshSmListData() {
+    if (!isSmListMode.value || !smListAutoUpdate.value) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (smListAutoRefreshing.value) return
+    // 詳細表示中 / オープン直後は一覧リロードしない（Inertia 競合で詳細が閉じるのを防ぐ）
+    if (isDetailOpen.value || Date.now() < detailCloseGuardUntil.value) return
+
+    smListAutoRefreshing.value = true
+    try {
+        await reloadListRecords({ preserveState: true })
+        // リロード中に詳細が開いた場合は以降の処理を打ち切る
+        if (isDetailOpen.value) return
+    } finally {
+        smListAutoRefreshing.value = false
+    }
+}
+
+function startSmListAutoRefresh() {
+    stopSmListAutoRefresh()
+    if (!smListAutoUpdate.value || !isSmListMode.value) return
+    smListAutoRefreshTimer.value = window.setInterval(() => {
+        refreshSmListData()
+    }, SM_LIST_AUTO_REFRESH_MS)
+}
+
+function stopSmListAutoRefresh() {
+    if (smListAutoRefreshTimer.value != null) {
+        window.clearInterval(smListAutoRefreshTimer.value)
+        smListAutoRefreshTimer.value = null
+    }
+}
 // Home→Logistics / 出荷準備 遷移時は「カレンダーのみ / 日 / 今日」を初期表示
-const logisticsViewMode = ref(isBoardMode.value ? 'calendar' : 'both') // list | both | calendar
-const logisticsCalendarOnLeft = ref(false)
+// 自動更新等でコンポーネントが再マウントされても、選択済みの表示方法を維持する
+const BOARD_VIEW_STORAGE_PREFIX = 'serviceRecord.boardView.'
+const BOARD_VIEW_MODES = ['list', 'both', 'calendar']
+
+function boardViewStorageKey(mode) {
+    return `${BOARD_VIEW_STORAGE_PREFIX}${mode}`
+}
+
+function loadBoardViewPrefs(mode) {
+    if (typeof sessionStorage === 'undefined' || !mode) return null
+    try {
+        const raw = sessionStorage.getItem(boardViewStorageKey(mode))
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        if (!parsed || typeof parsed !== 'object') return null
+        const viewMode = BOARD_VIEW_MODES.includes(parsed.viewMode) ? parsed.viewMode : null
+        const calendarOnLeft = typeof parsed.calendarOnLeft === 'boolean' ? parsed.calendarOnLeft : null
+        if (!viewMode && calendarOnLeft === null) return null
+        return { viewMode, calendarOnLeft }
+    } catch {
+        return null
+    }
+}
+
+function saveBoardViewPrefs(mode, viewMode, calendarOnLeft) {
+    if (typeof sessionStorage === 'undefined' || !mode) return
+    try {
+        sessionStorage.setItem(
+            boardViewStorageKey(mode),
+            JSON.stringify({ viewMode, calendarOnLeft }),
+        )
+    } catch {
+        // quota / private mode 等は無視
+    }
+}
+
+const savedBoardView = isBoardMode.value ? loadBoardViewPrefs(props.mode) : null
+const logisticsViewMode = ref(
+    savedBoardView?.viewMode ?? (isBoardMode.value ? 'calendar' : 'both'),
+) // list | both | calendar
+const logisticsCalendarOnLeft = ref(savedBoardView?.calendarOnLeft ?? false)
 const logisticsCalendarRef = ref(null)
 const logisticsAutoRefreshTimer = ref(null)
 const logisticsAutoRefreshing = ref(false)
@@ -709,6 +1065,9 @@ function onLogisticsSplitResized() {
 }
 
 watch([logisticsViewMode, logisticsCalendarOnLeft], () => {
+    if (isBoardMode.value) {
+        saveBoardViewPrefs(props.mode, logisticsViewMode.value, logisticsCalendarOnLeft.value)
+    }
     nextTick(() => {
         window.dispatchEvent(new Event('resize'))
     })
@@ -732,6 +1091,41 @@ async function onLogisticsCalendarSelect({ orderId, pending }) {
     }
 }
 
+function tokyoTodayYmd() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
+}
+
+function addDaysYmd(ymd, days) {
+    const [y, m, d] = ymd.split('-').map(Number)
+    const utc = new Date(Date.UTC(y, m - 1, d + days))
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${utc.getUTCFullYear()}-${pad(utc.getUTCMonth() + 1)}-${pad(utc.getUTCDate())}`
+}
+
+function matchesArrivalFilter(record, filter) {
+    if (filter === 'all') return true
+
+    const ymd = formatListDate(record?.receivedDate)
+    const today = tokyoTodayYmd()
+
+    if (filter === 'hide_future') {
+        if (!ymd) return true
+        return ymd <= today
+    }
+    if (!ymd) return false
+    if (filter === 'today') return ymd === today
+    if (filter === '1day') return ymd === addDaysYmd(today, -1)
+    if (filter === '2day') return ymd >= addDaysYmd(today, -2) && ymd <= today
+    if (filter === '3day') return ymd >= addDaysYmd(today, -3) && ymd <= today
+    if (filter === '1wk') return ymd >= addDaysYmd(today, -7) && ymd <= today
+    return true
+}
+
 const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
@@ -742,6 +1136,10 @@ const filteredRecords = computed(() => {
         })
     } else if (!isBoardMode.value) {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+    }
+
+    if (!isRestrictedListMode.value) {
+        records = records.filter((r) => matchesArrivalFilter(r, arrivalFilter.value))
     }
 
     if (!searchQuery.value) return records
@@ -764,6 +1162,7 @@ const filteredRecords = computed(() => {
             r.RMA,
             r.productName,
             r.SN,
+            r.returnCode,
             r.return_code_master?.description,
             r.labor_master?.laborName,
             r.dealer,
@@ -772,6 +1171,14 @@ const filteredRecords = computed(() => {
             r.email,
             r.phone,
             r.order_type,
+            r.poNum,
+            r.a2la,
+            r.symptoms,
+            r.sm_workorder,
+            r.entityID,
+            r.incident,
+            String(symptomsNumForRecord(r)),
+            r.RMA,
         ]
             .filter(Boolean)
             .join(' ')
@@ -827,18 +1234,31 @@ function clearAbroadSelection() {
     closeAbroadExcelPreview()
 }
 
+function abroadRequestType(returnCode) {
+    const code = Number(returnCode)
+    if ([1, 5, 9].includes(code)) return 'Certification'
+    if ([2, 3, 4, 13].includes(code)) return 'Repair'
+    return ''
+}
+
+function abroadA2laLabel(a2la) {
+    return a2la === 1 || a2la === '1' || a2la === true ? 'Yes' : 'No'
+}
+
 function buildAbroadExcelRows() {
     return filteredRecords.value
         .filter((r) => abroadSelectedIds.value.has(r.orderID))
         .map((r) => [
-            String(r.orderID ?? ''),
-            String(formatListDate(r.receivedDate) || r.receivedDate || ''),
-            String(statusLabel(r) || ''),
             String(r.productName || ''),
             String(r.SN || ''),
-            String(r.return_code_master?.description || ''),
-            String(r.dealer || ''),
-            String(r.dealer_depart || ''),
+            String(r.RMA || ''), // PO# ← servicerecord.RMA
+            '', // RMA# は常に空欄
+            abroadRequestType(r.returnCode),
+            abroadA2laLabel(r.a2la),
+            'No',
+            'No',
+            String(r.symptoms || ''),
+            '',
         ])
 }
 
@@ -864,7 +1284,10 @@ function closeAbroadExcelPreview() {
 }
 
 function addAbroadExcelRow() {
-    abroadExcelPreviewRows.value.push(abroadExcelHeaders.map(() => ''))
+    const row = abroadExcelHeaders.map(() => '')
+    row[ABROAD_PRETEST_HEADER_INDEX] = 'No'
+    row[ABROAD_POSTTEST_HEADER_INDEX] = 'No'
+    abroadExcelPreviewRows.value.push(row)
 }
 
 function removeAbroadExcelRow(index) {
@@ -925,6 +1348,23 @@ function resolveExcelImageExtension(fileName, mimeType) {
     return 'jpeg'
 }
 
+/** 例: RMA Request 20260702_03 (1).xlsx */
+function nextAbroadExcelFileName() {
+    const ymd = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date()).replace(/-/g, '')
+
+    const storageKey = `abroadExcelSeq_${ymd}`
+    let seq = Number(localStorage.getItem(storageKey) || '0') + 1
+    if (!Number.isFinite(seq) || seq < 1) seq = 1
+    localStorage.setItem(storageKey, String(seq))
+    const seqStr = String(seq).padStart(2, '0')
+    return `RMA Request ${ymd}_${seqStr} (1).xlsx`
+}
+
 async function downloadAbroadExcelFile() {
     const rows = abroadExcelPreviewRows.value
     if (!rows.length) {
@@ -943,38 +1383,68 @@ async function downloadAbroadExcelFile() {
         const dataSheet = workbook.addWorksheet('Data', {
             views: [{ state: 'frozen', ySplit: 1 }],
         })
+        const thinBorder = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } },
+        }
+        const headerRowHeight = 36
+        const cellFont = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF000000' } }
+
         dataSheet.addRow([...abroadExcelHeaders])
         rows.forEach((row) => {
-            dataSheet.addRow(row.map((cell) => (cell == null ? '' : String(cell))))
+            const values = row.map((cell) => (cell == null ? '' : String(cell)))
+            values[ABROAD_RMA_HEADER_INDEX] = ''
+            dataSheet.addRow(values)
         })
 
         const headerRow = dataSheet.getRow(1)
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-        headerRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF0F766E' },
-        }
+        headerRow.font = { ...cellFont }
+        headerRow.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
+        headerRow.height = headerRowHeight
         abroadExcelHeaders.forEach((_, index) => {
-            const column = dataSheet.getColumn(index + 1)
-            column.width = Math.max(12, String(abroadExcelHeaders[index]).length + 4)
-        })
-        dataSheet.columns.forEach((column) => {
-            let max = column.width || 12
-            column.eachCell({ includeEmpty: true }, (cell) => {
-                const len = String(cell.value ?? '').length
-                if (len + 2 > max) max = Math.min(40, len + 2)
-            })
-            column.width = max
+            const cell = headerRow.getCell(index + 1)
+            cell.font = { ...cellFont }
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: index === ABROAD_RMA_HEADER_INDEX ? 'FFFFFF00' : 'FFFFFFFF' },
+            }
+            cell.border = thinBorder
         })
 
-        // リストの下に画像のみを水平配置（ラベル・ファイル名・日付は付けない）
+        const columnWidths = [22, 14, 12, 12, 28, 18, 22, 22, 36, 28]
+        columnWidths.forEach((width, index) => {
+            dataSheet.getColumn(index + 1).width = width
+        })
+
+        rows.forEach((_, rowIndex) => {
+            const excelRow = dataSheet.getRow(rowIndex + 2)
+            excelRow.height = headerRowHeight
+            excelRow.font = { ...cellFont }
+            excelRow.alignment = { vertical: 'middle', wrapText: true }
+            abroadExcelHeaders.forEach((__, colIndex) => {
+                const cell = excelRow.getCell(colIndex + 1)
+                cell.font = { ...cellFont }
+                cell.border = thinBorder
+                if (colIndex === ABROAD_RMA_HEADER_INDEX) {
+                    cell.value = ''
+                }
+                if (
+                    (colIndex === ABROAD_PRETEST_HEADER_INDEX || colIndex === ABROAD_POSTTEST_HEADER_INDEX)
+                    && !String(cell.value ?? '').trim()
+                ) {
+                    cell.value = 'No'
+                }
+            })
+        })
+
         if (abroadAttachedImages.value.length) {
             const imageHeightPx = 220
             const imageWidthPx = 280
             const colSpanPerImage = 3.2
-            // exceljs の tl は 0-based。データ最終行(1-based)=rows.length+1 の次行
-            const imageTopRow = rows.length + 1
+            const imageTopRow = rows.length + 3
             let imageIndex = 0
 
             for (let i = 0; i < abroadAttachedImages.value.length; i += 1) {
@@ -997,8 +1467,21 @@ async function downloadAbroadExcelFile() {
             }
         }
 
-        const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
-        const xlsxBuffer = await workbook.xlsx.writeBuffer()
+        let xlsxBuffer = await workbook.xlsx.writeBuffer()
+        const msip = page.props.msip || {}
+        const labelId = String(msip.publicLabelId || '').trim()
+        const siteId = String(msip.siteId || '').trim()
+        let labelApplied = false
+        if (labelId && siteId) {
+            xlsxBuffer = await applySensitivityLabel(xlsxBuffer, {
+                labelId,
+                siteId,
+                method: 'Privileged',
+                contentBits: 0,
+            })
+            labelApplied = true
+        }
+
         const blob = new Blob(
             [xlsxBuffer],
             { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
@@ -1006,7 +1489,7 @@ async function downloadAbroadExcelFile() {
         const url = URL.createObjectURL(blob)
         const anchor = document.createElement('a')
         anchor.href = url
-        anchor.download = `abroad_${stamp}.xlsx`
+        anchor.download = nextAbroadExcelFileName()
         document.body.appendChild(anchor)
         anchor.click()
         anchor.remove()
@@ -1014,7 +1497,10 @@ async function downloadAbroadExcelFile() {
 
         abroadExcelMessage.value = `${rows.length} 行` +
             (abroadAttachedImages.value.length ? ` + 画像 ${abroadAttachedImages.value.length} 件` : '') +
-            ' を 1 つの Excel ファイル（.xlsx）で出力しました。'
+            ' を 1 つの Excel ファイル（.xlsx）で出力しました。' +
+            (labelApplied
+                ? '（秘密度ラベル: Public）'
+                : '（秘密度ラベル未設定: .env の MSIP_PUBLIC_LABEL_ID / MSIP_SITE_ID を設定してください）')
         closeAbroadExcelPreview()
     } catch (e) {
         abroadExcelMessage.value = e.message || 'ファイル作成に失敗しました。'
@@ -1024,10 +1510,47 @@ async function downloadAbroadExcelFile() {
 }
 
 watch(orderTypeFilter, (value) => {
-    if (value !== 'abroad') {
+    if (value !== 'abroad' && value !== 'rma' && value !== 'update_sm') {
         clearAbroadSelection()
+        stopSmListAutoRefresh()
+    } else {
+        abroadSelectedIds.value = new Set()
+        abroadExcelMessage.value = ''
+        closeAbroadExcelPreview()
+        if (value === 'rma' || value === 'update_sm') {
+            if (smListAutoUpdate.value) startSmListAutoRefresh()
+            else stopSmListAutoRefresh()
+        } else {
+            stopSmListAutoRefresh()
+        }
     }
 })
+
+watch(smListAutoUpdate, (enabled) => {
+    if (enabled && isSmListMode.value) startSmListAutoRefresh()
+    else stopSmListAutoRefresh()
+})
+
+watch(arrivalFilter, (value) => {
+    if (ARRIVAL_FILTERS.includes(value)) {
+        saveArrivalFilter(value)
+    }
+})
+
+function matchesAbroadFilter(record) {
+    return Number(record?.rmaNumOverSea) === 123
+        || String(record?.rmaNumOverSea ?? '').trim() === '123'
+}
+
+function matchesRmaFilter(record) {
+    return Number(record?.RMA) === 123
+        || String(record?.RMA ?? '').trim() === '123'
+}
+
+function matchesUpdateSmFilter(record) {
+    return Number(record?.sm_quote) === 123
+        || String(record?.sm_quote ?? '').trim() === '123'
+}
 
 function matchesOrderTypeFilter(record, filter) {
     const orderType = record?.order_type ?? null
@@ -1035,6 +1558,10 @@ function matchesOrderTypeFilter(record, filter) {
 
     if (filter === 'service') {
         return orderType === 'service' || orderType == null || orderType === ''
+    }
+    if (filter === 'tech_comp') {
+        const isService = orderType === 'service' || orderType == null || orderType === ''
+        return isService && (status === 190 || status === 191)
     }
     if (filter === 'closing') {
         const isServiceOrLoaner = orderType === 'service'
@@ -1053,8 +1580,13 @@ function matchesOrderTypeFilter(record, filter) {
         return orderType === 'waiting_list'
     }
     if (filter === 'abroad') {
-        return Number(record?.rmaNumOverSea) === 123
-            || String(record?.rmaNumOverSea ?? '').trim() === '123'
+        return matchesAbroadFilter(record)
+    }
+    if (filter === 'rma') {
+        return matchesRmaFilter(record)
+    }
+    if (filter === 'update_sm') {
+        return matchesUpdateSmFilter(record)
     }
     return true
 }
@@ -1101,6 +1633,7 @@ const isSavingRecord = ref(false)
 const saveError = ref('')
 const detailLoading = ref(false)
 const detailOpenError = ref('')
+const attachmentsRequestSeq = ref(0)
 
 function getBasePath() {
     return window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
@@ -1160,39 +1693,43 @@ function onReloadAttachments() {
     loadAttachments(activeRecord.value.orderID)
 }
 
-function loadAttachments(orderID) {
-    return new Promise((resolve) => {
-        attachmentsLoading.value = true
-        attachmentsError.value = ''
-        activeNotes.value = []
-        activeFiles.value = []
-        activeCapturedImages.value = []
-        activeParts.value = []
-        activeStockedParts.value = []
-        activeLoaners.value = []
+/**
+ * 添付は Inertia ではなく JSON API で取得する。
+ * Auto update の router.reload と競合すると詳細 state が落ちて一覧に戻るため。
+ */
+async function loadAttachments(orderID) {
+    const requestSeq = ++attachmentsRequestSeq.value
+    attachmentsLoading.value = true
+    attachmentsError.value = ''
+    activeNotes.value = []
+    activeFiles.value = []
+    activeCapturedImages.value = []
+    activeParts.value = []
+    activeStockedParts.value = []
+    activeLoaners.value = []
 
-        router.get(
-            window.location.pathname,
-            { loadOrderID: orderID },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ['attachmentData'],
-                onSuccess: (page) => {
-                    applyAttachmentData(page.props.attachmentData)
-                    resolve()
-                },
-                onError: () => {
-                    attachmentsError.value = '添付データの取得に失敗しました。'
-                    resolve()
-                },
-                onFinish: () => {
-                    attachmentsLoading.value = false
-                },
-            },
-        )
-    })
+    try {
+        const url = `${window.location.origin}${getBasePath()}/attachments/${orderID}`
+        const result = await apiFetch(url)
+        if (requestSeq !== attachmentsRequestSeq.value) return
+        if (!result) {
+            attachmentsError.value = '添付データの取得に失敗しました。'
+            return
+        }
+        const { response, data } = result
+        if (!response.ok) {
+            attachmentsError.value = data?.message || `添付データの取得に失敗しました。（HTTP ${response.status}）`
+            return
+        }
+        applyAttachmentData(data)
+    } catch (e) {
+        if (requestSeq !== attachmentsRequestSeq.value) return
+        attachmentsError.value = e.message || '添付データの取得に失敗しました。'
+    } finally {
+        if (requestSeq === attachmentsRequestSeq.value) {
+            attachmentsLoading.value = false
+        }
+    }
 }
 
 async function fetchRecord(orderID) {
@@ -1225,6 +1762,11 @@ async function openSecondLayer(record) {
         return
     }
 
+    // 詳細表示中は Auto update を止め、誤 close を短時間ガードする
+    stopSmListAutoRefresh()
+    stopLogisticsAutoRefresh()
+    detailCloseGuardUntil.value = Date.now() + 500
+
     detailOpenError.value = ''
     attachmentsError.value = ''
     activeRecord.value = record
@@ -1246,14 +1788,19 @@ async function openSecondLayer(record) {
 
     try {
         const fullRecord = await fetchRecord(record.orderID)
+        if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
         activeRecord.value = fullRecord
         draftRecord.value = { ...fullRecord }
     } catch (e) {
+        if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
         detailOpenError.value = `${e.message || '詳細データの取得に失敗しました。'}（一覧の情報のみ表示しています）`
     } finally {
-        detailLoading.value = false
+        if (isDetailOpen.value && activeRecord.value?.orderID === record.orderID) {
+            detailLoading.value = false
+        }
     }
 
+    if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
     await loadAttachments(record.orderID)
 }
 
@@ -1262,6 +1809,7 @@ function switchDetailLayout(layout) {
 }
 
 function resetDetailState() {
+    attachmentsRequestSeq.value += 1
     isDetailOpen.value = false
     activeRecord.value = null
     draftRecord.value = null
@@ -1281,7 +1829,17 @@ function resetDetailState() {
 }
 
 async function closeDetail() {
+    // dblclick 直後の誤発火・競合による close を無視
+    if (Date.now() < detailCloseGuardUntil.value) {
+        return
+    }
     resetDetailState()
+    if (smListAutoUpdate.value && isSmListMode.value) {
+        startSmListAutoRefresh()
+    }
+    if (isBoardMode.value) {
+        startLogisticsAutoRefresh()
+    }
     // administrator: 詳細から一覧へ戻るたびに一覧を再取得
     if (props.mode === 'admin') {
         await reloadListRecords({ preserveState: true })
@@ -1373,7 +1931,14 @@ async function onEngineerWorkflowDone() {
 }
 
 async function finishListWorkflow() {
+    detailCloseGuardUntil.value = 0
     resetDetailState()
+    if (smListAutoUpdate.value && isSmListMode.value) {
+        startSmListAutoRefresh()
+    }
+    if (isBoardMode.value) {
+        startLogisticsAutoRefresh()
+    }
     await reloadListRecords({ preserveState: true })
 }
 
@@ -1382,22 +1947,18 @@ async function finishEngineerWorkflow() {
 }
 
 function reloadListRecords(options = {}) {
+    // Logistics / 出荷準備は表示方法（一覧/カレンダー）を保持するため常に preserveState
     const {
-        preserveState = false,
+        preserveState = isBoardMode.value,
     } = options
 
     return new Promise((resolve) => {
-        router.get(
-            window.location.pathname,
-            {},
-            {
-                only: ['initialRecords'],
-                preserveState,
-                preserveScroll: true,
-                replace: true,
-                onFinish: () => resolve(),
-            },
-        )
+        router.reload({
+            only: ['initialRecords'],
+            preserveState,
+            preserveScroll: true,
+            onFinish: () => resolve(),
+        })
     })
 }
 
@@ -1409,10 +1970,13 @@ async function refreshLogisticsData() {
     if (!isBoardMode.value) return
     if (typeof document !== 'undefined' && document.hidden) return
     if (logisticsAutoRefreshing.value) return
+    // 詳細表示中 / オープン直後は一覧・カレンダーをリロードしない
+    if (isDetailOpen.value || Date.now() < detailCloseGuardUntil.value) return
 
     logisticsAutoRefreshing.value = true
     try {
         await reloadListRecords({ preserveState: true })
+        if (isDetailOpen.value) return
         await nextTick()
         logisticsCalendarRef.value?.refetchEvents?.()
     } finally {
@@ -1569,9 +2133,9 @@ async function saveRecord() {
     flex-shrink: 0;
     display: flex;
     align-items: center;
+    /* A | ① | B | ② | C で ①=② になる */
     justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 0;
     padding: 14px 20px;
     box-sizing: border-box;
     background: #dbdbdb;
@@ -1580,22 +2144,63 @@ async function saveRecord() {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* グループA: ステータスフィルタ（左寄せ・内容を崩さない） */
+.header-left {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
+    justify-content: flex-start;
+}
+
+/* グループB: 日付 + Quick Filter + Clear + RMA + Update SM（一塊のまま中央帯） */
+.header-center {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    min-width: 0;
+    justify-content: center;
+}
+
+/* グループC: 出荷カレンダー + 閉じる（右寄せ・内容を崩さない） */
+.header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
 .order-type-filters {
     display: flex;
     gap: 6px;
-    flex: 1;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+}
+
+.arrival-date-filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
     justify-content: flex-start;
 }
 
 .order-type-btn {
     padding: 6px 12px;
     border: 1px solid #64748b;
-    border-radius: 6px;
+    border-radius: 4px;
     background: #fff;
     color: #334155;
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .order-type-btn.active {
@@ -1605,9 +2210,8 @@ async function saveRecord() {
 }
 
 .search-area {
-    flex: 1;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     gap: 8px;
 }
@@ -1628,7 +2232,7 @@ async function saveRecord() {
     color: #111827;
 }
 
-.search-area button {
+.search-area > button:not(.calendar-link):not(.sm-mode-btn) {
     padding: 6px 16px;
     background-color: #6b7280;
     color: white;
@@ -1639,8 +2243,82 @@ async function saveRecord() {
     cursor: pointer;
 }
 
+.search-area a.calendar-link,
+.search-area button.calendar-link {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.search-area a.calendar-link:hover,
+.search-area button.calendar-link:hover {
+    background: #1d4ed8;
+}
+
+/* RMA / Update SM: 未選択は白、選択時のみ緑 */
+.search-area button.sm-mode-btn {
+    padding: 6px 12px;
+    border: 1px solid #64748b;
+    border-radius: 4px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.search-area button.sm-mode-btn:hover:not(.active) {
+    background: #f8fafc;
+}
+
+.search-area button.sm-mode-btn.active {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+}
+
+.abroad-sync-sm-btn {
+    background: #0f766e;
+}
+
+.abroad-sync-sm-btn:hover:not(:disabled) {
+    background: #0d9488;
+}
+
+.entity-id-input {
+    width: 100%;
+    min-width: 88px;
+    max-width: 140px;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+    color: #111827;
+}
+
+.entity-id-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.entity-id-input:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
 .home-link-area {
-    flex: 1;
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -1659,11 +2337,10 @@ async function saveRecord() {
 .logistics-view-controls {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
     gap: 6px;
-    flex: 0 0 auto;
-    padding: 0 8px;
+    padding: 0;
 }
 
 .view-mode-btn {
@@ -1695,11 +2372,22 @@ async function saveRecord() {
     text-decoration: none;
 }
 
-.home-link-area a.calendar-link {
+.home-link-area a.calendar-link,
+.home-link-area button.calendar-link {
     padding: 6px 12px;
     border-radius: 6px;
     background: #2563eb;
     color: #fff;
+    border: none;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.home-link-area a.calendar-link:hover,
+.home-link-area button.calendar-link:hover {
+    background: #1d4ed8;
 }
 
 .scrollable-table-zone {
@@ -1717,6 +2405,71 @@ async function saveRecord() {
     gap: 12px;
     padding: 8px 0 10px;
     flex-shrink: 0;
+}
+
+.abroad-toolbar-sm {
+    justify-content: space-between;
+}
+
+.abroad-toolbar-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.auto-update-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 4px 2px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.auto-update-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.auto-update-track {
+    position: relative;
+    width: 42px;
+    height: 22px;
+    border-radius: 999px;
+    background: #94a3b8;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+}
+
+.auto-update-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+    transition: transform 0.15s ease;
+}
+
+.auto-update-toggle.on .auto-update-track,
+.auto-update-toggle:has(input:checked) .auto-update-track {
+    background: #2563eb;
+}
+
+.auto-update-toggle.on .auto-update-thumb,
+.auto-update-toggle:has(input:checked) .auto-update-thumb {
+    transform: translateX(20px);
 }
 
 .abroad-excel-btn {
@@ -1748,7 +2501,7 @@ async function saveRecord() {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 12px 16px;
     background: rgba(15, 23, 42, 0.55);
     box-sizing: border-box;
 }
@@ -1765,8 +2518,8 @@ async function saveRecord() {
 }
 
 .abroad-preview-panel-wide {
-    width: min(1280px, 100%);
-    max-height: min(92vh, 980px);
+    width: min(96vw, 1840px);
+    max-height: min(96vh, 1100px);
 }
 
 .abroad-preview-header {
@@ -1839,17 +2592,19 @@ async function saveRecord() {
 }
 
 .abroad-preview-table-wrap {
-    max-height: 280px;
+    max-height: min(42vh, 420px);
     overflow: auto;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
 }
 
 .abroad-preview-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
+    table-layout: fixed;
 }
 
 .abroad-preview-table th,
@@ -1857,16 +2612,45 @@ async function saveRecord() {
     border: 1px solid #94a3b8;
     padding: 6px 8px;
     text-align: left;
-    white-space: nowrap;
     vertical-align: middle;
 }
 
 .abroad-preview-table th {
     position: sticky;
     top: 0;
-    background: #0f766e;
-    color: #fff;
+    background: #ffffff;
+    color: #111827;
     z-index: 1;
+    white-space: normal;
+    line-height: 1.25;
+    min-width: 110px;
+}
+
+.abroad-preview-table th:nth-child(1),
+.abroad-preview-table td:nth-child(1) { min-width: 160px; width: 160px; }
+.abroad-preview-table th:nth-child(2),
+.abroad-preview-table td:nth-child(2) { min-width: 110px; width: 110px; }
+.abroad-preview-table th:nth-child(3),
+.abroad-preview-table td:nth-child(3) { min-width: 100px; width: 100px; }
+.abroad-preview-table th:nth-child(4),
+.abroad-preview-table td:nth-child(4) { min-width: 90px; width: 90px; }
+.abroad-preview-table th:nth-child(5),
+.abroad-preview-table td:nth-child(5) { min-width: 200px; width: 200px; }
+.abroad-preview-table th:nth-child(6),
+.abroad-preview-table td:nth-child(6) { min-width: 130px; width: 130px; }
+.abroad-preview-table th:nth-child(7),
+.abroad-preview-table td:nth-child(7) { min-width: 150px; width: 150px; }
+.abroad-preview-table th:nth-child(8),
+.abroad-preview-table td:nth-child(8) { min-width: 150px; width: 150px; }
+.abroad-preview-table th:nth-child(9),
+.abroad-preview-table td:nth-child(9) { min-width: 220px; width: 220px; }
+.abroad-preview-table th:nth-child(10),
+.abroad-preview-table td:nth-child(10) { min-width: 180px; width: 180px; }
+.abroad-preview-table th:nth-child(11),
+.abroad-preview-table td:nth-child(11) { min-width: 72px; width: 72px; }
+
+.abroad-preview-table th.abroad-rma-header {
+    background: #ffff00;
 }
 
 .abroad-preview-table tbody tr:nth-child(even) {
@@ -1875,7 +2659,7 @@ async function saveRecord() {
 
 .abroad-cell-input {
     width: 100%;
-    min-width: 88px;
+    min-width: 0;
     box-sizing: border-box;
     border: 1px solid #cbd5e1;
     border-radius: 4px;

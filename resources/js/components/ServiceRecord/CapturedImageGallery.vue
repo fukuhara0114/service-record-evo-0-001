@@ -47,6 +47,19 @@
                         </option>
                     </select>
                 </label>
+                <button
+                    v-if="showLinkedOnlyToggle"
+                    type="button"
+                    class="action-btn filter-toggle-btn"
+                    :class="{ active: linkedOnlyFilter }"
+                    :disabled="loading || !canAssociate"
+                    :title="linkedOnlyFilter
+                        ? 'この案件に紐づいた画像のみ表示中（再クリックで解除）'
+                        : 'この案件に紐づいた画像だけを表示'"
+                    @click="toggleLinkedOnlyFilter"
+                >
+                    紐づけ済
+                </button>
                 <button type="button" class="action-btn" :disabled="loading" @click="reload">再読込</button>
             </div>
             <div class="gallery-toolbar-right">
@@ -268,6 +281,8 @@ const associating = ref(false)
 const associateMessage = ref('')
 const associateError = ref(false)
 const deleting = ref(false)
+const linkedOnlyFilter = ref(false)
+const periodBeforeLinkedOnly = ref(null)
 
 const periodOptions = PERIOD_OPTIONS
 const hasMore = computed(() => currentPage.value < lastPage.value)
@@ -306,6 +321,11 @@ const canAssociate = computed(() => {
     const id = Number(caseAssociatedId.value)
     return Number.isFinite(id) && id > 0
 })
+/** Email からの選択モード時に「紐づけ済」フィルターボタンを表示 */
+const showLinkedOnlyToggle = computed(() => props.selectionOnly && canAssociate.value)
+const shouldFilterByAssociated = computed(() => (
+    props.filterByAssociated || linkedOnlyFilter.value
+))
 
 function tokyoTodayYmd() {
     return new Intl.DateTimeFormat('en-CA', {
@@ -461,7 +481,7 @@ function listUrl(pageNum) {
     params.set('per_page', '48')
 
     if (
-        props.filterByAssociated
+        shouldFilterByAssociated.value
         && caseAssociatedId.value != null
         && caseAssociatedId.value !== ''
     ) {
@@ -707,6 +727,39 @@ function onCustomDateChange() {
     queueMicrotask(() => {
         suppressPeriodWatch.value = false
     })
+    reload()
+}
+
+function toggleLinkedOnlyFilter() {
+    if (!canAssociate.value) return
+
+    const next = !linkedOnlyFilter.value
+    linkedOnlyFilter.value = next
+
+    if (next) {
+        // 紐づけ済画像は撮影日が今日以外のことも多いため、期間を「すべて」に広げる
+        if (periodFilter.value !== 'all') {
+            periodBeforeLinkedOnly.value = periodFilter.value
+            suppressPeriodWatch.value = true
+            periodFilter.value = 'all'
+            applyPeriodToDates('all')
+            queueMicrotask(() => {
+                suppressPeriodWatch.value = false
+            })
+        } else {
+            periodBeforeLinkedOnly.value = null
+        }
+    } else if (periodBeforeLinkedOnly.value) {
+        const restore = periodBeforeLinkedOnly.value
+        periodBeforeLinkedOnly.value = null
+        suppressPeriodWatch.value = true
+        periodFilter.value = restore
+        applyPeriodToDates(restore)
+        queueMicrotask(() => {
+            suppressPeriodWatch.value = false
+        })
+    }
+
     reload()
 }
 
@@ -1012,6 +1065,22 @@ defineExpose({
 
 .action-btn-danger:hover:not(:disabled) {
     background: #b91c1c;
+}
+
+.filter-toggle-btn {
+    background: #fff;
+    color: #0e7490;
+    border: 1px solid #67e8f9;
+}
+
+.filter-toggle-btn:hover:not(:disabled) {
+    background: #ecfeff;
+}
+
+.filter-toggle-btn.active {
+    background: #0891b2;
+    border-color: #0891b2;
+    color: #fff;
 }
 
 .preview-overlay {

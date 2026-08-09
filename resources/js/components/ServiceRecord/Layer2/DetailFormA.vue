@@ -49,7 +49,7 @@
                                                 </option>
                                             </select>
                                         </dd>
-                                        <dt>製品名</dt>
+                                        <dt class="dt-product-name">製品名</dt>
                                         <dd class="dd-product-name">
                                             <button type="button" class="field-button" @click="openServiceMasterSelect">
                                                 {{ draftRecord?.productName || record?.productName || '選択してください' }}
@@ -257,6 +257,14 @@
                                         @click="showGalleryDialog = true"
                                     >
                                         Gallery
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="action-btn"
+                                        :disabled="emailDraftCreating"
+                                        @click="openEmailDraftDialog"
+                                    >
+                                        Email
                                     </button>
                                     <label class="price-adjust-symptoms">
                                         <input
@@ -475,7 +483,7 @@
                         <Splitpanes class="default-theme detail-splitpanes detail-splitpanes-bottom" @resized="syncBottomPaneSizes">
                             <Pane class="detail-pane detail-pane-notes" :size="notesPaneSize" :min-size="25">
                                 <div class="pane-content pane-content-scroll">
-                                    <section class="section-card section-card-compact section-card-fill">
+                                    <section class="section-card section-card-compact section-card-fill notes-card">
                                         <div class="section-header">
                                             <h3>Notes（{{ sharedNotes.length }}件）</h3>
                                             <div class="section-actions">
@@ -520,7 +528,7 @@
 
                             <Pane class="detail-pane detail-pane-parts" :size="partsPaneSize" :min-size="25">
                                 <div class="pane-content pane-content-scroll">
-                                    <section class="section-card section-card-compact section-card-fill">
+                                    <section class="section-card section-card-compact section-card-fill parts-card">
                                         <div class="section-header">
                                             <h3>Parts（{{ parts.length }}件）</h3>
                                             <div class="section-actions">
@@ -530,7 +538,7 @@
                                             </div>
                                         </div>
                                         <div v-if="parts.length" class="attachment-table-wrap">
-                                            <table class="data-table">
+                                            <table class="data-table parts-table">
                                                 <thead>
                                                     <tr>
                                                         <th>Part ID</th>
@@ -582,6 +590,7 @@
                             <button
                                 type="button"
                                 class="captured-toggle"
+                                :class="{ 'has-images': capturedImages.length > 0 }"
                                 @click="capturedImagesOpen = !capturedImagesOpen"
                             >
                                 <span>撮影画像（{{ capturedImages.length }}件）</span>
@@ -698,6 +707,27 @@
             </div>
         </div>
 
+        <EmailDraftTypeDialog
+            v-if="showEmailDraftDialog"
+            :creating="emailDraftCreating"
+            :error="emailDraftError"
+            confirm-label="プレビュー"
+            @close="closeEmailDraftDialog"
+            @confirm="previewEmailDraft"
+        />
+
+        <EmailDraftPreviewDialog
+            v-if="showEmailDraftPreviewDialog"
+            :to="emailDraftPreview.to"
+            :subject="emailDraftPreview.subject"
+            :body="emailDraftPreview.bodyHtml"
+            :body-html="emailDraftPreview.bodyHtml"
+            :body-text="emailDraftPreview.bodyText"
+            :template-label="emailDraftPreview.templateLabel"
+            :associated-id="galleryAssociatedId"
+            @close="showEmailDraftPreviewDialog = false"
+        />
+
         <CapturedImageGalleryDialog
             v-if="showGalleryDialog"
             title="Gallery"
@@ -717,6 +747,8 @@ import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
+import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTypeDialog.vue'
+import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
@@ -755,7 +787,18 @@ const selectedFileId = ref(null)
 const fileSortSaving = ref(false)
 const showPriceAdjustDialog = ref(false)
 const showGalleryDialog = ref(false)
-const capturedImagesOpen = ref(true)
+const showEmailDraftDialog = ref(false)
+const showEmailDraftPreviewDialog = ref(false)
+const emailDraftCreating = ref(false)
+const emailDraftError = ref('')
+const emailDraftPreview = ref({
+    to: '',
+    subject: '',
+    bodyHtml: '',
+    bodyText: '',
+    templateLabel: '',
+})
+const capturedImagesOpen = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const priceAdjustSaving = ref(false)
 const priceAdjustError = ref('')
@@ -951,6 +994,92 @@ function openNoteCreate() {
 
 function openEmailNoteLink() {
     emit('open-dialog', 'EMAIL_NOTE_LINK')
+}
+
+function isEmlFile(file) {
+    const name = String(file?.documentName || '').toLowerCase()
+    const type = String(file?.fileType || '').toLowerCase()
+    return name.endsWith('.eml')
+        || type.includes('message/rfc822')
+        || type === 'application/eml'
+        || type === 'message/rfc822'
+}
+
+function resolveEmailDraftSourceFile() {
+    const selected = selectedFile.value
+    if (selected && isEmlFile(selected)) return selected
+    return sortedFiles.value.find((file) => isEmlFile(file)) || null
+}
+
+function openEmailDraftDialog() {
+    emailDraftError.value = ''
+    showEmailDraftDialog.value = true
+}
+
+function closeEmailDraftDialog() {
+    if (emailDraftCreating.value) return
+    showEmailDraftDialog.value = false
+    emailDraftError.value = ''
+}
+
+function getRecordApiBase() {
+    const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
+    return `${window.location.origin}${basePath}`
+}
+
+async function previewEmailDraft(templateType) {
+    if (!templateType) {
+        emailDraftError.value = '定型メールの種類を選択してください。'
+        return
+    }
+
+    const orderID = props.record?.orderID
+    if (orderID == null || orderID === '') {
+        emailDraftError.value = '案件が特定できません。'
+        return
+    }
+
+    emailDraftCreating.value = true
+    emailDraftError.value = ''
+
+    try {
+        const sourceFile = resolveEmailDraftSourceFile()
+        const result = await apiFetch(`${getRecordApiBase()}/${orderID}/email-draft-preview`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                templateType,
+                fileId: sourceFile?.id ?? null,
+            }),
+        })
+
+        if (!result) {
+            throw new Error('メールプレビューの取得に失敗しました。')
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data?.message || `メールプレビューの取得に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        emailDraftPreview.value = {
+            to: data.to || '',
+            subject: data.subject || '',
+            bodyHtml: data.bodyHtml || data.body || '',
+            bodyText: data.bodyText || '',
+            templateLabel: data.templateLabel || '',
+        }
+        showEmailDraftDialog.value = false
+        showEmailDraftPreviewDialog.value = true
+    } catch (e) {
+        emailDraftError.value = e.message || 'メールプレビューの取得に失敗しました。'
+    } finally {
+        emailDraftCreating.value = false
+    }
 }
 
 function openServiceMasterSelect() {
@@ -1766,6 +1895,16 @@ function formatDate(value) {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    background: #d3d4d6;
+}
+
+.detail-top-grid > .detail-card .field-input,
+.detail-top-grid > .detail-card .field-select,
+.detail-top-grid > .detail-card .field-button,
+.detail-top-grid > .detail-card input[type="text"],
+.detail-top-grid > .detail-card input[type="date"],
+.detail-top-grid > .detail-card select {
+    background: #fff;
 }
 
 .detail-bottom-grid {
@@ -1992,6 +2131,8 @@ function formatDate(value) {
     margin: 0;
     font-size: 13px;
     line-height: 1.2;
+    color: #000;
+    font-weight: 700;
 }
 
 .linked-loaner-card .attachment-table-wrap {
@@ -2020,6 +2161,10 @@ function formatDate(value) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.linked-loaner-card .data-table tbody td {
+    background: #fff;
 }
 
 .linked-loaner-card .data-table th:last-child,
@@ -2051,7 +2196,8 @@ function formatDate(value) {
 .section-card h3 {
     margin: 0 0 12px;
     font-size: 16px;
-    color: #1e293b;
+    color: #000;
+    font-weight: 700;
 }
 
 .section-header {
@@ -2128,8 +2274,8 @@ function formatDate(value) {
 
 
 .info-grid dt {
-    font-weight: bold;
-    color: #475569;
+    font-weight: 700;
+    color: #000;
 }
 
 .info-grid dd {
@@ -2174,7 +2320,7 @@ function formatDate(value) {
 }
 
 .detail-card-rma-order .rma-order-grid dt:nth-of-type(n + 5) {
-    color: #1e3a8a;
+    color: #000;
 }
 
 .dd-order-num {
@@ -2238,14 +2384,16 @@ function formatDate(value) {
     align-items: center;
     gap: 6px;
     font-size: 14px;
-    font-weight: bold;
-    color: #1e293b;
+    font-weight: 700;
+    color: #000;
 }
 
 .misc-field > span {
     flex: 0 0 auto;
     white-space: nowrap;
     min-width: 5.5em;
+    color: #000;
+    font-weight: 700;
 }
 
 .misc-field .field-input {
@@ -2320,12 +2468,24 @@ function formatDate(value) {
 .dd-product-name {
     display: flex;
     gap: 8px;
+    align-items: flex-start;
+}
+
+.dt-product-name {
+    display: flex;
     align-items: center;
+    align-self: start;
+    box-sizing: border-box;
+    min-height: 30px;
 }
 
 .dd-product-name .field-button {
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    font-weight: 700;
 }
 
 .entity-id-display {
@@ -2335,11 +2495,12 @@ function formatDate(value) {
     flex: 0 0 auto;
     min-width: 72px;
     font-size: 13px;
-    color: #475569;
+    color: #000;
 }
 
 .entity-id-label {
-    font-weight: 600;
+    font-weight: 700;
+    color: #000;
     line-height: 1.2;
 }
 
@@ -2364,7 +2525,8 @@ function formatDate(value) {
     flex-direction: column;
     gap: 2px;
     font-size: 14px;
-    color: #475569;
+    color: #000;
+    font-weight: 700;
 }
 
 .input-field input {
@@ -2438,6 +2600,8 @@ function formatDate(value) {
 
 .data-table thead th {
     background: #e2e8f0;
+    color: #000;
+    font-weight: 700;
 }
 
 .table-row {
@@ -2474,6 +2638,16 @@ function formatDate(value) {
 
 .notes-table {
     table-layout: fixed;
+    background: #fff;
+}
+
+.notes-table th,
+.notes-table td {
+    font-weight: 700;
+}
+
+.notes-table tbody td {
+    background: #fff;
 }
 
 .notes-table .col-note-date,
@@ -2504,6 +2678,8 @@ function formatDate(value) {
 .section-card-compact h3 {
     margin: 0;
     font-size: 14px;
+    color: #000;
+    font-weight: 700;
 }
 
 .section-card-compact .section-header {
@@ -2625,7 +2801,25 @@ function formatDate(value) {
     flex-direction: column;
     min-height: 0;
     height: 100%;
-    backgroud: #cccccc;
+    background: #cccccc;
+}
+
+.notes-card,
+.parts-card {
+    background: #e0f2fe4f;
+}
+
+.parts-table {
+    background: #fff;
+}
+
+.parts-table th,
+.parts-table td {
+    font-weight: 700;
+}
+
+.parts-table tbody td {
+    background: #fff;
 }
 
 .attachment-table-wrap {
@@ -2666,6 +2860,19 @@ function formatDate(value) {
 
 .captured-toggle:hover {
     background: #cbd5e1;
+}
+
+.captured-toggle.has-images {
+    background: #86efac;
+    color: #14532d;
+}
+
+.captured-toggle.has-images:hover {
+    background: #4ade80;
+}
+
+.captured-toggle.has-images .captured-toggle-icon {
+    color: #166534;
 }
 
 .captured-toggle-icon {

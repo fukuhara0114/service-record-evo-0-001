@@ -1,5 +1,6 @@
 <template>
-    <div class="detail-overlay" @click.self="$emit('close')">
+    <!-- パネル全画面のため backdrop click は不要。dblclick 残存 click で誤 close するのを防ぐ -->
+    <div class="detail-overlay">
         <div class="detail-panel">
             <div class="detail-header">
                 <div class="layout-tabs">
@@ -46,7 +47,9 @@
                     >
                         {{ savingRecord ? '保存中...' : '保存' }}
                     </button>
-                    <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">×</button>
+                    <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">
+                        <span aria-hidden="true">×</span>
+                    </button>
                 </div>
             </div>
 
@@ -393,17 +396,33 @@ const headerReturnCodeLabel = computed(() => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
     width: 36px;
     height: 36px;
     padding: 0;
+    margin: 0;
     border: 1px solid #94a3b8;
     border-radius: 6px;
     background: #fff;
     color: #0f172a;
     font-size: 22px;
     font-weight: 700;
-    line-height: 1;
+    line-height: 0;
+    text-align: center;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.close-x-btn > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    line-height: 1;
+    /* × グリフの視覚重心をボタン中央へ合わせる */
+    transform: translate(-0.02em, -0.06em);
 }
 
 .close-x-btn:hover {

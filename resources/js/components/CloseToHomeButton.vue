@@ -33,9 +33,11 @@ const resolvedUrl = computed(() => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
     width: 36px;
     height: 36px;
     padding: 0;
+    margin: 0;
     border: 1px solid #94a3b8;
     border-radius: 6px;
     background: #fff;
@@ -43,9 +45,21 @@ const resolvedUrl = computed(() => {
     text-decoration: none;
     font-size: 22px;
     font-weight: 700;
-    line-height: 1;
+    line-height: 0;
+    text-align: center;
     cursor: pointer;
     flex: 0 0 auto;
+}
+
+.close-to-home-btn > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    line-height: 1;
+    /* × グリフの視覚重心をボタン中央へ合わせる */
+    transform: translate(-0.02em, -0.06em);
 }
 
 .close-to-home-btn:hover {

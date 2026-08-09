@@ -437,6 +437,7 @@ class LoanerRecordController extends Controller
             'status' => 'nullable|integer',
             'returnCode' => 'nullable|integer',
             'SN' => 'nullable|string|max:255',
+            'loanerID' => 'nullable|integer',
             'linkMode' => 'required|in:none,parent',
             'parentID' => 'nullable|integer',
             'plannedSentDate' => 'nullable|date',
@@ -464,13 +465,45 @@ class LoanerRecordController extends Controller
             'deliveryDestination_zipcode' => 'nullable|string|max:20',
             'deliveryDestination_address1' => 'nullable|string|max:255',
             'deliveryDestination_address2' => 'nullable|string|max:255',
+            'sourceFileId' => 'nullable|integer',
+            'additionalFileIds' => 'nullable|array',
+            'additionalFileIds.*' => 'integer',
         ]);
 
-        $available = $this->findAvailableLoaner($validated['productName']);
+        $available = $this->findAvailableLoaner(
+            $validated['productName'],
+            isset($validated['loanerID']) ? (int) $validated['loanerID'] : null,
+        );
+        if (!empty($validated['loanerID']) && !$available) {
+            return response()->json([
+                'message' => '指定した貸出機は在庫として選択できません。一覧を更新してやり直してください。',
+            ], 422);
+        }
         $orderType = $available ? 'loaner' : 'waiting_list';
         $user = $request->user();
         $linkMode = $validated['linkMode'];
         $parentId = null;
+
+        $fileIds = collect()
+            ->when(!empty($validated['sourceFileId']), fn ($c) => $c->push((int) $validated['sourceFileId']))
+            ->merge($validated['additionalFileIds'] ?? [])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($fileIds->isNotEmpty()) {
+            $files = AttachedFile::query()
+                ->whereIn('id', $fileIds)
+                ->where('associatedID', -1)
+                ->get();
+
+            if ($files->count() !== $fileIds->count()) {
+                return response()->json([
+                    'message' => '未登録ファイルの状態が変わったため、画面を再読み込みしてやり直してください。',
+                ], 422);
+            }
+        }
 
         if ($linkMode === 'parent') {
             if (empty($validated['parentID'])) {
@@ -519,6 +552,7 @@ class LoanerRecordController extends Controller
             $status,
             $user,
             $parentId,
+            $fileIds,
             &$attachedLoanerId,
         ) {
             $record = ServiceRecord::create([
@@ -566,6 +600,13 @@ class LoanerRecordController extends Controller
                 $validated['plannedReturnedDate'] ?? null,
             );
             $attachedLoanerId = $attached?->id;
+
+            if ($fileIds->isNotEmpty()) {
+                AttachedFile::query()
+                    ->whereIn('id', $fileIds)
+                    ->where('associatedID', -1)
+                    ->update(['associatedID' => $record->orderID]);
+            }
 
             return $record;
         });
@@ -1060,16 +1101,30 @@ class LoanerRecordController extends Controller
         }
     }
 
-    private function findAvailableLoaner(string $productName): ?LoanerMaster
+    private function findAvailableLoaner(string $productName, ?int $loanerId = null): ?LoanerMaster
     {
         $statusColumn = $this->resolveStatusColumn();
 
-        return app(MasterPriceVersionResolver::class)->latestByKey(
+        $latest = app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
                 ->where('productName', $productName),
             'loanerID'
-        )->first(function (LoanerMaster $row) use ($statusColumn) {
+        );
+
+        if ($loanerId !== null) {
+            $selected = $latest->first(function (LoanerMaster $row) use ($loanerId) {
+                return (int) $row->loanerID === $loanerId;
+            });
+
+            if (!$selected) {
+                return null;
+            }
+
+            return (int) ($selected->{$statusColumn} ?? -1) === 0 ? $selected : null;
+        }
+
+        return $latest->first(function (LoanerMaster $row) use ($statusColumn) {
             return (int) ($row->{$statusColumn} ?? -1) === 0;
         });
     }

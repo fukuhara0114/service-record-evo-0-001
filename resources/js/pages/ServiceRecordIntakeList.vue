@@ -42,7 +42,13 @@
                             <p class="empty-card-help">情報入力のみで新規案件を作成</p>
                         </div>
                         <div class="file-card-actions">
-                            <a :href="createWithoutFileUrl" class="btn btn-primary btn-sm">添付なしで新規登録</a>
+                            <button
+                                type="button"
+                                class="btn btn-primary btn-sm"
+                                @click="openCaseTypeDialog({ mode: 'blank' })"
+                            >
+                                添付なしで新規登録
+                            </button>
                         </div>
                     </article>
 
@@ -57,7 +63,7 @@
                         @dragleave.prevent="onUploadDragLeave"
                         @drop.prevent="onUploadDrop"
                     >
-                        <div class="file-preview-wrap file-preview-empty" @click="openUploadPicker">
+                        <div class="file-preview-wrap file-preview-empty" @click="openUploadCaseTypeDialog">
                             <p class="empty-card-title">ファイルを追加して作成</p>
                             <p class="empty-card-help">
                                 {{ uploadBusy
@@ -71,7 +77,7 @@
                                 type="button"
                                 class="btn btn-primary btn-sm"
                                 :disabled="uploadBusy"
-                                @click="openUploadPicker"
+                                @click="openUploadCaseTypeDialog"
                             >
                                 {{ uploadBusy ? 'アップロード中...' : 'ファイルを選択' }}
                             </button>
@@ -93,29 +99,19 @@
                         @click="openPreview(file)"
                     >
                         <div class="file-preview-wrap">
-                            <template v-if="isPdf(file)">
-                                <iframe
-                                    v-if="loadedPreviewIds.has(file.id)"
-                                    :src="fileUrl(file.id)"
-                                    class="file-preview"
-                                    :title="`file preview ${file.id}`"
-                                    tabindex="-1"
-                                />
-                                <div v-else class="file-preview-fallback file-preview-lazy">
-                                    <p>{{ file.documentName || '（名称なし）' }}</p>
-                                    <p class="fallback-type">PDF（クリックでプレビュー）</p>
-                                </div>
-                            </template>
+                            <iframe
+                                v-if="isPdf(file)"
+                                :src="fileUrl(file.id)"
+                                class="file-preview"
+                                :title="`file preview ${file.id}`"
+                                tabindex="-1"
+                            />
                             <img
-                                v-else-if="isImage(file) && loadedPreviewIds.has(file.id)"
+                                v-else-if="isImage(file)"
                                 :src="fileUrl(file.id)"
                                 :alt="file.documentName || '画像'"
                                 class="file-preview-image"
                             >
-                            <div v-else-if="isImage(file)" class="file-preview-fallback file-preview-lazy">
-                                <p>{{ file.documentName || '（名称なし）' }}</p>
-                                <p class="fallback-type">画像（クリックでプレビュー）</p>
-                            </div>
                             <div v-else class="file-preview-fallback">
                                 <p>{{ file.documentName || '（名称なし）' }}</p>
                                 <p class="fallback-type">{{ file.fileType || 'プレビュー非対応' }}</p>
@@ -128,7 +124,13 @@
                         </div>
 
                         <div class="file-card-actions" @click.stop>
-                            <a :href="createUrl(file.id)" class="btn btn-primary btn-sm">このファイルで新規登録</a>
+                            <button
+                                type="button"
+                                class="btn btn-primary btn-sm"
+                                @click="openCaseTypeDialog({ mode: 'file', file })"
+                            >
+                                このファイルで新規登録
+                            </button>
                             <button
                                 type="button"
                                 class="btn btn-danger btn-sm btn-delete"
@@ -154,6 +156,14 @@
             @saved="onPreviewSaved"
             @navigate="openPreview"
         />
+
+        <IntakeCaseTypeDialog
+            v-if="caseTypeDialog"
+            :mode="caseTypeDialog.mode"
+            :file-name="caseTypeDialog.fileName"
+            @close="caseTypeDialog = null"
+            @confirm="onCaseTypeConfirm"
+        />
     </div>
 </template>
 
@@ -161,6 +171,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import IntakeCaseTypeDialog from '@/components/ServiceRecord/Intake/IntakeCaseTypeDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import { startFileImport } from '@/utils/startFileImport'
 
@@ -181,13 +192,15 @@ const uploadError = ref('')
 const uploadDropActive = ref(false)
 const uploadDragDepth = ref(0)
 const files = ref([...(props.unregisteredFiles ?? [])])
-const loadedPreviewIds = ref(new Set())
 const deletingFileId = ref(null)
 const deleteError = ref('')
 const importStatus = ref('')
 const importBusy = ref(false)
 const showImportProgress = ref(false)
+const caseTypeDialog = ref(null)
+const pendingCaseType = ref(null)
 let importProgressHideTimer = null
+let pendingUploadFiles = null
 
 watch(
     () => props.unregisteredFiles,
@@ -241,11 +254,58 @@ onBeforeUnmount(() => {
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
-const createWithoutFileUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/create`)
 const uploadUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake/upload`)
 
-function createUrl(fileId) {
-    return `${page.props.appBaseUrl}/servicerecord/intake/${fileId}/create`
+function createWithoutFileUrl(caseType = 'service') {
+    const type = caseType === 'loaner' ? 'loaner' : 'service'
+    return `${page.props.appBaseUrl}/servicerecord/intake/create?order_type=${encodeURIComponent(type)}`
+}
+
+function createUrl(fileId, caseType = 'service') {
+    const type = caseType === 'loaner' ? 'loaner' : 'service'
+    return `${page.props.appBaseUrl}/servicerecord/intake/${fileId}/create?order_type=${encodeURIComponent(type)}`
+}
+
+function openCaseTypeDialog({ mode, file = null, files = null } = {}) {
+    pendingUploadFiles = Array.isArray(files) && files.length ? files : null
+    caseTypeDialog.value = {
+        mode,
+        fileId: file?.id ?? null,
+        fileName: file?.documentName || '',
+    }
+}
+
+function openUploadCaseTypeDialog() {
+    if (uploadBusy.value) return
+    uploadError.value = ''
+    openCaseTypeDialog({ mode: 'upload' })
+}
+
+function onCaseTypeConfirm(caseType) {
+    const dialog = caseTypeDialog.value
+    caseTypeDialog.value = null
+    if (!dialog) return
+
+    if (dialog.mode === 'blank') {
+        window.location.href = createWithoutFileUrl(caseType)
+        return
+    }
+
+    if (dialog.mode === 'file') {
+        window.location.href = createUrl(dialog.fileId, caseType)
+        return
+    }
+
+    if (dialog.mode === 'upload') {
+        pendingCaseType.value = caseType
+        if (pendingUploadFiles?.length) {
+            const list = pendingUploadFiles
+            pendingUploadFiles = null
+            uploadThenCreate(list)
+            return
+        }
+        openUploadPicker()
+    }
 }
 
 function fileUrl(fileId) {
@@ -261,11 +321,6 @@ function isImage(file) {
 }
 
 function openPreview(file) {
-    if (file?.id != null) {
-        const next = new Set(loadedPreviewIds.value)
-        next.add(file.id)
-        loadedPreviewIds.value = next
-    }
     previewFile.value = file
 }
 
@@ -383,7 +438,7 @@ function onUploadDrop(event) {
         uploadError.value = 'アップロード可能なファイルがありません。'
         return
     }
-    uploadThenCreate(list)
+    openCaseTypeDialog({ mode: 'upload', files: list })
 }
 
 async function uploadSingleFile(file, sortNum) {
@@ -453,11 +508,14 @@ async function uploadThenCreate(fileList) {
             throw new Error('ファイルの登録結果を取得できませんでした。')
         }
 
-        window.location.href = createUrl(firstFileId)
+        const caseType = pendingCaseType.value || 'service'
+        pendingCaseType.value = null
+        window.location.href = createUrl(firstFileId, caseType)
     } catch (e) {
         uploadError.value = e.message || 'アップロードに失敗しました。'
         uploadBusy.value = false
         uploadProgress.value = ''
+        pendingCaseType.value = null
     }
 }
 </script>

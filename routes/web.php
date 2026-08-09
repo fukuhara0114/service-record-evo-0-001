@@ -100,6 +100,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/servicerecord/stocked-parts', [ServiceRecordController::class, 'storeStockedPart'])->name('servicerecord.stocked-parts.store');
     Route::put('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'updateStockedPart'])->name('servicerecord.stocked-parts.update');
     Route::delete('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'destroyStockedPart'])->name('servicerecord.stocked-parts.destroy');
+    Route::post('/servicerecord/{orderID}/email-draft-preview', [ServiceRecordController::class, 'emailDraftPreview'])->name('servicerecord.email-draft-preview');
     Route::put('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update');
     Route::post('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update.post');
     Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])->name('servicerecords.detail');

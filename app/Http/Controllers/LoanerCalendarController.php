@@ -24,6 +24,7 @@ class LoanerCalendarController extends Controller
             'start' => 'nullable|date',
             'end' => 'nullable|date',
             'loanerID' => 'nullable|integer',
+            'productName' => 'nullable|string|max:255',
         ]);
 
         $query = AttachedLoaner::query()
@@ -34,6 +35,19 @@ class LoanerCalendarController extends Controller
 
         if (!empty($validated['loanerID'])) {
             $query->where('loanerID', $validated['loanerID']);
+        }
+
+        if (!empty($validated['productName'])) {
+            $productName = $validated['productName'];
+            $query->where(function ($q) use ($productName) {
+                $q->where('productName', $productName)
+                    ->orWhereHas('loanerMaster', function ($master) use ($productName) {
+                        $master->where('productName', $productName);
+                    })
+                    ->orWhereHas('serviceRecord', function ($record) use ($productName) {
+                        $record->where('productName', $productName);
+                    });
+            });
         }
 
         $startColumn = $this->resolveStartColumn();

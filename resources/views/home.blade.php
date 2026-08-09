@@ -131,7 +131,6 @@
         <a href="{{ url('/servicerecord/administrator') }}" class="btn">Admin</a>
         <a href="{{ url('/servicerecord/engineer') }}" class="btn">Engineer</a>
         <a href="{{ url('/servicerecord/intake') }}" class="btn">案件登録</a>
-        <a href="{{ url('/servicerecord/loaner/create') }}" class="btn">貸出機登録</a>
         <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">貸出カレンダー</a>
         <a href="{{ url('/servicerecord/master-price-revision') }}" class="btn">価格改定</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>

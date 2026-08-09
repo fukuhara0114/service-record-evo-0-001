@@ -24,14 +24,15 @@
                 </div>
                 <div class="panel-body files-body">
                     <div class="captured-images-panel">
-                        <button
-                            type="button"
-                            class="captured-toggle"
-                            @click="capturedImagesOpen = !capturedImagesOpen"
-                        >
-                            <span>撮影画像（{{ capturedImages.length }}件）</span>
-                            <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
-                        </button>
+                            <button
+                                type="button"
+                                class="captured-toggle"
+                                :class="{ 'has-images': capturedImages.length > 0 }"
+                                @click="capturedImagesOpen = !capturedImagesOpen"
+                            >
+                                <span>撮影画像（{{ capturedImages.length }}件）</span>
+                                <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                            </button>
                         <div v-show="capturedImagesOpen" class="captured-images-body">
                             <AssociatedCapturedImages
                                 :images="capturedImages"
@@ -68,7 +69,7 @@
                         :disabled="statusActionSaving"
                         @click="onComplete"
                     >
-                        {{ statusActionSaving ? '処理中...' : '完了' }}
+                        {{ statusActionSaving ? '処理中...' : '出荷完了' }}
                     </button>
                     <button
                         type="button"
@@ -81,73 +82,76 @@
                 </div>
                 <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
+                <section class="panel panel-summary">
+                    <div class="panel-body summary-row">
+                        <span class="summary-item">{{ fieldValue('dealer') || 'dealer' }}</span>
+                        <span class="summary-item">{{ fieldValue('productName') || 'ProductName' }}</span>
+                        <span class="summary-item">SN:{{ fieldValue('SN') || 'xxxxxxx' }}</span>
+                    </div>
+                </section>
+
                 <section class="panel panel-delivery">
                     <div class="panel-header">
-                        <h3>Delivery</h3>
+                        <h3>発送先</h3>
                     </div>
-                    <div class="panel-body delivery-grid">
-                        <label class="field">
-                            <span>会社名</span>
+                    <div class="panel-body delivery-form">
+                        <label class="field field-zip">
+                            <span>郵便番号</span>
                             <input
                                 type="text"
-                                :value="fieldValue('deliveryDestination_company')"
-                                @input="updateDraftValue('deliveryDestination_company', $event.target.value)"
-                            >
-                        </label>
-                        <label class="field">
-                            <span>部署名</span>
-                            <input
-                                type="text"
-                                :value="fieldValue('deliveryDestination_depart')"
-                                @input="updateDraftValue('deliveryDestination_depart', $event.target.value)"
-                            >
-                        </label>
-                        <label class="field">
-                            <span>担当者</span>
-                            <input
-                                type="text"
-                                :value="fieldValue('deliveryDestination_contactPerson')"
-                                @input="updateDraftValue('deliveryDestination_contactPerson', $event.target.value)"
-                            >
-                        </label>
-                        <label class="field">
-                            <span>電話</span>
-                            <input
-                                type="text"
-                                :value="fieldValue('deliveryDestination_phone')"
-                                @input="updateDraftValue('deliveryDestination_phone', $event.target.value)"
-                            >
-                        </label>
-                        <label class="field field-span2">
-                            <span>E-mail</span>
-                            <input
-                                type="text"
-                                :value="fieldValue('deliveryDestination_email')"
-                                @input="updateDraftValue('deliveryDestination_email', $event.target.value)"
-                            >
-                        </label>
-                        <label class="field">
-                            <span>〒</span>
-                            <input
-                                type="text"
+                                placeholder="zipcode"
                                 :value="fieldValue('deliveryDestination_zipcode')"
                                 @input="updateDraftValue('deliveryDestination_zipcode', $event.target.value)"
                             >
                         </label>
-                        <label class="field">
-                            <span>都道府県</span>
+                        <div class="address-row">
+                            <label class="field field-address1">
+                                <input
+                                    type="text"
+                                    placeholder="address1"
+                                    :value="fieldValue('deliveryDestination_address1')"
+                                    @input="updateDraftValue('deliveryDestination_address1', $event.target.value)"
+                                >
+                            </label>
+                            <label class="field field-address2">
+                                <input
+                                    type="text"
+                                    placeholder="address2"
+                                    :value="fieldValue('deliveryDestination_address2')"
+                                    @input="updateDraftValue('deliveryDestination_address2', $event.target.value)"
+                                >
+                            </label>
+                        </div>
+                        <label class="field field-company">
                             <input
                                 type="text"
-                                :value="fieldValue('deliveryDestination_address1')"
-                                @input="updateDraftValue('deliveryDestination_address1', $event.target.value)"
+                                placeholder="deliveryCompany"
+                                :value="fieldValue('deliveryDestination_company')"
+                                @input="updateDraftValue('deliveryDestination_company', $event.target.value)"
                             >
                         </label>
-                        <label class="field field-span2">
-                            <span>住所</span>
+                        <label class="field field-full">
                             <input
                                 type="text"
-                                :value="fieldValue('deliveryDestination_address2')"
-                                @input="updateDraftValue('deliveryDestination_address2', $event.target.value)"
+                                placeholder="deliveryCompany_depart"
+                                :value="fieldValue('deliveryDestination_depart')"
+                                @input="updateDraftValue('deliveryDestination_depart', $event.target.value)"
+                            >
+                        </label>
+                        <label class="field field-contact">
+                            <input
+                                type="text"
+                                placeholder="deliveryCompany_contactPerson"
+                                :value="fieldValue('deliveryDestination_contactPerson')"
+                                @input="updateDraftValue('deliveryDestination_contactPerson', $event.target.value)"
+                            >
+                        </label>
+                        <label class="field field-phone">
+                            <input
+                                type="text"
+                                placeholder="deliveryCompany_Phone"
+                                :value="fieldValue('deliveryDestination_phone')"
+                                @input="updateDraftValue('deliveryDestination_phone', $event.target.value)"
                             >
                         </label>
                     </div>
@@ -178,7 +182,7 @@
                     </div>
                     <div class="panel-body notes-body">
                         <div v-if="sharedNotes.length" class="table-wrap">
-                            <table class="data-table">
+                            <table class="data-table notes-table">
                                 <thead>
                                     <tr>
                                         <th class="col-date">日時</th>
@@ -204,7 +208,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <p v-else class="empty-message">Notes がありません。</p>
+                        <p v-else class="empty-message notes-empty">Notes</p>
                     </div>
                 </section>
             </div>
@@ -238,7 +242,7 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 
 const page = usePage()
 const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
-const capturedImagesOpen = ref(true)
+const capturedImagesOpen = ref(false)
 const fileSortSaving = ref(false)
 const statusActionSaving = ref(false)
 const actionMessage = ref('')
@@ -515,9 +519,21 @@ async function patchFileSort(fileId, sortNum) {
 .right-column {
     grid-column: 2;
     min-height: 0;
-    display: grid;
-    grid-template-rows: auto auto minmax(140px, 34%) minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 10px;
+}
+
+.right-column > .action-bar,
+.right-column > .action-message,
+.right-column > .panel-summary,
+.right-column > .panel-delivery {
+    flex: 0 0 auto;
+}
+
+.right-column > .panel-notes {
+    flex: 1 1 auto;
+    min-height: 160px;
 }
 
 .panel {
@@ -596,6 +612,19 @@ async function patchFileSort(fileId, sortNum) {
     background: #cbd5e1;
 }
 
+.captured-toggle.has-images {
+    background: #86efac;
+    color: #14532d;
+}
+
+.captured-toggle.has-images:hover {
+    background: #4ade80;
+}
+
+.captured-toggle.has-images .captured-toggle-icon {
+    color: #166534;
+}
+
 .captured-toggle-icon {
     font-size: 11px;
     color: #475569;
@@ -660,32 +689,83 @@ async function patchFileSort(fileId, sortNum) {
     cursor: not-allowed;
 }
 
-.delivery-grid {
+.panel-summary .panel-body {
+    background: #eff6ff;
+    padding: 12px 14px;
+}
+
+.summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 20px;
+}
+
+.summary-item {
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.delivery-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #eff6ff;
+}
+
+.address-row {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 10px;
+    grid-template-columns: minmax(100px, 0.45fr) minmax(0, 1.55fr);
+    gap: 8px;
 }
 
 .field {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 12px;
-    color: #475569;
+    display: block;
+    min-width: 0;
 }
 
-.field-span2 {
-    grid-column: span 2;
+.field-zip,
+.field-company,
+.field-contact,
+.field-phone {
+    width: min(240px, 100%);
+}
+
+.field-full {
+    width: 100%;
 }
 
 .field input {
     width: 100%;
-    padding: 5px 7px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
+    padding: 6px 8px;
+    border: 1px solid #0f172a;
+    border-radius: 2px;
     box-sizing: border-box;
+    background: #fff;
     color: #0f172a;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.field input::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.notes-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    font-size: 18px;
     font-weight: 700;
+    color: #64748b;
 }
 
 .table-wrap {
@@ -712,6 +792,11 @@ async function patchFileSort(fileId, sortNum) {
     top: 0;
     background: #e2e8f0;
     z-index: 1;
+}
+
+.notes-table th,
+.notes-table td {
+    font-weight: 700;
 }
 
 .table-row {

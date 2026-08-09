@@ -6,9 +6,11 @@
             :associated-id="resolvedAssociatedId"
             :filter-by-associated="filterByAssociated"
             :initial-captured-by="initialCapturedBy"
+            :selection-only="selectionOnly"
             @select="(item) => $emit('select', item)"
             @selection-change="(items) => $emit('selection-change', items)"
             @associated="(payload) => $emit('associated', payload)"
+            @confirm-selection="(items) => $emit('confirm-selection', items)"
         />
     </BaseDialog>
 </template>
@@ -40,9 +42,13 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    selectionOnly: {
+        type: Boolean,
+        default: false,
+    },
 })
 
-defineEmits(['close', 'select', 'selection-change', 'associated'])
+defineEmits(['close', 'select', 'selection-change', 'associated', 'confirm-selection'])
 
 const galleryRef = ref(null)
 const dialogTitle = computed(() => props.title || 'Gallery')

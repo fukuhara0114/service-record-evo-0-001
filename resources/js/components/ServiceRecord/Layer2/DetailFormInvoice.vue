@@ -194,7 +194,7 @@
                             </div>
                         </div>
                         <div v-if="sharedNotes.length" class="notes-wrap">
-                            <table class="data-table">
+                            <table class="data-table notes-table">
                                 <thead>
                                     <tr>
                                         <th>日時</th>
@@ -1113,6 +1113,11 @@ watch(
     border-bottom: 1px solid #cbd5e1;
     padding: 7px 8px;
     text-align: left;
+}
+
+.notes-table th,
+.notes-table td {
+    font-weight: 700;
 }
 
 .col-amount {
