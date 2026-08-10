@@ -22,7 +22,8 @@
             <p class="hint">
                 旧版の validDateMax は改定日前日になります。CSVは Excel 向け Shift_JIS で出力し、取込は UTF-8 / Shift_JIS を自動判定します。
                 新規追加は serviceID / partID / loanerID を空欄にし、改定実行時に自動採番します（名称は必須）。
-                loaner は一個体＝一つの loanerID（servicerecord.loanerID と紐づく）。同一 productName でも loanerID が異なれば別個体です。
+                loaner は一個体＝一つの loanerID（版をまたいでも同じ。servicerecord.loanerID と紐づく）。
+                同一 productName でも loanerID が異なれば別個体です。新規追加だけ loanerID 空欄で自動採番します。
             </p>
             <p v-if="repairNotice" class="hint repair">{{ repairNotice }}</p>
             <div class="toolbar-actions">
@@ -426,9 +427,8 @@ const repairNotice = computed(() => {
     const repair = props.meta?.loanerIdRepair
     if (!repair) return ''
     const assigned = Number(repair.assignedNull || 0)
-    const reassigned = Number(repair.reassignedDuplicates || 0)
-    if (assigned + reassigned < 1) return ''
-    return `loanerID を一個体一意に整備しました（未採番 ${assigned}件 / 重複解消 ${reassigned}件）。`
+    if (assigned < 1) return ''
+    return `loanerID 未採番の個体に ID を付与しました（${assigned}件）。同一個体の価格版では loanerID を維持します。`
 })
 
 function tokensOf(value) {

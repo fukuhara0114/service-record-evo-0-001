@@ -98,7 +98,13 @@ class ServiceRecord extends Model
         'lastEditPerson',
         'lastEditDate',
         'entityID',
-        'loanerID'
+        'loanerID',
+        'promotion_ready_at',
+        'promotion_source_orderID',
+    ];
+
+    protected $casts = [
+        'promotion_ready_at' => 'datetime',
     ];
 
 

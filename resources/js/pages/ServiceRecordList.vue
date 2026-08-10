@@ -417,6 +417,29 @@
                         <th style="width: 96px; text-align: center;">symptomsNum</th>
                         <th>symptoms</th>
                     </tr>
+                    <tr v-else-if="orderTypeFilter === 'loaner'">
+                        <th style="width: 80px; text-align: center;">orderID</th>
+                        <th style="width: 80px; text-align: center;">ParentID</th>
+                        <th>status</th>
+                        <th>ProductName</th>
+                        <th>SN</th>
+                        <th>dealer</th>
+                        <th>dealer_depart</th>
+                        <th>contactPerson</th>
+                        <th>shippingOut_requiredDate</th>
+                        <th>shippedDate</th>
+                    </tr>
+                    <tr v-else-if="orderTypeFilter === 'waiting_list'">
+                        <th style="width: 88px; text-align: center;">繰上</th>
+                        <th style="width: 80px; text-align: center;">orderID</th>
+                        <th style="width: 80px; text-align: center;">ParentID</th>
+                        <th>ProductName</th>
+                        <th>SN</th>
+                        <th>dealer</th>
+                        <th>dealer_depart</th>
+                        <th>contactPerson</th>
+                        <th>返却元</th>
+                    </tr>
                     <tr v-else>
                         <th style="width: 80px; text-align: center;">OrderID</th>
                         <th>受領日</th>
@@ -438,7 +461,11 @@
                         v-for="r in filteredRecords"
                         :key="r.orderID"
                         class="table-row"
-                        :class="{ 'active-row': selectedOrderId === r.orderID }"
+                        :class="{
+                            'active-row': selectedOrderId === r.orderID,
+                            'promotion-ready-row': isPromotionReady(r),
+                        }"
+                        :title="promotionRowTitle(r)"
                         @click="selectedOrderId = r.orderID"
                         @dblclick="openSecondLayer(r)"
                     >
@@ -488,6 +515,35 @@
                             <td>{{ r.incident }}</td>
                             <td style="text-align: center;">{{ symptomsNumForRecord(r) }}</td>
                             <td>{{ r.symptoms }}</td>
+                        </template>
+                        <template v-else-if="orderTypeFilter === 'loaner'">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;">{{ r.parentID }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
+                            <td>{{ formatListDate(r.shippedDate) }}</td>
+                        </template>
+                        <template v-else-if="orderTypeFilter === 'waiting_list'">
+                            <td style="text-align: center;">
+                                <span
+                                    v-if="isPromotionReady(r)"
+                                    class="promotion-ready-badge"
+                                    :title="promotionRowTitle(r)"
+                                >繰上可</span>
+                            </td>
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;">{{ r.parentID }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td style="text-align: center;">{{ r.promotion_source_orderID || '—' }}</td>
                         </template>
                         <template v-else>
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -1155,9 +1211,12 @@ const filteredRecords = computed(() => {
     return records.filter(r => {
         const rowText = [
             r.orderID?.toString(),
+            r.parentID?.toString(),
             r.receivedDate,
             formatListDate(r.shippingOut_requiredDate),
             r.shippingOut_requiredDate,
+            formatListDate(r.shippedDate),
+            r.shippedDate,
             statusLabel(r),
             r.RMA,
             r.productName,
@@ -1179,6 +1238,9 @@ const filteredRecords = computed(() => {
             r.incident,
             String(symptomsNumForRecord(r)),
             r.RMA,
+            r.promotion_ready_at,
+            r.promotion_source_orderID?.toString(),
+            isPromotionReady(r) ? '繰上可' : '',
         ]
             .filter(Boolean)
             .join(' ')
@@ -1611,6 +1673,18 @@ function formatListDate(value) {
     return String(value).slice(0, 10)
 }
 
+function isPromotionReady(record) {
+    return record?.promotion_ready_at != null && record.promotion_ready_at !== ''
+}
+
+function promotionRowTitle(record) {
+    if (!isPromotionReady(record)) return undefined
+    const source = record.promotion_source_orderID
+    return source
+        ? `繰り上がり候補（返却元 orderID: ${source}）`
+        : '繰り上がり候補'
+}
+
 function clearSearch() {
     searchQuery.value = ''
     document.getElementById('customSearchInput')?.focus()
@@ -1754,8 +1828,8 @@ async function openSecondLayer(record) {
         return
     }
 
-    // loaner フィルター選択中は貸出案件詳細ページへ遷移
-    if (orderTypeFilter.value === 'loaner') {
+    // loaner / waiting_list フィルター選択中は貸出案件詳細ページへ遷移
+    if (orderTypeFilter.value === 'loaner' || orderTypeFilter.value === 'waiting_list') {
         const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
         const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
         window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${record.orderID}${params}`
@@ -2846,6 +2920,27 @@ async function saveRecord() {
 
 .table-row {
     cursor: pointer;
+}
+
+.promotion-ready-row td {
+    background-color: #fef9c3 !important;
+}
+
+.promotion-ready-row.active-row td {
+    color: rgb(255, 255, 255) !important;
+    background-color: #7e25eb !important;
+}
+
+.promotion-ready-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #111827;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 
 .active-row td {

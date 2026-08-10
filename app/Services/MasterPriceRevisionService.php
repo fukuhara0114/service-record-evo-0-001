@@ -48,10 +48,10 @@ class MasterPriceRevisionService
     }
 
     /**
-     * 有効な loaner 個体について loanerID を一意にする。
-     * - loanerID 空欄 → 自動採番
-     * - 同一 loanerID に複数個体 → 代表1件を残し、他は新規採番
-     * 代表は id === loanerID の行、なければ最小 id。
+     * 有効な loaner 個体のうち loanerID 空欄だけを自動採番する。
+     *
+     * 注意: 同一 loanerID の複数行は「価格版」であり別個体ではない。
+     * serviceID / partID と同様、版をまたいで loanerID は維持する（振り直ししない）。
      *
      * @return array{assignedNull:int,reassignedDuplicates:int}
      */
@@ -59,49 +59,31 @@ class MasterPriceRevisionService
     {
         return DB::transaction(function () {
             $today = Carbon::today()->toDateString();
-            $openQuery = fn () => DB::table('loanermaster')
+            $openNullRows = DB::table('loanermaster')
                 ->where(function ($query) use ($today) {
                     $query->whereNull('validDateMax')
                         ->orWhere('validDateMax', '>=', $today);
+                })
+                ->where(function ($query) {
+                    $query->whereNull('loanerID')
+                        ->orWhere('loanerID', '');
                 })
                 ->orderBy('id')
                 ->get(['id', 'loanerID']);
 
             $next = $this->nextBusinessId('loanermaster', 'loanerID');
             $assignedNull = 0;
-            $reassignedDuplicates = 0;
 
-            foreach ($openQuery()->whereNull('loanerID') as $row) {
+            foreach ($openNullRows as $row) {
                 DB::table('loanermaster')->where('id', $row->id)->update(['loanerID' => $next]);
                 $next++;
                 $assignedNull++;
             }
 
-            $groups = $openQuery()
-                ->whereNotNull('loanerID')
-                ->groupBy(fn ($row) => (string) $row->loanerID);
-
-            foreach ($groups as $loanerId => $rows) {
-                if ($rows->count() <= 1) {
-                    continue;
-                }
-
-                $keeper = $rows->first(fn ($row) => (int) $row->id === (int) $loanerId)
-                    ?? $rows->sortBy('id')->first();
-
-                foreach ($rows as $row) {
-                    if ((int) $row->id === (int) $keeper->id) {
-                        continue;
-                    }
-                    DB::table('loanermaster')->where('id', $row->id)->update(['loanerID' => $next]);
-                    $next++;
-                    $reassignedDuplicates++;
-                }
-            }
-
             return [
                 'assignedNull' => $assignedNull,
-                'reassignedDuplicates' => $reassignedDuplicates,
+                // 互換のためキーは残すが、版の loanerID は振り直さない
+                'reassignedDuplicates' => 0,
             ];
         });
     }
@@ -270,13 +252,13 @@ class MasterPriceRevisionService
 
     private function latestLoanerRows(bool $forDisplay = true): Collection
     {
-        // 一個体 = 一つの loanerID。価格版が複数ある場合は最新版のみ。
-        return LoanerMaster::query()
-            ->whereNotNull('loanerID')
-            ->orderByDesc('validDateMin')
-            ->orderByDesc('id')
-            ->get()
-            ->unique('loanerID')
+        // 一個体 = 一つの loanerID。価格版が複数ある場合は最新版のみ（loanerID は版をまたいで同一）。
+        return $this->resolver->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', ''),
+            'loanerID'
+        )
             ->sortBy([
                 ['productName', 'asc'],
                 ['item', 'asc'],

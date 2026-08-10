@@ -78,7 +78,14 @@ class MasterPriceVersionResolver
             ->orderByDesc('validDateMin')
             ->orderByDesc('id')
             ->get()
-            ->unique($businessKey)
+            ->groupBy(function (Model $row) use ($businessKey) {
+                $value = $row->getAttribute($businessKey);
+
+                return $value === null || $value === ''
+                    ? 'null:'.$row->getKey()
+                    : (string) $value;
+            })
+            ->map(fn (Collection $group) => $group->first())
             ->values();
     }
 

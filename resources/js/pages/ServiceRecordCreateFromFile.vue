@@ -875,7 +875,19 @@ const statuses = computed(() => props.statuses ?? [])
 const returnCodes = computed(() => props.returnCodes ?? [])
 const dealers = computed(() => props.dealersMaster ?? [])
 const services = computed(() => latestMastersByKey(props.servicesMaster ?? [], 'serviceID'))
-const loanerUnits = computed(() => props.loaners ?? [])
+const loanerUnits = computed(() => {
+    const seen = new Set()
+    const unique = []
+    for (const unit of props.loaners ?? []) {
+        const key = unit?.loanerID != null && unit.loanerID !== ''
+            ? String(unit.loanerID)
+            : `id:${unit?.id ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(unit)
+    }
+    return unique
+})
 const loanerProductOptions = computed(() =>
     (props.loanerProducts ?? []).map(item => ({
         productName: item.productName,

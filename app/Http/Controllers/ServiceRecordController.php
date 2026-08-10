@@ -186,7 +186,8 @@ class ServiceRecordController extends Controller
                     ->orWhere(function ($loanerQuery) {
                         $loanerQuery->where('order_type', 'loaner')
                             ->whereIn('status', \App\Models\StatusLoaner::query()->select('processID_new'));
-                    });
+                    })
+                    ->orWhere('order_type', 'waiting_list');
             });
         }
 
@@ -1724,6 +1725,7 @@ class ServiceRecordController extends Controller
         $loaners = app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', '')
                 ->whereNotNull('productName')
                 ->where('productName', '!=', '')
                 ->select([
@@ -1747,7 +1749,9 @@ class ServiceRecordController extends Controller
         $loanerProducts = $loaners
             ->groupBy('productName')
             ->map(function ($rows, $productName) use ($loanerStatusColumn) {
-                $availableCount = $rows->where($loanerStatusColumn, 0)->count();
+                $availableCount = $rows
+                    ->filter(fn ($row) => (int) ($row->{$loanerStatusColumn} ?? -1) === 0)
+                    ->count();
 
                 return [
                     'productName' => $productName,
@@ -2494,6 +2498,7 @@ class ServiceRecordController extends Controller
                 'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
                 'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
                 'order_type' => $orderType,
+                'RMA' => $orderType === 'loaner' ? 'loaner' : null,
                 'lastEditPerson' => $user?->kanji_name,
                 'lastEditDate' => now(),
             ]);

@@ -409,6 +409,61 @@
                 </div>
             </div>
         </div>
+
+        <div
+            v-if="promotionModalOpen"
+            class="confirm-overlay"
+            @click.self="closePromotionModal"
+        >
+            <div class="confirm-panel promotion-panel" role="dialog" aria-modal="true" aria-labelledby="promotion-modal-title">
+                <h3 id="promotion-modal-title">繰り上がり候補</h3>
+                <p class="promotion-lead">
+                    status が「在庫有り」になったため、同機種（{{ record.productName }}）の waiting_list に繰り上がり候補があります。
+                </p>
+                <div class="promotion-table-wrap">
+                    <table v-if="promotionCandidates.length" class="promotion-table">
+                        <thead>
+                            <tr>
+                                <th>orderID</th>
+                                <th>ParentID</th>
+                                <th>dealer</th>
+                                <th>contactPerson</th>
+                                <th>希望期間</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="candidate in promotionCandidates" :key="candidate.orderID">
+                                <td>{{ candidate.orderID }}</td>
+                                <td>{{ candidate.parentID ?? '—' }}</td>
+                                <td>{{ candidate.dealer || '—' }}</td>
+                                <td>{{ candidate.contactPerson || '—' }}</td>
+                                <td>
+                                    {{ candidate.plannedSentDate || '—' }}
+                                    ~
+                                    {{ candidate.plannedReturnedDate || '—' }}
+                                </td>
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="btn btn-secondary promotion-open-btn"
+                                        @click="openPromotionCandidate(candidate)"
+                                    >
+                                        開く
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="promotion-empty">同機種の waiting_list 候補はありません。</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-primary" @click="closePromotionModal">
+                        後で対応
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -478,6 +533,8 @@ const noteDialogMode = ref('create')
 const noteSaving = ref(false)
 const noteDeleting = ref(false)
 const noteDialogError = ref('')
+const promotionModalOpen = ref(false)
+const promotionCandidates = ref([])
 const noteForm = reactive({
     note: '',
     important: false,
@@ -1065,13 +1122,31 @@ async function save() {
         const { response, data } = result
         if (!response.ok) throw new Error(validationError(data, `保存に失敗しました。（HTTP ${response.status}）`))
         syncCurrentDates(data.attached, data.record)
+        if (data.record?.status != null && data.record.status !== '') {
+            form.status = String(data.record.status)
+        }
         success.value = data.message || '貸出詳細を保存しました。'
         calendarRef.value?.getApi?.().refetchEvents()
+        if (data.promotionTriggered) {
+            promotionCandidates.value = Array.isArray(data.promotionCandidates) ? data.promotionCandidates : []
+            promotionModalOpen.value = true
+        }
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
     } finally {
         saving.value = false
     }
+}
+
+function closePromotionModal() {
+    promotionModalOpen.value = false
+}
+
+function openPromotionCandidate(candidate) {
+    if (!candidate?.orderID) return
+    const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+    const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
+    window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${candidate.orderID}${params}`
 }
 
 function syncCurrentDates(attached, record = null) {
@@ -1552,6 +1627,17 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 .confirm-error { margin: 0; color: #b91c1c; font-size: 12px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+
+.promotion-panel { width: min(760px, 100%); }
+.promotion-lead { margin: 0 0 12px; color: #334155; font-size: 13px; line-height: 1.45; }
+.promotion-table-wrap { max-height: min(50vh, 360px); overflow: auto; border: 1px solid #cbd5e1; border-radius: 6px; }
+.promotion-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.promotion-table th,
+.promotion-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
+.promotion-table th { position: sticky; top: 0; background: #f8fafc; color: #475569; font-weight: 600; }
+.promotion-table tbody tr:last-child td { border-bottom: none; }
+.promotion-open-btn { min-height: 26px; padding: 2px 10px; font-size: 11px; }
+.promotion-empty { margin: 0; padding: 16px; color: #64748b; font-size: 13px; text-align: center; }
 
 :deep(.splitpanes__splitter) { width: 7px !important; border-left: 1px solid #64748b; border-right: 1px solid #64748b; background: #cbd5e1 !important; }
 :deep(.splitpanes__splitter:hover) { background: #60a5fa !important; }
