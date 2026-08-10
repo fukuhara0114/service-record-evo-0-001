@@ -430,6 +430,19 @@ class MasterPriceRevisionService
         ];
 
         DB::table('loanermaster')->insert($this->filterExistingColumns('loanermaster', $payload));
+
+        // 共有項目（状態・ノート・日付など）は全版で同一にする
+        LoanerMaster::syncSharedFieldsAcrossVersions($current['loanerID'], [
+            'currentStatus' => $payload['currentStatus'] ?? null,
+            'note1' => $payload['note1'] ?? null,
+            'note2' => $payload['note2'] ?? null,
+            'note3' => $payload['note3'] ?? null,
+            'sentDate' => $payload['sentDate'] ?? null,
+            'returnedDate' => $payload['returnedDate'] ?? null,
+            'lastEditPerson' => $payload['lastEditPerson'] ?? null,
+            'lastEditDate' => $payload['lastEditDate'] ?? null,
+            'certificatedDate' => $payload['certificatedDate'] ?? null,
+        ]);
     }
 
     /**
