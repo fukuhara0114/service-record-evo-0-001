@@ -132,9 +132,12 @@ class EmlReplyDraftService
             $replySubject = $this->buildReplySubject($originalSubject);
         }
 
-        if ($replySubject === '') {
+        if ($templateType === self::TYPE_RECEIPT) {
+            $productName = (string) ($record->productName ?: '—');
+            $sn = (string) ($record->SN ?: '—');
+            $replySubject = '【機材受領のご連絡】（製品:' . $productName . ' SN:' . $sn . '）';
+        } elseif ($replySubject === '') {
             $replySubject = match ($templateType) {
-                self::TYPE_RECEIPT => '製品受領のご連絡',
                 self::TYPE_QUOTE => 'お見積のご案内',
                 self::TYPE_WORK_CHANGE => '作業内容変更のご連絡',
                 default => 'ご連絡',
@@ -161,22 +164,34 @@ class EmlReplyDraftService
      */
     private function buildReplyBodies(ServiceRecord $record, string $templateType, array $original): array
     {
+        $contactPerson = trim((string) ($record->contactPerson ?? ''));
+        if ($contactPerson === '') {
+            $contactPerson = '御担当者';
+        }
+
+        $sender = $this->resolveSenderName();
+        $displayDate = $this->formatDisplayDate($record->receivedDate ?? null);
+
         $vars = [
             'dealer' => $this->e((string) ($record->dealer ?: '（会社名）')),
-            'contactPerson' => $this->e((string) ($record->contactPerson ?: 'ご担当者')),
+            'contactPerson' => $this->e($contactPerson),
             'productName' => $this->e((string) ($record->productName ?: '—')),
             'SN' => $this->e((string) ($record->SN ?: '—')),
             'orderID' => $this->e((string) ($record->orderID ?: '—')),
             'RMA' => $this->e((string) ($record->RMA ?: '—')),
+            'sender' => $this->e($sender),
+            'displayDate' => $this->e($displayDate),
         ];
 
         $plainVars = [
             'dealer' => (string) ($record->dealer ?: '（会社名）'),
-            'contactPerson' => (string) ($record->contactPerson ?: 'ご担当者'),
+            'contactPerson' => $contactPerson,
             'productName' => (string) ($record->productName ?: '—'),
             'SN' => (string) ($record->SN ?: '—'),
             'orderID' => (string) ($record->orderID ?: '—'),
             'RMA' => (string) ($record->RMA ?: '—'),
+            'sender' => $sender,
+            'displayDate' => $displayDate,
         ];
 
         $htmlTemplate = match ($templateType) {
@@ -216,6 +231,41 @@ class EmlReplyDraftService
         ];
     }
 
+    private function resolveSenderName(): string
+    {
+        $user = auth()->user();
+        $kanji = trim((string) ($user?->kanji_name ?? ''));
+        if ($kanji !== '') {
+            return $kanji;
+        }
+        $name = trim((string) ($user?->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        return '担当';
+    }
+
+    private function formatDisplayDate(mixed $value): string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y年n月j日');
+        }
+
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return now()->timezone(config('app.timezone', 'Asia/Tokyo'))->format('Y年n月j日');
+        }
+
+        try {
+            return \Carbon\Carbon::parse($raw)
+                ->timezone(config('app.timezone', 'Asia/Tokyo'))
+                ->format('Y年n月j日');
+        } catch (\Throwable) {
+            return now()->timezone(config('app.timezone', 'Asia/Tokyo'))->format('Y年n月j日');
+        }
+    }
+
     private function wrapHtmlDocument(string $innerHtml): string
     {
         return <<<HTML
@@ -238,14 +288,20 @@ HTML;
     private function receiptHtmlTemplate(): string
     {
         return <<<'TPL'
-<p style="margin:0 0 12px;">{dealer}<br>{contactPerson} 様</p>
-<p style="margin:0 0 12px;">お世話になっております。</p>
-<p style="margin:0 0 12px;">下記製品のご依頼を受領いたしましたのでご連絡いたします。</p>
-<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">
-<tr><td style="padding:4px 12px 4px 0;color:#64748b;">製品名</td><td style="padding:4px 0;font-weight:700;">{productName}</td></tr>
-<tr><td style="padding:4px 12px 4px 0;color:#64748b;">S/N</td><td style="padding:4px 0;font-weight:700;">{SN}</td></tr>
-</table>
-<p style="margin:0 0 12px;">進捗があり次第、改めてご連絡いたします。<br>何卒よろしくお願いいたします。</p>
+<div style="color:#000;">
+<p style="margin:0 0 12px;">{dealer}&emsp;{contactPerson} 様</p>
+<p style="margin:0 0 12px;">いつも大変お世話になっております。<br>エックスライトサービスセンター{sender}です。</p>
+<p style="margin:0 0 12px;">ご依頼いただきました機材（製品:{productName} SN:{SN}）を{displayDate}にX-riteにて受領いたしました。<br>作業を進めさせていただきます。<br>何卒よろしくお願いいたします。<br><br></p>
+<p style="margin:0 0 12px;">なお、お問い合わせは出来るだけメールにてお願いいたします。</p>
+<p style="margin:0 0 16px;">また、電子帳簿保存法の改正に伴い、発注書・納品書等の書類はメールでの送付をお願いいたします。</p>
+<p style="margin:0 0 4px;">*******************************************************************</p>
+<p style="margin:0 0 4px;">エックスライト社 サービスセンター</p>
+<p style="margin:0 0 4px;">〒135-0064 東京都江東区青海2-5-10 テレコムセンタービル 西棟6F</p>
+<p style="margin:0 0 4px;">TEL: 03-6374-8730</p>
+<p style="margin:0 0 12px;">japanserviceorder@xrite.com</p>
+<p style="margin:0 0 4px;">*******************************************************************</p>
+</div>
+<div id="ms-outlook-signature"></div>
 TPL;
     }
 
@@ -283,15 +339,21 @@ TPL;
 {dealer}
 {contactPerson} 様
 
-お世話になっております。
+いつも大変お世話になっております。
+エックスライトサービスセンター{sender}です。
 
-下記製品のご依頼を受領いたしましたのでご連絡いたします。
-
-製品名: {productName}
-S/N: {SN}
-
-進捗があり次第、改めてご連絡いたします。
+ご依頼いただきました機材（製品:{productName} SN:{SN}）を{displayDate}にX-riteにて受領いたしました。
+作業を進めさせていただきます。
 何卒よろしくお願いいたします。
+
+なお、お問い合わせは出来るだけメールにてお願いいたします。
+
+また、電子帳簿保存法の改正に伴い、発注書・納品書等の書類はメールでの送付をお願いいたします。
+
+エックスライト社 サービスセンター
+〒135-0064 東京都江東区青海2-5-10 テレコムセンタービル 西棟6F
+TEL: 03-6374-8730
+japanserviceorder@xrite.com
 TPL;
     }
 
