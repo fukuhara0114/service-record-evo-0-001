@@ -69,6 +69,14 @@ class LoanerMaster extends Model
         'lastEditDate' => 'datetime',
     ];
 
+    /** 機種選択一覧から除外する item 文言か */
+    public static function isExcludedFromProductSelect(?string $item): bool
+    {
+        $text = (string) $item;
+
+        return str_contains($text, '使用不可') || str_contains($text, 'サービス終了');
+    }
+
     protected static bool $syncingSharedFields = false;
 
     protected static function booted(): void

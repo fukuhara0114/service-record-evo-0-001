@@ -80,24 +80,8 @@
                     <section v-if="showLoanerMetaFields" class="info-card info-card-status">
                         <label class="field">
                             <span>status</span>
-                            <template v-if="linkMode === 'none'">
-                                <input
-                                    type="text"
-                                    :value="unregisteredStatusLabel"
-                                    readonly
-                                >
-                                <p class="field-hint">紐づけ無しのため「案件未登録」(20) で保存します。後から service 案件が作成されたら、貸出期間編集画面で親案件を紐づけできます。</p>
-                            </template>
-                            <select v-else v-model="form.status">
-                                <option value="">選択してください</option>
-                                <option
-                                    v-for="status in statuses"
-                                    :key="status.processID_new"
-                                    :value="String(status.processID_new)"
-                                >
-                                    {{ status.status }} ({{ status.processID_new }})
-                                </option>
-                            </select>
+                            <input type="text" value="確保済み (0)" readonly>
+                            <p class="field-hint">新規 loaner は status=0（確保済み）で保存します。</p>
                         </label>
                     </section>
 
@@ -402,13 +386,13 @@ function defaultPeriodStart() {
 
 function defaultPeriodEnd() {
     const d = new Date()
-    d.setDate(d.getDate() + 7)
+    d.setDate(d.getDate() + 14)
     return d.toISOString().slice(0, 10)
 }
 
 const form = reactive({
     productName: '',
-    status: '',
+    status: '0',
     SN: '',
     plannedSentDate: defaultPeriodStart(),
     plannedReturnedDate: defaultPeriodEnd(),
@@ -459,12 +443,18 @@ const loaners = computed(() => {
     return unique
 })
 const loanerProductOptions = computed(() =>
-    (props.loanerProducts ?? []).map(item => ({
-        productName: item.productName,
-        availableCount: item.availableCount,
-        totalCount: item.totalCount,
-        order_type: item.order_type,
-    })),
+    (props.loanerProducts ?? [])
+        .filter((item) => {
+            const text = String(item?.item ?? '')
+            return !text.includes('使用不可') && !text.includes('サービス終了')
+        })
+        .map(item => ({
+            item: item.item ?? '',
+            productName: item.productName,
+            availableCount: item.availableCount,
+            totalCount: item.totalCount,
+            order_type: item.order_type,
+        })),
 )
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
@@ -492,7 +482,7 @@ const showWaitingWarning = computed(() =>
 
 watch(linkMode, (mode) => {
     if (mode === 'none') {
-        form.status = ''
+        form.status = '0'
         selectedParent.value = null
         showParentSearch.value = false
     }
@@ -505,9 +495,14 @@ const filteredLoaners = computed(() => {
         .split(/\s+/)
         .filter(Boolean)
 
-    if (tokens.length === 0) return loaners.value
+    const base = loaners.value.filter((unit) => {
+        const text = String(unit?.item ?? '')
+        return !text.includes('使用不可') && !text.includes('サービス終了')
+    })
 
-    return loaners.value.filter((unit) => {
+    if (tokens.length === 0) return base
+
+    return base.filter((unit) => {
         const text = [
             unit.productName,
             unit.item,
@@ -555,7 +550,7 @@ function openSelectDialog(kind) {
 function clearProductSelection() {
     form.productName = ''
     form.SN = ''
-    form.status = ''
+    form.status = '0'
     availability.value = null
     waitingListAccepted.value = false
     showWaitingConfirm.value = false
@@ -639,7 +634,7 @@ function onMasterSelected(result) {
     if (activeSelectKind.value === 'loanerProduct') {
         form.productName = result.productName ?? ''
         form.SN = ''
-        form.status = ''
+        form.status = '0'
         availability.value = null
         waitingListAccepted.value = false
         showWaitingConfirm.value = false
@@ -683,7 +678,7 @@ async function checkAvailability() {
 
         availability.value = data
         if (data.order_type === 'waiting_list') {
-            form.status = ''
+            form.status = '0'
             waitingListAccepted.value = false
             showWaitingConfirm.value = true
             if (data.suggestedPeriod?.plannedSentDate) {
@@ -776,15 +771,6 @@ async function save() {
         return
     }
 
-    if (
-        linkMode.value === 'parent'
-        && availability.value?.order_type === 'loaner'
-        && form.status === ''
-    ) {
-        error.value = 'status を選択してください。'
-        return
-    }
-
     if (form.plannedSentDate && form.plannedReturnedDate && form.plannedReturnedDate < form.plannedSentDate) {
         error.value = '貸出終了日は開始日以降にしてください。'
         return
@@ -806,9 +792,7 @@ async function save() {
                 receivedDate: null,
                 linkMode: linkMode.value,
                 parentID: linkMode.value === 'parent' ? Number(selectedParent.value.orderID) : null,
-                status: availability.value?.order_type === 'loaner' && linkMode.value === 'parent' && form.status !== ''
-                    ? Number(form.status)
-                    : null,
+                status: 0,
                 returnCode: null,
                 SN: form.SN || null,
                 plannedSentDate: form.plannedSentDate || null,

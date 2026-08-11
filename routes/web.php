@@ -76,6 +76,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/servicerecord/loaner/store', [LoanerRecordController::class, 'store'])->name('servicerecord.loaner.store');
     Route::get('/servicerecord/loaner/detail/{id}', [LoanerRecordController::class, 'detail'])->name('servicerecord.loaner.detail');
     Route::put('/servicerecord/loaner/detail/{id}', [LoanerRecordController::class, 'updateDetail'])->name('servicerecord.loaner.detail.update');
+    Route::post('/servicerecord/loaner/detail/{id}/promote', [LoanerRecordController::class, 'promoteFromWaiting'])->name('servicerecord.loaner.detail.promote');
     Route::get('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'editPeriod'])->name('servicerecord.loaner.period.edit');
     Route::put('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'updatePeriod'])->name('servicerecord.loaner.period.update');
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');

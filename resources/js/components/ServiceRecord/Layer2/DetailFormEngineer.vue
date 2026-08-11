@@ -172,34 +172,11 @@
                             </div>
                         </aside>
                         <div class="card-main">
-                            <div v-if="sharedNotes.length" class="table-wrap">
-                                <table class="data-table notes-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="col-note-date">日時</th>
-                                            <th class="col-note-author">記入者</th>
-                                            <th>内容</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="note in sharedNotes"
-                                            :key="note.id"
-                                            class="table-row"
-                                            :class="{
-                                                'important-row': note.important,
-                                                'active-row': selectedSharedNoteId === note.id,
-                                            }"
-                                            @click="selectedSharedNoteId = note.id"
-                                        >
-                                            <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                            <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                            <td class="text-cell" @click.stop="selectedSharedNoteId = note.id" v-html="linkifyNote(note.note)" />
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else class="empty-message">Notes がありません。</p>
+                            <NotesTable
+                                v-model:selected-id="selectedSharedNoteId"
+                                :notes="sharedNotes"
+                                :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                            />
                         </div>
                     </section>
 
@@ -213,34 +190,12 @@
                             </div>
                         </aside>
                         <div class="card-main">
-                            <div v-if="personalNotes.length" class="table-wrap">
-                                <table class="data-table notes-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="col-note-date">日時</th>
-                                            <th class="col-note-author">記入者</th>
-                                            <th>内容</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="note in personalNotes"
-                                            :key="note.id"
-                                            class="table-row"
-                                            :class="{
-                                                'important-row': note.important,
-                                                'active-row': selectedPersonalNoteId === note.id,
-                                            }"
-                                            @click="selectedPersonalNoteId = note.id"
-                                        >
-                                            <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                            <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                            <td class="text-cell" @click.stop="selectedPersonalNoteId = note.id" v-html="linkifyNote(note.note)" />
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else class="empty-message">Personal Notes がありません。</p>
+                            <NotesTable
+                                v-model:selected-id="selectedPersonalNoteId"
+                                :notes="personalNotes"
+                                :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                empty-message="Personal Notes がありません。"
+                            />
                         </div>
                     </section>
 
@@ -307,8 +262,8 @@ import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { linkifyText } from '@/utils/linkifyText'
 
 const props = defineProps({
     record: Object,
@@ -370,11 +325,6 @@ function isPersonalNote(note) {
     return note?.personal === true || note?.personal === 1 || note?.personal === '1'
 }
 
-function linkifyNote(value) {
-    const html = linkifyText(value)
-    return html || '—'
-}
-
 const selectedSharedNote = computed(() =>
     sharedNotes.value.find(note => Number(note.id) === Number(selectedSharedNoteId.value)) || null,
 )
@@ -416,13 +366,6 @@ function canModifyNote(note) {
     if (!note) return false
     if (!currentUserName.value) return false
     return String(note.whoWrote || '') === String(currentUserName.value)
-}
-
-function formatDate(value) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return String(value)
-    return date.toLocaleString('ja-JP')
 }
 
 function getCsrfToken() {

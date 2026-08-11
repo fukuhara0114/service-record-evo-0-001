@@ -36,10 +36,11 @@
             <button
                 type="button"
                 class="action-btn action-btn-mapics"
+                :class="{ 'is-on': isMapics47On }"
                 :disabled="statusActionSaving"
                 @click="toggleMapics47"
             >
-                Mapics47{{ isMapics47On ? ' ON' : '' }}
+                Mapics47
             </button>
             <label class="toolbar-field">
                 <span>出荷予定</span>
@@ -51,29 +52,37 @@
                     @input="updateDraftDateValue('shippingOut_requiredDate', $event.target.value)"
                 >
             </label>
-            <div class="toolbar-actions">
-                <span class="files-count">
-                    {{ sortedFiles.length }} File(s)
-                    ／ 撮影画像 {{ capturedImages.length }}件
-                </span>
-                <button type="button" class="action-btn" :disabled="statusActionSaving" @click="showGalleryDialog = true">
+            <div class="invoice-toolbar-actions">
+                <button type="button" class="action-btn action-btn-wide" :disabled="statusActionSaving" @click="showGalleryDialog = true">
                     Gallery
                 </button>
-                <button type="button" class="action-btn action-btn-primary" :disabled="statusActionSaving" @click="$emit('save')">
+                <button type="button" class="action-btn action-btn-primary action-btn-wide" :disabled="statusActionSaving" @click="$emit('save')">
                     保存
                 </button>
                 <button
                     type="button"
-                    class="action-btn action-btn-primary"
+                    class="action-btn action-btn-primary action-btn-wide"
                     :disabled="statusActionSaving"
                     @click="onComplete"
                 >
                     {{ statusActionSaving ? '処理中...' : '完了' }}
                 </button>
-                <button type="button" class="action-btn" :disabled="statusActionSaving" @click="onBack">
-                    戻る
+                <button
+                    type="button"
+                    class="action-btn action-btn-danger action-btn-wide"
+                    :disabled="statusActionSaving"
+                    @click="onRemand"
+                >
+                    差戻
                 </button>
             </div>
+            <span class="files-count">
+                {{ sortedFiles.length }} File(s)
+                ／ 撮影画像 {{ capturedImages.length }}件
+            </span>
+            <button type="button" class="action-btn" :disabled="statusActionSaving" @click="onBack">
+                戻る
+            </button>
         </section>
         <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
@@ -193,30 +202,11 @@
                                 </button>
                             </div>
                         </div>
-                        <div v-if="sharedNotes.length" class="notes-wrap">
-                            <table class="data-table notes-table">
-                                <thead>
-                                    <tr>
-                                        <th>日時</th>
-                                        <th>記入者</th>
-                                        <th>内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="note in sharedNotes"
-                                        :key="note.id"
-                                        :class="{ 'active-note-row': selectedNoteId === note.id }"
-                                        @click="selectedNoteId = note.id"
-                                    >
-                                        <td class="col-date">{{ formatDate(note.whenWrote) }}</td>
-                                        <td class="col-author">{{ note.whoWrote || '—' }}</td>
-                                        <td class="text-cell" v-html="linkifyNote(note.note)" />
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message">Notes がありません。</p>
+                        <NotesTable
+                            v-model:selected-id="selectedNoteId"
+                            :notes="sharedNotes"
+                            :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                        />
                     </section>
                 </div>
             </Pane>
@@ -330,8 +320,8 @@ import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { linkifyText } from '@/utils/linkifyText'
 import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
@@ -498,14 +488,6 @@ function formatSignedAmount(value) {
     return num > 0 ? `-${abs}` : `+${abs}`
 }
 
-function formatDate(value) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return String(value)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
 function toDateInputValue(value) {
     if (!value) return ''
     const normalized = String(value).trim().replace(' ', 'T')
@@ -516,11 +498,6 @@ function toDateInputValue(value) {
     }
     const pad = (n) => String(n).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-function linkifyNote(value) {
-    const html = linkifyText(value)
-    return html || '—'
 }
 
 function updateDraftValue(field, value) {
@@ -870,6 +847,7 @@ async function onComplete() {
     actionMessage.value = ''
     try {
         await updateRecordFields({
+            status: 350,
             invNum: props.draftRecord.invNum,
             mapics_inv: props.draftRecord.mapics_inv,
             mapics47: props.draftRecord.mapics47,
@@ -878,7 +856,10 @@ async function onComplete() {
             price: props.draftRecord.price,
             discount_service: props.draftRecord.discount_service,
         })
-        emit('workflow-done', { action: 'complete' })
+        emit('workflow-done', {
+            action: 'complete',
+            status: 350,
+        })
     } catch (e) {
         if (!e.cancelled) {
             actionMessage.value = e.message || '完了処理に失敗しました。'
@@ -886,6 +867,16 @@ async function onComplete() {
     } finally {
         statusActionSaving.value = false
     }
+}
+
+function onRemand() {
+    if (statusActionSaving.value) return
+    emit('open-dialog', 'NOTE', {
+        mode: 'create',
+        personal: false,
+        remand: true,
+        remandStatus: 201,
+    })
 }
 
 function onBack() {
@@ -1001,19 +992,40 @@ watch(
     margin-left: auto;
 }
 
+.invoice-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 50px;
+}
+
 .files-count {
     font-size: 12px;
     color: #64748b;
-    margin-right: 4px;
+    margin-left: auto;
+    margin-right: 8px;
 }
 
 .action-btn-mapics {
-    background: #16a34a;
-    color: #fff;
+    background: #fff;
+    color: #0f172a;
+    border: 1px solid #94a3b8;
 }
 
 .action-btn-mapics:hover {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+.action-btn-mapics.is-on {
+    background: #16a34a;
+    color: #fff;
+    border-color: #16a34a;
+}
+
+.action-btn-mapics.is-on:hover {
     background: #15803d;
+    color: #fff;
 }
 
 .invoice-splitpanes {

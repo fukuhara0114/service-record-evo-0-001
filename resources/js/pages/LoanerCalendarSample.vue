@@ -100,8 +100,15 @@ import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
+import multiMonthPlugin from '@fullcalendar/multimonth'
 import interactionPlugin from '@fullcalendar/interaction'
 import { apiFetch } from '@/utils/apiFetch'
+import {
+    handleMonthCellDoubleClickToDayView,
+    ROLLING_MONTH_VIEW,
+    fullCalendarDayCellClassNames,
+    rollingMonthViewConfig,
+} from '@/utils/fullCalendarCommon'
 
 defineProps({
     loaners: {
@@ -117,6 +124,7 @@ const selectedEvent = ref(null)
 const error = ref('')
 const success = ref('')
 const periodSaving = ref(false)
+const TWO_MONTH_VIEW = 'multiMonthTwoMonth'
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
@@ -203,20 +211,31 @@ function decorateEvents(events) {
 }
 
 const calendarOptions = {
-    plugins: [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin],
-    initialView: 'dayGridMonth',
+    plugins: [dayGridPlugin, timeGridPlugin, listPlugin, multiMonthPlugin, interactionPlugin],
+    initialView: ROLLING_MONTH_VIEW,
     locale: 'ja',
+    firstDay: 0,
     height: '100%',
     headerToolbar: {
         left: 'prev,next today',
         center: 'title',
-        right: 'dayGridMonth,timeGridWeek,listWeek',
+        right: `${ROLLING_MONTH_VIEW},${TWO_MONTH_VIEW},timeGridWeek,listWeek`,
     },
     buttonText: {
         today: '今日',
-        month: '月',
         week: '週',
         list: 'リスト',
+    },
+    views: {
+        [ROLLING_MONTH_VIEW]: {
+            ...rollingMonthViewConfig,
+        },
+        [TWO_MONTH_VIEW]: {
+            type: 'multiMonth',
+            duration: { months: 2 },
+            multiMonthMaxColumns: 2,
+            buttonText: '2月',
+        },
     },
     editable: true,
     eventStartEditable: true,
@@ -225,6 +244,8 @@ const calendarOptions = {
     selectable: false,
     dayMaxEvents: true,
     eventDisplay: 'block',
+    dayCellClassNames: fullCalendarDayCellClassNames,
+    dateClick: handleCalendarDateClick,
     events: fetchEvents,
     eventClick: handleEventClick,
     eventDrop: handleEventDropOrResize,
@@ -240,6 +261,15 @@ const calendarOptions = {
             html: `<div class="loaner-event-chip" style="background:${colors.background};border-color:${colors.border};">${title}</div>`,
         }
     },
+}
+
+function handleCalendarDateClick(info) {
+    handleMonthCellDoubleClickToDayView(info)
+
+    if (info?.view?.type !== TWO_MONTH_VIEW) return
+    if ((info?.jsEvent?.detail || 0) < 2) return
+    if (!info?.dateStr) return
+    info.view.calendar?.changeView?.('dayGridDay', info.dateStr)
 }
 
 async function fetchEvents(info, successCallback, failureCallback) {

@@ -151,17 +151,19 @@ const configs = {
     },
     loanerProduct: {
         title: '貸出機種選択',
-        searchPlaceholder: '半角英数で検索（productName）',
+        searchPlaceholder: '半角英数で検索（productName / item）',
         columns: [
+            { key: 'item', label: 'item', getter: item => item?.item ?? '—' },
             { key: 'productName', label: 'productName', getter: item => item?.productName ?? '—' },
             { key: 'availableCount', label: '在庫', getter: item => item?.availableCount ?? 0 },
             { key: 'totalCount', label: '台数', getter: item => item?.totalCount ?? 0 },
             { key: 'order_type', label: '判定', getter: item => item?.order_type ?? '—' },
         ],
         valueGetter: item => item?.productName,
-        searchFields: item => [item?.productName],
+        searchFields: item => [item?.productName, item?.item],
         buildResult: item => ({
             productName: String(item?.productName ?? ''),
+            item: item?.item ?? '',
         }),
     },
     loanerUnit: {
@@ -204,15 +206,22 @@ const searchPlaceholder = computed(() => config.value.searchPlaceholder)
 const columns = computed(() => config.value.columns)
 
 const filteredItems = computed(() => {
+    const baseItems = props.kind === 'loanerProduct'
+        ? (props.items ?? []).filter((item) => {
+            const text = String(item?.item ?? '')
+            return !text.includes('使用不可') && !text.includes('サービス終了')
+        })
+        : (props.items ?? [])
+
     const tokens = searchQuery.value
         .toLowerCase()
         .trim()
         .split(/\s+/)
         .filter(Boolean)
 
-    if (tokens.length === 0) return props.items
+    if (tokens.length === 0) return baseItems
 
-    return props.items.filter((item) => {
+    return baseItems.filter((item) => {
         const text = config.value.searchFields(item)
             .filter(value => value != null && value !== '')
             .join(' ')

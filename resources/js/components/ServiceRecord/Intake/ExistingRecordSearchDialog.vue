@@ -55,28 +55,50 @@
 
                 <div class="detail-pane">
                     <div class="pane-header">
-                        <h4>案件詳細</h4>
+                        <h4>Notes / Files</h4>
                     </div>
-                    <div v-if="selectedRecord" class="detail-grid">
-                        <div><span>orderID</span><strong>{{ selectedRecord.orderID || '—' }}</strong></div>
-                        <div><span>order_type</span><strong>{{ selectedRecord.order_type || '—' }}</strong></div>
-                        <div><span>productName</span><strong>{{ selectedRecord.productName || '—' }}</strong></div>
-                        <div><span>SN</span><strong>{{ selectedRecord.SN || '—' }}</strong></div>
-                        <div><span>dealer</span><strong>{{ selectedRecord.dealer || '—' }}</strong></div>
-                        <div><span>dealer_depart</span><strong>{{ selectedRecord.dealer_depart || '—' }}</strong></div>
-                        <div><span>contactPerson</span><strong>{{ selectedRecord.contactPerson || '—' }}</strong></div>
-                        <div v-if="purpose === 'loaner'">
-                            <span>status</span>
-                            <strong>{{ selectedRecord.status_master_loaner?.status || selectedRecord.status || '—' }}</strong>
-                        </div>
-                        <div v-if="purpose === 'loaner'">
-                            <span>parentID</span>
-                            <strong>{{ selectedRecord.parentID || 'なし' }}</strong>
-                        </div>
-                        <div v-if="purpose !== 'loaner'">
-                            <span>returnCode</span>
-                            <strong>{{ selectedRecord.return_code_master?.description || '—' }}</strong>
-                        </div>
+                    <div v-if="selectedRecord" class="detail-scroll">
+                        <p v-if="attachmentsLoading" class="attachment-status">Notes / Files を読み込み中...</p>
+                        <p v-else-if="attachmentsError" class="attachment-status error">{{ attachmentsError }}</p>
+
+                        <template v-else>
+                            <section class="attachment-section">
+                                <div class="attachment-section-header">
+                                    <h5>Notes（{{ sharedNotes.length }}件）</h5>
+                                </div>
+                                <div class="notes-host">
+                                    <NotesTable
+                                        v-model:selected-id="selectedNoteId"
+                                        :notes="sharedNotes"
+                                        :record-order-id="selectedRecord.orderID"
+                                        :date-column-width="134"
+                                        :author-column-width="66"
+                                        :table-font-size="12"
+                                    />
+                                </div>
+                            </section>
+
+                            <section class="attachment-section attachment-section-files">
+                                <div class="attachment-section-header">
+                                    <h5>Files（書類 {{ sortedDetailFiles.length }}件）</h5>
+                                </div>
+                                <div class="files-list-wrap">
+                                    <AttachedFileItem
+                                        v-for="(file, index) in sortedDetailFiles"
+                                        :key="file.id"
+                                        :file="file"
+                                        :order-id="selectedRecord.orderID"
+                                        :file-base-url="filesBaseUrl"
+                                        :selected="selectedFileId === file.id"
+                                        :can-move-up="false"
+                                        :can-move-down="false"
+                                        :sorting="false"
+                                        @select="selectedFileId = file.id"
+                                    />
+                                    <p v-if="!sortedDetailFiles.length" class="empty-message">書類ファイルがありません。</p>
+                                </div>
+                            </section>
+                        </template>
                     </div>
                     <p v-else class="empty-message">左の一覧から案件を選択してください。</p>
                     <div class="detail-actions">
@@ -160,6 +182,10 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { usePage } from '@inertiajs/vue3'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
+import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     records: {
@@ -195,12 +221,21 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'loaner-selected', 'search'])
 
+const page = usePage()
 const selectedOrderId = ref(null)
 const showLinkConfirm = ref(false)
 const linkForm = reactive({
     receivedDate: '',
     status: '',
 })
+
+const attachmentsLoading = ref(false)
+const attachmentsError = ref('')
+const detailNotes = ref([])
+const detailFiles = ref([])
+const selectedNoteId = ref(null)
+const selectedFileId = ref(null)
+let attachmentsRequestSeq = 0
 
 const dialogTitle = computed(() => {
     if (props.purpose === 'parent') return '親案件の検索'
@@ -235,9 +270,61 @@ const selectedRecord = computed(() =>
     (props.records ?? []).find(record => String(record.orderID) === String(selectedOrderId.value)),
 )
 
-watch(selectedRecord, () => {
+const sharedNotes = computed(() =>
+    (detailNotes.value ?? []).filter(note => !(
+        note?.personal === true || note?.personal === 1 || note?.personal === '1'
+    )),
+)
+
+const sortedDetailFiles = computed(() =>
+    [...(detailFiles.value ?? [])].sort((a, b) => {
+        const aSort = Number(a?.sortNum ?? Number.MAX_SAFE_INTEGER)
+        const bSort = Number(b?.sortNum ?? Number.MAX_SAFE_INTEGER)
+        if (aSort !== bSort) return aSort - bSort
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    }),
+)
+
+const filesBaseUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/files`)
+
+watch(selectedRecord, (record) => {
     showLinkConfirm.value = false
+    selectedNoteId.value = null
+    selectedFileId.value = null
+    loadAttachments(record?.orderID)
 })
+
+async function loadAttachments(orderID) {
+    const requestSeq = ++attachmentsRequestSeq
+    detailNotes.value = []
+    detailFiles.value = []
+    attachmentsError.value = ''
+
+    if (!orderID) {
+        attachmentsLoading.value = false
+        return
+    }
+
+    attachmentsLoading.value = true
+    try {
+        const url = `${page.props.appBaseUrl}/servicerecord/attachments/${orderID}`
+        const result = await apiFetch(url)
+        if (requestSeq !== attachmentsRequestSeq) return
+        if (!result?.response?.ok) {
+            throw new Error(result?.data?.message || '添付データの取得に失敗しました。')
+        }
+        detailNotes.value = result.data?.notes ?? []
+        detailFiles.value = result.data?.files ?? []
+        selectedFileId.value = detailFiles.value[0]?.id ?? null
+    } catch (e) {
+        if (requestSeq !== attachmentsRequestSeq) return
+        attachmentsError.value = e.message || '添付データの取得に失敗しました。'
+    } finally {
+        if (requestSeq === attachmentsRequestSeq) {
+            attachmentsLoading.value = false
+        }
+    }
+}
 
 function toDateInputValue(value) {
     if (!value) return ''
@@ -453,34 +540,66 @@ function confirmLink() {
     color: #1e293b;
 }
 
-.detail-grid {
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    overflow: auto;
+.detail-scroll {
     flex: 1;
-}
-
-.detail-grid div {
+    min-height: 0;
+    overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    background: #f8fafc;
 }
 
-.detail-grid span {
+.attachment-section {
+    padding: 12px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 140px;
+}
+
+.attachment-section + .attachment-section {
+    border-top: 1px solid #e2e8f0;
+}
+
+.attachment-section-files {
+    flex: 1;
+    min-height: 220px;
+}
+
+.attachment-section-header h5 {
+    margin: 0;
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.attachment-status {
+    margin: 0;
+    padding: 16px;
     font-size: 12px;
     color: #64748b;
 }
 
-.detail-grid strong {
-    font-size: 13px;
-    color: #1e293b;
-    word-break: break-word;
+.attachment-status.error {
+    color: #b91c1c;
+}
+
+.notes-host {
+    min-height: 120px;
+    max-height: 220px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.files-list-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .empty-message {

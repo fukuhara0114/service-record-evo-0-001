@@ -148,38 +148,11 @@
                                         <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
                                     </div>
                                 </div>
-                                <div v-if="sharedNotes.length" class="attachment-table-wrap">
-                                    <table class="data-table notes-table">
-                                        <thead>
-                                            <tr>
-                                                <th class="col-note-date">日時</th>
-                                                <th class="col-note-author">記入者</th>
-                                                <th class="col-note-body">内容</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr
-                                                v-for="note in sharedNotes"
-                                                :key="note.id"
-                                                class="table-row"
-                                                :class="{
-                                                    'important-row': note.important,
-                                                    'active-row': Number(selectedNoteId) === Number(note.id),
-                                                }"
-                                                @click="selectedNoteId = note.id"
-                                            >
-                                                <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                                <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                                <td
-                                                    class="text-cell col-note-body"
-                                                    @click.stop="selectedNoteId = note.id"
-                                                    v-html="linkifyNote(note.note)"
-                                                />
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <p v-else class="empty-message">Notes がありません。</p>
+                                <NotesTable
+                                    v-model:selected-id="selectedNoteId"
+                                    :notes="sharedNotes"
+                                    :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                />
                             </section>
                         </Pane>
                     </Splitpanes>
@@ -319,8 +292,8 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { linkifyText } from '@/utils/linkifyText'
 import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
@@ -480,19 +453,6 @@ function formatSignedAmount(value) {
     if (!Number.isFinite(num) || num === 0) return '0'
     const abs = formatPrice(Math.abs(num))
     return num > 0 ? `-${abs}` : `+${abs}`
-}
-
-function formatDate(value) {
-    if (!value) return '—'
-    const normalized = String(value).replace(' ', 'T')
-    const date = new Date(normalized)
-    if (Number.isNaN(date.getTime())) return String(value)
-    return date.toLocaleDateString('ja-JP')
-}
-
-function linkifyNote(value) {
-    const html = linkifyText(value)
-    return html || '—'
 }
 
 function getApiBasePath() {

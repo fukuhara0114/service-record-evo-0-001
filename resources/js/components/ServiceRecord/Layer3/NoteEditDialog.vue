@@ -90,7 +90,7 @@ async function save() {
     const noteBody = (() => {
         const text = noteText.value.trim()
         if (props.payload?.remand) {
-            return text.startsWith('[差戻理由]') ? text : `[差戻理由]\n${text}`
+            return text.startsWith('[差戻理由]') ? text : `[差戻理由] ${text}`
         }
         return text
     })()

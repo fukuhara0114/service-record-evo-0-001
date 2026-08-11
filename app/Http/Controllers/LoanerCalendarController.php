@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AttachedLoaner;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
+use App\Support\LoanerStatusFlow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -178,14 +179,57 @@ class LoanerCalendarController extends Controller
         ];
     }
 
+    /**
+     * 絞り込み候補: 未完了の loaner / waiting_list 案件に紐づく loanerID のみ。
+     * loaner の未完了は status >= 0 かつ status < 400（アクティブリストと同じ）。
+     */
     private function loanerOptions()
     {
-        return LoanerMaster::query()
+        $activeRecordScope = function ($query) {
+            $query->where(function ($inner) {
+                $inner
+                    ->where(function ($loaner) {
+                        $loaner->where('order_type', 'loaner')
+                            ->where('status', '>=', LoanerStatusFlow::STOCK)
+                            ->where('status', '<', LoanerStatusFlow::ACTIVE_LIST_STATUS_MAX);
+                    })
+                    ->orWhere('order_type', 'waiting_list');
+            });
+        };
+
+        $idsFromRecords = ServiceRecord::query()
+            ->where($activeRecordScope)
             ->whereNotNull('loanerID')
+            ->where('loanerID', '!=', '')
+            ->distinct()
+            ->pluck('loanerID');
+
+        $idsFromAttached = AttachedLoaner::query()
+            ->whereNotNull('loanerID')
+            ->where('loanerID', '!=', '')
+            ->whereHas('serviceRecord', $activeRecordScope)
+            ->distinct()
+            ->pluck('loanerID');
+
+        $loanerIds = $idsFromRecords
+            ->merge($idsFromAttached)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($loanerIds->isEmpty()) {
+            return collect();
+        }
+
+        return LoanerMaster::query()
+            ->whereIn('loanerID', $loanerIds)
             ->orderBy('productName')
             ->orderBy('loanerID')
-            ->limit(500)
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
             ->get(['loanerID', 'productName', 'item', 'SN'])
+            ->unique('loanerID')
             ->map(fn ($row) => [
                 'loanerID' => $row->loanerID,
                 'label' => trim(implode(' / ', array_filter([

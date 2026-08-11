@@ -181,34 +181,12 @@
                         </div>
                     </div>
                     <div class="panel-body notes-body">
-                        <div v-if="sharedNotes.length" class="table-wrap">
-                            <table class="data-table notes-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-date">日時</th>
-                                        <th class="col-author">記入者</th>
-                                        <th>内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="note in sharedNotes"
-                                        :key="note.id"
-                                        class="table-row"
-                                        :class="{
-                                            'important-row': note.important,
-                                            'active-row': selectedNoteId === note.id,
-                                        }"
-                                        @click="selectedNoteId = note.id"
-                                    >
-                                        <td class="col-date">{{ formatDate(note.whenWrote) }}</td>
-                                        <td class="col-author">{{ note.whoWrote || '—' }}</td>
-                                        <td class="text-cell" v-html="linkifyNote(note.note)" />
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p v-else class="empty-message notes-empty">Notes</p>
+                        <NotesTable
+                            v-model:selected-id="selectedNoteId"
+                            :notes="sharedNotes"
+                            :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                            empty-message="Notes"
+                        />
                     </div>
                 </section>
             </div>
@@ -221,8 +199,8 @@ import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { linkifyText } from '@/utils/linkifyText'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 360
@@ -305,15 +283,6 @@ function fieldValue(field) {
 function updateDraftValue(field, value) {
     if (!props.draftRecord) return
     props.draftRecord[field] = value
-}
-
-function formatDate(value) {
-    if (!value) return '—'
-    return String(value).replace('T', ' ').slice(0, 16)
-}
-
-function linkifyNote(text) {
-    return linkifyText(text || '')
 }
 
 function getCsrfToken() {

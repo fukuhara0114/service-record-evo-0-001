@@ -180,6 +180,17 @@
                     >
                         左右入替
                     </button>
+                    <template v-if="mode === 'shippingPrep'">
+                        <button
+                            type="button"
+                            class="abroad-excel-btn shipping-paste-btn"
+                            :disabled="abroadSelectedCount === 0 || shippingExcelCopyBusy"
+                            @click="copySelectedRowsForExcelPaste"
+                        >
+                            Excel用コピー{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                        </button>
+                        <span v-if="shippingExcelCopyMessage" class="abroad-excel-message">{{ shippingExcelCopyMessage }}</span>
+                    </template>
                 </div>
                 <div class="home-link-area">
                     <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
@@ -198,6 +209,16 @@
                     <thead>
                         <tr>
                             <th style="width: 80px; text-align: center;">OrderID</th>
+                            <th v-if="mode === 'shippingPrep'" style="width: 44px; text-align: center;">
+                                <input
+                                    type="checkbox"
+                                    :checked="abroadAllVisibleSelected"
+                                    :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                    title="表示中を全選択"
+                                    @click.stop
+                                    @change="toggleAbroadSelectAll($event)"
+                                >
+                            </th>
                             <th>予定出荷日</th>
                             <th>ステータス</th>
                             <th>RMA#</th>
@@ -225,6 +246,18 @@
                                 style="text-align: center; font-weight: bold;"
                                 :class="orderIdUnderlineClass(r)"
                             >{{ r.orderID }}</td>
+                            <td
+                                v-if="mode === 'shippingPrep'"
+                                style="text-align: center;"
+                                @click.stop
+                                @dblclick.stop
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                             <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
@@ -273,6 +306,16 @@
                             <thead>
                                 <tr>
                                     <th style="width: 80px; text-align: center;">OrderID</th>
+                                    <th v-if="mode === 'shippingPrep'" style="width: 44px; text-align: center;">
+                                        <input
+                                            type="checkbox"
+                                            :checked="abroadAllVisibleSelected"
+                                            :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                            title="表示中を全選択"
+                                            @click.stop
+                                            @change="toggleAbroadSelectAll($event)"
+                                        >
+                                    </th>
                                     <th>予定出荷日</th>
                                     <th>ステータス</th>
                                     <th>RMA#</th>
@@ -300,6 +343,18 @@
                                         style="text-align: center; font-weight: bold;"
                                         :class="orderIdUnderlineClass(r)"
                                     >{{ r.orderID }}</td>
+                                    <td
+                                        v-if="mode === 'shippingPrep'"
+                                        style="text-align: center;"
+                                        @click.stop
+                                        @dblclick.stop
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="isAbroadSelected(r.orderID)"
+                                            @change="toggleAbroadSelect(r.orderID, $event)"
+                                        >
+                                    </td>
                                     <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                                     <td>{{ statusLabel(r) }}</td>
                                     <td>{{ r.RMA }}</td>
@@ -345,6 +400,18 @@
                     Create Excel File{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
                 </button>
                 <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
+            </div>
+            <!-- Invoice: Excel 貼付用クリップボードコピー -->
+            <div v-else-if="orderTypeFilter === 'invoice'" class="abroad-toolbar">
+                <button
+                    type="button"
+                    class="abroad-excel-btn"
+                    :disabled="abroadSelectedCount === 0 || shippingExcelCopyBusy"
+                    @click="copySelectedRowsForExcelPaste"
+                >
+                    Excel用コピー{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                </button>
+                <span v-if="shippingExcelCopyMessage" class="abroad-excel-message">{{ shippingExcelCopyMessage }}</span>
             </div>
             <!-- RMA / Update SM: Sync SM + Auto update -->
             <div v-else-if="isSmListMode" class="abroad-toolbar abroad-toolbar-sm">
@@ -419,10 +486,10 @@
                     </tr>
                     <tr v-else-if="orderTypeFilter === 'loaner'">
                         <th style="width: 80px; text-align: center;">orderID</th>
-                        <th style="width: 80px; text-align: center;">ParentID</th>
-                        <th>status</th>
-                        <th>ProductName</th>
+                        <th style="width: 80px; text-align: center;">parentID</th>
+                        <th>productName</th>
                         <th>SN</th>
+                        <th>status</th>
                         <th>dealer</th>
                         <th>dealer_depart</th>
                         <th>contactPerson</th>
@@ -439,6 +506,31 @@
                         <th>dealer_depart</th>
                         <th>contactPerson</th>
                         <th>返却元</th>
+                    </tr>
+                    <tr v-else-if="orderTypeFilter === 'invoice'">
+                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <th style="width: 44px; text-align: center;">
+                            <input
+                                type="checkbox"
+                                :checked="abroadAllVisibleSelected"
+                                :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                title="表示中を全選択"
+                                @click.stop
+                                @change="toggleAbroadSelectAll($event)"
+                            >
+                        </th>
+                        <th>出荷予定日</th>
+                        <th>ステータス</th>
+                        <th>RMA#</th>
+                        <th>製品名</th>
+                        <th>S/N</th>
+                        <th>作業内容</th>
+                        <th>担当者</th>
+                        <th>販売店</th>
+                        <th>部署</th>
+                        <th>担当者</th>
+                        <th>Email</th>
+                        <th>Phone</th>
                     </tr>
                     <tr v-else>
                         <th style="width: 80px; text-align: center;">OrderID</th>
@@ -519,9 +611,9 @@
                         <template v-else-if="orderTypeFilter === 'loaner'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td style="text-align: center;">{{ r.parentID }}</td>
-                            <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
+                            <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.dealer }}</td>
                             <td>{{ r.dealer_depart }}</td>
                             <td>{{ r.contactPerson }}</td>
@@ -544,6 +636,28 @@
                             <td>{{ r.dealer_depart }}</td>
                             <td>{{ r.contactPerson }}</td>
                             <td style="text-align: center;">{{ r.promotion_source_orderID || '—' }}</td>
+                        </template>
+                        <template v-else-if="orderTypeFilter === 'invoice'">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
+                            <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.email }}</td>
+                            <td>{{ r.phone }}</td>
                         </template>
                         <template v-else>
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -809,7 +923,7 @@ import ExcelJS from 'exceljs'
 import { redirectToLogin } from '@/utils/auth'
 import { apiFetch } from '@/utils/apiFetch'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
@@ -882,7 +996,64 @@ onUnmounted(() => {
 
 // --- 第1階層 ---
 const searchQuery = ref('')
-const orderTypeFilter = ref('service')
+const ORDER_TYPE_FILTERS = [
+    'service',
+    'tech_comp',
+    'closing',
+    'invoice',
+    'loaner',
+    'waiting_list',
+    'abroad',
+    'rma',
+    'update_sm',
+]
+const ORDER_TYPE_FILTER_STORAGE_KEY = 'serviceRecordOrderTypeFilter'
+
+function resolveInitialOrderTypeFilter() {
+    if (typeof window !== 'undefined') {
+        try {
+            const fromQuery = new URLSearchParams(window.location.search).get('orderType')
+            if (ORDER_TYPE_FILTERS.includes(fromQuery)) return fromQuery
+        } catch {
+            // ignore
+        }
+    }
+    if (typeof sessionStorage !== 'undefined') {
+        try {
+            const stored = sessionStorage.getItem(ORDER_TYPE_FILTER_STORAGE_KEY)
+            if (ORDER_TYPE_FILTERS.includes(stored)) return stored
+        } catch {
+            // ignore
+        }
+    }
+    return 'service'
+}
+
+function persistOrderTypeFilter(value) {
+    if (typeof sessionStorage === 'undefined') return
+    try {
+        sessionStorage.setItem(ORDER_TYPE_FILTER_STORAGE_KEY, value)
+    } catch {
+        // ignore
+    }
+}
+
+function syncOrderTypeQuery(value) {
+    if (typeof window === 'undefined' || !window.history?.replaceState) return
+    try {
+        const url = new URL(window.location.href)
+        if (ORDER_TYPE_FILTERS.includes(value) && value !== 'service') {
+            url.searchParams.set('orderType', value)
+        } else {
+            url.searchParams.delete('orderType')
+        }
+        window.history.replaceState({}, '', url.href)
+    } catch {
+        // ignore
+    }
+}
+
+const orderTypeFilter = ref(resolveInitialOrderTypeFilter())
 const isSmListMode = computed(() =>
     orderTypeFilter.value === 'rma' || orderTypeFilter.value === 'update_sm',
 )
@@ -919,6 +1090,8 @@ const abroadExcelPreviewRows = ref([])
 const abroadAttachedImages = ref([])
 const abroadExcelCreating = ref(false)
 const abroadSyncSmBusy = ref(false)
+const shippingExcelCopyBusy = ref(false)
+const shippingExcelCopyMessage = ref('')
 const entityIdSavingOrderId = ref(null)
 const entityIdEditOriginal = new Map()
 const smListAutoUpdate = ref(false)
@@ -1182,6 +1355,17 @@ function matchesArrivalFilter(record, filter) {
     return true
 }
 
+function sortByShippingOutRequiredDateDesc(records) {
+    return [...records].sort((a, b) => {
+        const da = formatListDate(a?.shippingOut_requiredDate) || ''
+        const db = formatListDate(b?.shippingOut_requiredDate) || ''
+        if (da === db) return 0
+        if (!da) return 1
+        if (!db) return -1
+        return db.localeCompare(da)
+    })
+}
+
 const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
@@ -1198,56 +1382,66 @@ const filteredRecords = computed(() => {
         records = records.filter((r) => matchesArrivalFilter(r, arrivalFilter.value))
     }
 
-    if (!searchQuery.value) return records
-
-    const queries = searchQuery.value
-        .toLowerCase()
-        .trim()
-        .split(/\s+/)
-        .filter(q => q.length > 0)
-
-    if (queries.length === 0) return records
-
-    return records.filter(r => {
-        const rowText = [
-            r.orderID?.toString(),
-            r.parentID?.toString(),
-            r.receivedDate,
-            formatListDate(r.shippingOut_requiredDate),
-            r.shippingOut_requiredDate,
-            formatListDate(r.shippedDate),
-            r.shippedDate,
-            statusLabel(r),
-            r.RMA,
-            r.productName,
-            r.SN,
-            r.returnCode,
-            r.return_code_master?.description,
-            r.labor_master?.laborName,
-            r.dealer,
-            r.dealer_depart,
-            r.contactPerson,
-            r.email,
-            r.phone,
-            r.order_type,
-            r.poNum,
-            r.a2la,
-            r.symptoms,
-            r.sm_workorder,
-            r.entityID,
-            r.incident,
-            String(symptomsNumForRecord(r)),
-            r.RMA,
-            r.promotion_ready_at,
-            r.promotion_source_orderID?.toString(),
-            isPromotionReady(r) ? '繰上可' : '',
-        ]
-            .filter(Boolean)
-            .join(' ')
+    if (searchQuery.value) {
+        const queries = searchQuery.value
             .toLowerCase()
+            .trim()
+            .split(/\s+/)
+            .filter(q => q.length > 0)
 
-        return queries.every(q => rowText.includes(q))
-    })
+        if (queries.length > 0) {
+            records = records.filter(r => {
+                const rowText = [
+                    r.orderID?.toString(),
+                    r.parentID?.toString(),
+                    r.receivedDate,
+                    formatListDate(r.shippingOut_requiredDate),
+                    r.shippingOut_requiredDate,
+                    formatListDate(r.shippedDate),
+                    r.shippedDate,
+                    statusLabel(r),
+                    r.RMA,
+                    r.productName,
+                    r.SN,
+                    r.returnCode,
+                    r.return_code_master?.description,
+                    r.labor_master?.laborName,
+                    r.dealer,
+                    r.dealer_depart,
+                    r.contactPerson,
+                    r.email,
+                    r.phone,
+                    r.order_type,
+                    r.poNum,
+                    r.a2la,
+                    r.symptoms,
+                    r.sm_workorder,
+                    r.entityID,
+                    r.incident,
+                    String(symptomsNumForRecord(r)),
+                    r.RMA,
+                    r.promotion_ready_at,
+                    r.promotion_source_orderID?.toString(),
+                    isPromotionReady(r) ? '繰上可' : '',
+                ]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase()
+
+                return queries.every(q => rowText.includes(q))
+            })
+        }
+    }
+
+    const sortByShippingDesc =
+        props.mode === 'shippingPrep'
+        || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
+
+    if (sortByShippingDesc) {
+        records = sortByShippingOutRequiredDateDesc(records)
+    }
+
+    return records
 })
 
 const abroadSelectedCount = computed(() => abroadSelectedIds.value.size)
@@ -1293,7 +1487,61 @@ function toggleAbroadSelectAll(event) {
 function clearAbroadSelection() {
     abroadSelectedIds.value = new Set()
     abroadExcelMessage.value = ''
+    shippingExcelCopyMessage.value = ''
     closeAbroadExcelPreview()
+}
+
+/** Excel 貼付用: shippingOut_requiredDate + 空11セル + SN + Conum + dealer + price */
+function buildShippingExcelPasteRow(record) {
+    const emptyCells = Array.from({ length: 11 }, () => '')
+    return [
+        formatListDate(record?.shippingOut_requiredDate),
+        ...emptyCells,
+        record?.SN ?? '',
+        record?.coNum ?? '',
+        record?.dealer ?? '',
+        record?.price ?? '',
+    ].join('\t')
+}
+
+async function writeTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        return
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    if (!ok) throw new Error('クリップボードへのコピーに失敗しました。')
+}
+
+async function copySelectedRowsForExcelPaste() {
+    if (abroadSelectedIds.value.size === 0 || shippingExcelCopyBusy.value) return
+
+    const rows = filteredRecords.value.filter((r) => abroadSelectedIds.value.has(r.orderID))
+    if (!rows.length) {
+        shippingExcelCopyMessage.value = '行を選択してください。'
+        return
+    }
+
+    const tsv = rows.map((r) => buildShippingExcelPasteRow(r)).join('\n')
+
+    shippingExcelCopyBusy.value = true
+    shippingExcelCopyMessage.value = ''
+    try {
+        await writeTextToClipboard(tsv)
+        shippingExcelCopyMessage.value = `${rows.length} 件をクリップボードにコピーしました。Excel に貼り付けてください。`
+    } catch (e) {
+        shippingExcelCopyMessage.value = e.message || 'クリップボードへのコピーに失敗しました。'
+    } finally {
+        shippingExcelCopyBusy.value = false
+    }
 }
 
 function abroadRequestType(returnCode) {
@@ -1572,6 +1820,8 @@ async function downloadAbroadExcelFile() {
 }
 
 watch(orderTypeFilter, (value) => {
+    persistOrderTypeFilter(value)
+    syncOrderTypeQuery(value)
     if (value !== 'abroad' && value !== 'rma' && value !== 'update_sm') {
         clearAbroadSelection()
         stopSmListAutoRefresh()
@@ -1630,13 +1880,20 @@ function matchesOrderTypeFilter(record, filter) {
             || orderType === 'loaner'
             || orderType == null
             || orderType === ''
-        return isServiceOrLoaner && status === 200
+        return isServiceOrLoaner && Number.isFinite(status) && status >= 200 && status < 300
     }
     if (filter === 'invoice') {
-        return Number.isFinite(status) && status >= 300 && status <= 385
+        const isServiceOrLoaner = orderType === 'service'
+            || orderType === 'loaner'
+            || orderType == null
+            || orderType === ''
+        return isServiceOrLoaner && Number.isFinite(status) && status >= 300 && status < 350
     }
     if (filter === 'loaner') {
         return orderType === 'loaner'
+            && Number.isFinite(status)
+            && status >= 0
+            && status < 400
     }
     if (filter === 'waiting_list') {
         return orderType === 'waiting_list'
@@ -1830,7 +2087,14 @@ async function openSecondLayer(record) {
 
     // loaner / waiting_list フィルター選択中は貸出案件詳細ページへ遷移
     if (orderTypeFilter.value === 'loaner' || orderTypeFilter.value === 'waiting_list') {
-        const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+        let returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+        try {
+            const url = new URL(returnUrl || window.location.href)
+            url.searchParams.set('orderType', orderTypeFilter.value)
+            returnUrl = url.href
+        } catch {
+            // keep original returnUrl
+        }
         const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
         window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${record.orderID}${params}`
         return
@@ -1956,7 +2220,8 @@ async function onDialogSaved(result) {
 
     if (isRemandNote) {
         try {
-            await updateActiveRecordStatus(40)
+            const remandStatus = Number(dialogPayload.value?.remandStatus ?? 40)
+            await updateActiveRecordStatus(Number.isFinite(remandStatus) ? remandStatus : 40)
             closeDialog()
             await finishEngineerWorkflow()
         } catch (e) {
@@ -2072,6 +2337,36 @@ function stopLogisticsAutoRefresh() {
     }
 }
 
+function resolveDetailFormAPrice(draft, parts = []) {
+    if (!draft) return null
+
+    const asOfDate = draft.orderDate ?? null
+    const master = findServiceMaster(page.props.servicesMaster, {
+        productName: draft.productName,
+        entityID: draft.entityID,
+        serviceID: draft.serviceID,
+    }, asOfDate)
+
+    const workPrice = resolveServiceWorkPrice(master, draft.returnCode)
+    const a2laOn = draft.a2la === 1 || draft.a2la === '1' || draft.a2la === true
+    const a2laRaw = a2laOn ? Number(master?.price_a2la ?? 0) : 0
+    const a2laPrice = Number.isFinite(a2laRaw) ? a2laRaw : 0
+
+    const partsTotal = (parts ?? []).reduce((sum, part) => {
+        const versioned = findPartMaster(page.props.partsMaster, part.partID, asOfDate)
+        const raw = versioned?.price_discounted
+            ?? part.part_master?.price_discounted
+            ?? part.partMaster?.price_discounted
+        const value = Number(raw)
+        return sum + (Number.isFinite(value) ? value : 0)
+    }, 0)
+
+    const discountRaw = Number(draft.discount_service ?? 0)
+    const discount = Number.isFinite(discountRaw) ? discountRaw : 0
+    const total = workPrice + a2laPrice + partsTotal - discount
+    return Number.isFinite(total) ? total : null
+}
+
 async function saveRecord() {
     if (!activeRecord.value?.orderID || !draftRecord.value) {
         return
@@ -2079,6 +2374,14 @@ async function saveRecord() {
 
     isSavingRecord.value = true
     saveError.value = ''
+
+    // DetailFormA: 詳細再取得で draft が差し替わっても、保存時に表示価格を確実に price へ載せる
+    if (detailLayout.value === 'A') {
+        const resolvedPrice = resolveDetailFormAPrice(draftRecord.value, activeParts.value)
+        if (resolvedPrice != null) {
+            draftRecord.value.price = resolvedPrice
+        }
+    }
 
     const url = `${window.location.origin}${getBasePath()}/${activeRecord.value.orderID}`
 
@@ -2560,6 +2863,10 @@ async function saveRecord() {
 .abroad-excel-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.shipping-paste-btn {
+    margin-left: 8px;
 }
 
 .abroad-excel-message {

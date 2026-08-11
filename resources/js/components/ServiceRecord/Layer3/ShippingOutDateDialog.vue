@@ -163,6 +163,12 @@ import BaseDialog from './BaseDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { SHIPPING_DAILY_CAPACITY } from '@/constants/shipping'
 import { getServiceRecordBasePath, serviceRecordUrl } from '@/utils/serviceRecordPath'
+import {
+    handleMonthCellDoubleClickToDayView,
+    ROLLING_MONTH_VIEW,
+    fullCalendarDayCellClassNames,
+    rollingMonthViewConfig,
+} from '@/utils/fullCalendarCommon'
 
 const props = defineProps({
     mode: { type: String, default: 'complete' }, // complete | browse
@@ -182,8 +188,8 @@ const props = defineProps({
     confirming: { type: Boolean, default: false },
     /** true のとき初期表示を「今日」にする（Logistics 一覧など） */
     goToToday: { type: Boolean, default: false },
-    /** 初期ビュー: dayGridMonth | dayGridWeek | dayGridDay */
-    initialView: { type: String, default: 'dayGridMonth' },
+    /** 初期ビュー: dayGridRollingMonth | dayGridWeek | dayGridDay */
+    initialView: { type: String, default: ROLLING_MONTH_VIEW },
     /** false のときイベントのドラッグ＆ドロップを無効化 */
     editable: { type: Boolean, default: true },
 })
@@ -198,7 +204,7 @@ const capacity = ref(SHIPPING_DAILY_CAPACITY)
 const dayCounts = ref({})
 const error = ref('')
 const dropSaving = ref(false)
-const currentViewType = ref('dayGridMonth')
+const currentViewType = ref(ROLLING_MONTH_VIEW)
 const selectedDetail = ref(null)
 const selectedEventId = ref(null)
 const detailLoading = ref(false)
@@ -349,18 +355,14 @@ function escapeHtml(value) {
 
 function formatEventLines(event) {
     const propsX = event.extendedProps || {}
-    const line1 = [
+    const label = [
         propsX.pending ? '【仮】' : '',
-        propsX.orderID ?? event.id,
-        propsX.SN,
         propsX.productName,
+        propsX.SN,
+        propsX.dealer,
     ].filter(Boolean).join(' / ')
 
-    const line2 = [propsX.dealer, propsX.dealer_depart, propsX.contactPerson]
-        .filter(Boolean)
-        .join(' / ')
-
-    return { line1: line1 || event.title || '', line2 }
+    return { line1: label || event.title || '', line2: '' }
 }
 
 function buildPendingEvent(dateStr) {
@@ -705,9 +707,8 @@ async function handleEventDrop(info) {
 
 function dayCellClassNames(arg) {
     const dateStr = toDateStr(arg.date)
-    const classes = []
+    const classes = [...fullCalendarDayCellClassNames(arg)]
     if (isPastDate(dateStr)) classes.push('shipping-day-past')
-    if (arg.date.getDay() === 0 || arg.date.getDay() === 6) classes.push('shipping-day-weekend')
     if (selectedDate.value === dateStr) classes.push('shipping-day-selected')
     const count = displayCount(dateStr)
     if (count > capacity.value) {
@@ -736,7 +737,7 @@ function dayCellContent(arg) {
 }
 
 function eventContent(arg) {
-    const { line1, line2 } = formatEventLines(arg.event)
+    const { line1 } = formatEventLines(arg.event)
     const viewType = arg.view?.type || ''
     const detailed = viewType === 'dayGridWeek' || viewType === 'dayGridDay'
     const recordStatus = resolveEventRecordStatus(arg.event)
@@ -747,51 +748,53 @@ function eventContent(arg) {
     const styleAttr = bg
         ? ` style="background-color:${bg} !important;border-color:${border} !important;color:${text} !important;display:block;width:100%;box-sizing:border-box;"`
         : ''
-    const statusTag = Number.isFinite(recordStatus)
-        ? `<span class="shipping-status-tag">[${recordStatus}]</span> `
-        : ''
 
     if (!detailed) {
         return {
-            html: `<div class="shipping-event-chip ${style.className}" title="${escapeHtml(arg.event.title)}"${styleAttr}>${statusTag}${escapeHtml(line1)}${line2 ? ' / ' + escapeHtml(line2) : ''}</div>`,
+            html: `<div class="shipping-event-chip ${style.className}" title="${escapeHtml(line1)}"${styleAttr}>${escapeHtml(line1)}</div>`,
         }
     }
 
     return {
-        html: `<div class="shipping-event-bar ${style.className}" title="${escapeHtml(arg.event.title)}"${styleAttr}>`
-            + `<div class="shipping-event-line1">${statusTag}${escapeHtml(line1)}</div>`
-            + (line2 ? `<div class="shipping-event-line2">${escapeHtml(line2)}</div>` : '')
+        html: `<div class="shipping-event-bar ${style.className}" title="${escapeHtml(line1)}"${styleAttr}>`
+            + `<div class="shipping-event-line1">${escapeHtml(line1)}</div>`
             + `</div>`,
     }
 }
 
 function handleDatesSet(info) {
-    currentViewType.value = info.view?.type || 'dayGridMonth'
+    currentViewType.value = info.view?.type || ROLLING_MONTH_VIEW
 }
 
-const resolvedInitialView = ['dayGridMonth', 'dayGridWeek', 'dayGridDay'].includes(props.initialView)
-    ? props.initialView
-    : 'dayGridMonth'
+function handleCalendarDateClick(info) {
+    handleDateClick(info)
+    handleMonthCellDoubleClickToDayView(info)
+}
+
+const resolvedInitialView = [ROLLING_MONTH_VIEW, 'dayGridWeek', 'dayGridDay', 'dayGridMonth'].includes(props.initialView)
+    ? (props.initialView === 'dayGridMonth' ? ROLLING_MONTH_VIEW : props.initialView)
+    : ROLLING_MONTH_VIEW
 
 const calendarOptions = reactive({
     plugins: [dayGridPlugin, interactionPlugin],
     initialView: resolvedInitialView,
     initialDate: props.goToToday ? todayStr() : undefined,
     locale: 'ja',
+    firstDay: 0,
     height: '100%',
     headerToolbar: {
         left: 'prev,next today',
         center: 'title',
-        right: 'dayGridMonth,dayGridWeek,dayGridDay',
+        right: `${ROLLING_MONTH_VIEW},dayGridWeek,dayGridDay`,
     },
     buttonText: {
         today: '今日',
-        month: '月',
         week: '週',
         day: '日',
     },
     views: {
-        dayGridMonth: {
+        [ROLLING_MONTH_VIEW]: {
+            ...rollingMonthViewConfig,
             dayMaxEvents: 4,
             eventDisplay: 'block',
         },
@@ -809,7 +812,7 @@ const calendarOptions = reactive({
     dayMaxEvents: true,
     eventDisplay: 'block',
     events: fetchEvents,
-    dateClick: handleDateClick,
+    dateClick: handleCalendarDateClick,
     eventClick: handleEventClick,
     eventAllow: handleEventAllow,
     eventDrop: handleEventDrop,
@@ -836,7 +839,6 @@ function jumpToToday() {
 }
 
 onMounted(() => {
-    if (!props.goToToday && resolvedInitialView === 'dayGridMonth') return
     nextTick(() => {
         jumpToToday()
         // レイアウト確定後にもう一度（Splitpane 初期表示対策）

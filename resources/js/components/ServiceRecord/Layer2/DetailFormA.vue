@@ -493,35 +493,11 @@
                                                 <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate">新規追加</button>
                                             </div>
                                         </div>
-                                        <div v-if="sharedNotes.length" class="attachment-table-wrap">
-                                            <table class="data-table notes-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th class="col-note-date">日時</th>
-                                                        <th class="col-note-author">記入者</th>
-                                                        <th class="col-note-body">内容</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr
-                                                        v-for="note in sharedNotes"
-                                                        :key="note.id"
-                                                        class="table-row"
-                                                        :class="{ 'important-row': note.important, 'active-row': Number(selectedNoteId) === Number(note.id) }"
-                                                        @click="selectedNoteId = note.id"
-                                                    >
-                                                        <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
-                                                        <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
-                                                        <td
-                                                            class="text-cell col-note-body"
-                                                            @click.stop="selectedNoteId = note.id"
-                                                            v-html="linkifyNote(note.note)"
-                                                        />
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        <p v-else class="empty-message">Notes がありません。</p>
+                                        <NotesTable
+                                            v-model:selected-id="selectedNoteId"
+                                            :notes="sharedNotes"
+                                            :record-order-id="record?.orderID"
+                                        />
                                     </section>
                                 </div>
                             </Pane>
@@ -747,10 +723,10 @@ import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
+import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTypeDialog.vue'
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { linkifyText } from '@/utils/linkifyText'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
@@ -835,11 +811,6 @@ const selectedNote = computed(() => sharedNotes.value.find(n => Number(n.id) ===
 
 function isPersonalNote(note) {
     return note?.personal === true || note?.personal === 1 || note?.personal === '1'
-}
-
-function linkifyNote(value) {
-    const html = linkifyText(value)
-    return html || '—'
 }
 
 const recordOrderType = computed(() =>
@@ -1201,10 +1172,16 @@ const displayPrice = computed(() => {
     return basePrice.value - discountValue
 })
 
-watch(basePrice, (value) => {
-    if (!props.draftRecord) return
-    props.draftRecord.price = value
-}, { immediate: true })
+// 画面上の「価格」数値を price カラムへ反映（draft 差し替え時も再同期）
+watch(
+    [displayPrice, () => props.draftRecord],
+    () => {
+        if (!props.draftRecord) return
+        const num = Number(displayPrice.value)
+        props.draftRecord.price = Number.isFinite(num) ? num : null
+    },
+    { immediate: true },
+)
 
 function toggleA2la() {
     if (!props.draftRecord) return
@@ -1280,7 +1257,7 @@ async function confirmPriceAdjust() {
             throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
         }
 
-        // price 本体は変更せず、discount_service のみ更新（表示は price - discount_service）
+        // discount_service を更新し、表示価格（displayPrice）は watch 経由で price へ反映
         props.draftRecord.discount_service = amount
         sessionAdjustmentAmount.value = amount
         showPriceAdjustDialog.value = false

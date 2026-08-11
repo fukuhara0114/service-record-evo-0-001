@@ -6,10 +6,12 @@ use App\Models\AttachedLoaner;
 use App\Models\AttachedFile;
 use App\Models\AttachedNote;
 use App\Models\Dealer;
+use App\Models\Labor;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
 use App\Services\MasterPriceVersionResolver;
+use App\Support\LoanerStatusFlow;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,13 +49,19 @@ class LoanerRecordController extends Controller
         ])->values();
 
         $loanerProducts = $loaners
+            ->filter(fn ($row) => !LoanerMaster::isExcludedFromProductSelect($row->item ?? null))
             ->groupBy('productName')
             ->map(function ($rows, $productName) use ($statusColumn) {
                 $availableCount = $rows
                     ->filter(fn ($row) => (int) ($row->{$statusColumn} ?? -1) === 0)
                     ->count();
 
+                $item = $rows
+                    ->map(fn ($row) => trim((string) ($row->item ?? '')))
+                    ->first(fn ($value) => $value !== '');
+
                 return [
+                    'item' => $item !== null && $item !== '' ? $item : null,
                     'productName' => $productName,
                     'totalCount' => $rows->count(),
                     'availableCount' => $availableCount,
@@ -160,6 +168,7 @@ class LoanerRecordController extends Controller
                 'parentID',
                 'order_type',
                 'status',
+                'laborID',
                 'productName',
                 'SN',
                 'loanerID',
@@ -170,6 +179,7 @@ class LoanerRecordController extends Controller
                 'orderNum',
                 'orderDate',
                 'poNum',
+                'shippingOut_requiredDate',
                 'dealer',
                 'dealer_depart',
                 'contactPerson',
@@ -197,6 +207,8 @@ class LoanerRecordController extends Controller
                 'deliveryDestination_zipcode',
                 'deliveryDestination_address1',
                 'deliveryDestination_address2',
+                'promotion_ready_at',
+                'promotion_source_orderID',
             ]) + [
                 'status_label' => $record->order_type === 'loaner'
                     ? $record->statusMasterLoaner?->status
@@ -214,6 +226,10 @@ class LoanerRecordController extends Controller
                 'validDateMin',
                 'validDateMax',
             ]),
+            'availableUnits' => $this->serializeAvailableUnitsForProduct(
+                $record->productName,
+                $record->order_type === 'waiting_list' ? $record : null,
+            ),
             'files' => AttachedFile::query()
                 ->where('associatedID', $record->orderID)
                 ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
@@ -229,6 +245,8 @@ class LoanerRecordController extends Controller
                     ->get()
             ),
             'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
+            'statusFlow' => LoanerStatusFlow::meta(),
+            'labors' => Labor::query()->orderBy('laborName')->get(['laborID', 'laborName']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
             // 価格版解決用に同一 loanerID の全版を渡す
             'loanerUnits' => LoanerMaster::query()
@@ -257,6 +275,212 @@ class LoanerRecordController extends Controller
         ]);
     }
 
+    /**
+     * waiting_list → loaner へ繰り上げる。
+     */
+    public function promoteFromWaiting(Request $request, int $id)
+    {
+        $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
+        $record = $attached->serviceRecord;
+
+        if (!$record || $record->order_type !== 'waiting_list') {
+            return response()->json(['message' => 'waiting_list 案件のみ繰り上げできます。'], 422);
+        }
+
+        $validated = $request->validate([
+            'loanerID' => 'nullable|integer',
+        ]);
+
+        $productName = trim((string) ($record->productName ?? ''));
+        if ($productName === '') {
+            return response()->json(['message' => 'productName が未設定のため繰り上げできません。'], 422);
+        }
+
+        $preferredLoanerId = isset($validated['loanerID']) ? (int) $validated['loanerID'] : null;
+        if ($preferredLoanerId === null && $record->promotion_source_orderID) {
+            $sourceLoanerId = ServiceRecord::query()
+                ->where('orderID', $record->promotion_source_orderID)
+                ->value('loanerID');
+            if ($sourceLoanerId !== null && $sourceLoanerId !== '') {
+                $preferredLoanerId = (int) $sourceLoanerId;
+            }
+        }
+
+        $isPromotionReady = Schema::hasColumn('servicerecord', 'promotion_ready_at')
+            && $record->promotion_ready_at != null
+            && $record->promotion_ready_at !== '';
+
+        $available = $this->findAvailableLoaner($productName, $preferredLoanerId);
+
+        // 繰上可なのに在庫フラグが残っている場合でも、返却元個体で繰り上げ可能にする
+        if (!$available && $isPromotionReady && $preferredLoanerId !== null) {
+            $available = $this->findLoanerUnitByProductAndId($productName, $preferredLoanerId);
+        }
+        if (!$available && $isPromotionReady) {
+            $available = $this->findLoanerUnitByProductAndId($productName, null);
+        }
+
+        if (!$available) {
+            return response()->json([
+                'message' => isset($validated['loanerID'])
+                    ? '指定した貸出機は在庫として選択できません。'
+                    : '同機種の在庫がありません。在庫復帰後に再度実行してください。',
+            ], 422);
+        }
+
+        $user = $request->user();
+        $initialStatus = $this->resolveUnregisteredStatus()?->processID_new;
+        if ($initialStatus === null) {
+            $initialStatus = LoanerStatusFlow::STOCK;
+        }
+
+        DB::transaction(function () use ($record, $attached, $available, $user, $initialStatus) {
+            $record->order_type = 'loaner';
+            $record->status = $initialStatus;
+            $record->RMA = 'loaner';
+            $record->loanerID = $available->loanerID;
+            $record->productName = $available->productName ?? $record->productName;
+            $record->SN = $available->SN ?? $record->SN;
+            if (Schema::hasColumn('servicerecord', 'promotion_ready_at')) {
+                $record->promotion_ready_at = null;
+            }
+            if (Schema::hasColumn('servicerecord', 'promotion_source_orderID')) {
+                $record->promotion_source_orderID = null;
+            }
+            $record->lastEditPerson = $user?->kanji_name;
+            $record->lastEditDate = now();
+            $record->save();
+
+            $attached->loanerID = $available->loanerID;
+            $attachedColumns = Schema::getColumnListing('attachedloaners');
+            if (in_array('assignStatus', $attachedColumns, true)) {
+                $attached->assignStatus = 'reserved';
+            }
+            if (in_array('productName', $attachedColumns, true)) {
+                $attached->productName = $available->productName ?? $attached->productName;
+            }
+            if (in_array('comment', $attachedColumns, true)) {
+                $comment = trim((string) ($attached->comment ?? ''));
+                $attached->comment = $comment === ''
+                    ? 'promoted from waiting_list'
+                    : $comment;
+            }
+            // NOT NULL 制約対策: 空文字由来の null を残さない
+            if (
+                in_array('assignStatus', $attachedColumns, true)
+                && ($attached->assignStatus === null || $attached->assignStatus === '')
+            ) {
+                $attached->assignStatus = 'reserved';
+            }
+            $attached->save();
+
+            $this->setLoanerInventoryStatus($available->loanerID, 1);
+        });
+
+        $record->refresh();
+        $attached->refresh();
+
+        return response()->json([
+            'message' => 'waiting_list を loaner 案件へ繰り上げました。',
+            'record' => $record->only([
+                'orderID',
+                'parentID',
+                'order_type',
+                'status',
+                'laborID',
+                'productName',
+                'SN',
+                'loanerID',
+                'promotion_ready_at',
+                'promotion_source_orderID',
+            ]),
+            'attached' => [
+                'id' => $attached->id,
+                'loanerID' => $attached->loanerID,
+                'assignStatus' => $attached->assignStatus ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function serializeAvailableUnitsForProduct(?string $productName, ?ServiceRecord $waitingRecord = null): array
+    {
+        $productName = trim((string) $productName);
+        if ($productName === '') {
+            return [];
+        }
+
+        $statusColumn = $this->resolveStatusColumn();
+        $latest = app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', '')
+                ->where('productName', $productName),
+            'loanerID'
+        );
+
+        $available = $latest
+            ->filter(fn (LoanerMaster $row) => (int) ($row->{$statusColumn} ?? -1) === 0)
+            ->values();
+
+        // 繰上可: 返却元個体を候補先頭へ（在庫フラグ未更新でも選べるようにする）
+        $sourceLoanerId = null;
+        if (
+            $waitingRecord
+            && $waitingRecord->promotion_ready_at
+            && $waitingRecord->promotion_source_orderID
+        ) {
+            $sourceLoanerId = ServiceRecord::query()
+                ->where('orderID', $waitingRecord->promotion_source_orderID)
+                ->value('loanerID');
+        }
+
+        if ($sourceLoanerId !== null && $sourceLoanerId !== '') {
+            $sourceUnit = $latest->first(
+                fn (LoanerMaster $row) => (string) $row->loanerID === (string) $sourceLoanerId
+            );
+            if ($sourceUnit) {
+                $available = $available
+                    ->reject(fn (LoanerMaster $row) => (string) $row->loanerID === (string) $sourceLoanerId)
+                    ->values();
+                $available->prepend($sourceUnit);
+            }
+        }
+
+        return $available
+            ->map(fn (LoanerMaster $row) => [
+                'loanerID' => $row->loanerID,
+                'productName' => $row->productName,
+                'SN' => $row->SN,
+                'manageNum' => $row->manageNum,
+                'item' => $row->item,
+                'isPromotionSource' => $sourceLoanerId !== null
+                    && (string) $row->loanerID === (string) $sourceLoanerId,
+            ])
+            ->all();
+    }
+
+    private function findLoanerUnitByProductAndId(string $productName, ?int $loanerId = null): ?LoanerMaster
+    {
+        $latest = app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', '')
+                ->where('productName', $productName),
+            'loanerID'
+        );
+
+        if ($loanerId !== null) {
+            return $latest->first(
+                fn (LoanerMaster $row) => (int) $row->loanerID === $loanerId
+            );
+        }
+
+        return $latest->first();
+    }
+
     public function updateDetail(Request $request, int $id)
     {
         $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
@@ -269,6 +493,7 @@ class LoanerRecordController extends Controller
         $recordRules = [
             'parentID' => 'nullable|integer|exists:servicerecord,orderID',
             'status' => 'nullable|integer',
+            'laborID' => 'nullable|integer',
             'productName' => 'nullable|string|max:255',
             'SN' => 'nullable|string|max:255',
             'loanerID' => 'nullable|integer',
@@ -279,6 +504,7 @@ class LoanerRecordController extends Controller
             'orderNum' => 'nullable|string|max:255',
             'orderDate' => 'nullable|date',
             'poNum' => 'nullable|string|max:255',
+            'shippingOut_requiredDate' => 'nullable|date',
             'dealer' => 'nullable|string|max:255',
             'dealer_depart' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
@@ -348,6 +574,42 @@ class LoanerRecordController extends Controller
             }
         }
 
+        if ($record->order_type === 'loaner') {
+            $targetStatus = array_key_exists('status', $validated) && $validated['status'] !== null
+                ? (int) $validated['status']
+                : (int) $record->status;
+
+            // labor は受け入れ確認中のみ変更可。それ以外で送られた laborID は無視する
+            if (
+                array_key_exists('laborID', $validated)
+                && !LoanerStatusFlow::isLaborEditableStatus($targetStatus)
+            ) {
+                unset($validated['laborID']);
+            }
+
+            if (LoanerStatusFlow::isLaborEditableStatus($targetStatus)) {
+                $laborId = $validated['laborID'] ?? $record->laborID;
+                if ($laborId === null || $laborId === '') {
+                    return response()->json([
+                        'message' => '受け入れ確認担当の labor を選択してください。',
+                    ], 422);
+                }
+                $laborExists = Labor::query()->where('laborID', $laborId)->exists();
+                if (!$laborExists) {
+                    return response()->json(['message' => '指定された labor は存在しません。'], 422);
+                }
+            }
+
+            if (LoanerStatusFlow::isShipPrepCompleteStatus($targetStatus)) {
+                $shippingDate = $validated['shippingOut_requiredDate'] ?? $record->shippingOut_requiredDate;
+                if ($shippingDate === null || $shippingDate === '') {
+                    return response()->json([
+                        'message' => 'status が「貸出機出荷準備完了＿起伝依頼」のときは発送予定日を設定してください。',
+                    ], 422);
+                }
+            }
+        }
+
         if (array_key_exists('loanerID', $validated) && $validated['loanerID'] !== null) {
             $loanerExists = LoanerMaster::query()
                 ->where('loanerID', $validated['loanerID'])
@@ -410,6 +672,19 @@ class LoanerRecordController extends Controller
             ) {
                 $attachedPayload['productName'] = $validated['productName'];
             }
+            // assignStatus は NOT NULL。空文字→null 変換で落ちないよう保護する
+            if (
+                array_key_exists('assignStatus', $attachedPayload)
+                && ($attachedPayload['assignStatus'] === null || $attachedPayload['assignStatus'] === '')
+            ) {
+                if ($attached->assignStatus !== null && $attached->assignStatus !== '') {
+                    unset($attachedPayload['assignStatus']);
+                } else {
+                    $attachedPayload['assignStatus'] = $record->order_type === 'waiting_list'
+                        ? 'waiting'
+                        : 'reserved';
+                }
+            }
             $attached->fill($attachedPayload);
             $attached->save();
 
@@ -417,30 +692,38 @@ class LoanerRecordController extends Controller
                 $newStatus = (int) $record->status;
                 $oldStatus = (int) $previousStatus;
                 $newLoanerId = $record->loanerID ?? $attached->loanerID;
-                $stockStatusId = $this->resolveStockStatusId();
 
-                // loanerID 変更時は旧個体を在庫へ戻し、新個体を貸出中へ
+                // loanerID 変更時は旧個体を在庫へ戻し、新個体はアクティブ案件なら貸出中フラグへ
                 if (
                     $previousLoanerId !== null && $previousLoanerId !== ''
                     && (string) $previousLoanerId !== (string) ($newLoanerId ?? '')
                 ) {
                     $this->setLoanerInventoryStatus($previousLoanerId, 0);
-                    if ($newLoanerId !== null && $newLoanerId !== '' && $newStatus !== $stockStatusId) {
-                        $this->setLoanerInventoryStatus($newLoanerId, 1);
+                    if ($newLoanerId !== null && $newLoanerId !== '') {
+                        $this->setLoanerInventoryStatus(
+                            $newLoanerId,
+                            LoanerStatusFlow::isActiveListStatus($newStatus) ? 1 : 0,
+                        );
                     }
                 }
 
-                // 案件 status が「在庫有り」へ変わったタイミングで返却処理
-                if ($newStatus === $stockStatusId && $oldStatus !== $stockStatusId) {
+                // status が 400（貸出中）以降へ進んだ時点で機材を在庫復帰し、waiting_list を確認
+                $crossedToInactive = LoanerStatusFlow::crossedToInactiveList($oldStatus, $newStatus);
+
+                if ($crossedToInactive) {
                     if ($newLoanerId !== null && $newLoanerId !== '') {
                         $this->setLoanerInventoryStatus($newLoanerId, 0);
                     }
                     $promotionTriggered = true;
                     $promotionCandidates = $this->markPromotionCandidatesForReturnedLoaner($record);
-                } elseif ($oldStatus === $stockStatusId && $newStatus !== $stockStatusId) {
-                    if ($newLoanerId !== null && $newLoanerId !== '') {
-                        $this->setLoanerInventoryStatus($newLoanerId, 1);
-                    }
+                } elseif (
+                    !LoanerStatusFlow::isActiveListStatus($oldStatus)
+                    && LoanerStatusFlow::isActiveListStatus($newStatus)
+                    && $newLoanerId !== null
+                    && $newLoanerId !== ''
+                ) {
+                    // 完了後ステータスからアクティブへ戻した場合は再確保
+                    $this->setLoanerInventoryStatus($newLoanerId, 1);
                 }
             }
         });
@@ -448,12 +731,16 @@ class LoanerRecordController extends Controller
         $attached->refresh();
         $record->refresh();
 
+        $promotionFromLending = $promotionTriggered
+            && LoanerStatusFlow::crossedToInactiveList($previousStatus, $record->status);
+
         return response()->json([
             'message' => '貸出詳細を保存しました。',
             'record' => $record->only([
                 'orderID',
                 'parentID',
                 'status',
+                'laborID',
                 'productName',
                 'SN',
                 'loanerID',
@@ -464,6 +751,7 @@ class LoanerRecordController extends Controller
                 'orderNum',
                 'orderDate',
                 'poNum',
+                'shippingOut_requiredDate',
             ]),
             'attached' => [
                 'id' => $attached->id,
@@ -476,6 +764,8 @@ class LoanerRecordController extends Controller
                 'comment' => $attached->comment,
             ],
             'promotionTriggered' => $promotionTriggered,
+            'promotionFromCheck' => $promotionFromLending,
+            'promotionFromLending' => $promotionFromLending,
             'promotionCandidates' => $promotionCandidates,
         ]);
     }
@@ -582,16 +872,8 @@ class LoanerRecordController extends Controller
 
         $status = -1; // waiting_list は status リレーションなし。NOT NULL 制約のため -1 固定
         if ($orderType === 'loaner') {
-            if ($linkMode === 'none') {
-                $status = $this->resolveUnregisteredStatus()?->processID_new;
-                if ($status === null) {
-                    return response()->json([
-                        'message' => 'statusmaster_loaner に「未登録」ステータスが見つかりません。',
-                    ], 422);
-                }
-            } else {
-                $status = $validated['status'] ?? null;
-            }
+            // 新規 loaner は常に 0（確保済み）
+            $status = LoanerStatusFlow::STOCK;
         }
 
         $attachedLoanerId = null;
@@ -935,7 +1217,7 @@ class LoanerRecordController extends Controller
             }
         } else {
             $start = $plannedSentDate ?: now()->toDateString();
-            $end = $plannedReturnedDate ?: Carbon::parse($start)->addDays(7)->toDateString();
+            $end = $plannedReturnedDate ?: Carbon::parse($start)->addDays(14)->toDateString();
         }
 
         $payload = [
@@ -969,7 +1251,7 @@ class LoanerRecordController extends Controller
     /**
      * waiting_list の初期期間:
      * 同機種の各貸出機について「現在以降の予約終了日」を取り、
-     * 最も早く空く個体の終了翌日を開始日とする（期間は7日）。
+     * 最も早く空く個体の終了翌日を開始日とする（期間は14日）。
      *
      * @return array{0:string,1:string,2:?string} [start, end, basedOnReturnedDate]
      */
@@ -1054,7 +1336,7 @@ class LoanerRecordController extends Controller
                 : $start->copy()->subDay()->toDateString();
         }
 
-        $end = $start->copy()->addDays(7);
+        $end = $start->copy()->addDays(14);
 
         return [
             $start->toDateString(),
@@ -1179,17 +1461,25 @@ class LoanerRecordController extends Controller
                 return null;
             }
 
+            if (LoanerMaster::isExcludedFromProductSelect($selected->item ?? null)) {
+                return null;
+            }
+
             return (int) ($selected->{$statusColumn} ?? -1) === 0 ? $selected : null;
         }
 
         return $latest->first(function (LoanerMaster $row) use ($statusColumn) {
+            if (LoanerMaster::isExcludedFromProductSelect($row->item ?? null)) {
+                return false;
+            }
+
             return (int) ($row->{$statusColumn} ?? -1) === 0;
         });
     }
 
     /**
      * loanermaster.currentStatus を全版へ反映する。
-     * 0 = 在庫あり / 1 = 貸出中など在庫なし
+     * 0 = 在庫あり / 1 = アクティブ貸出案件に確保中
      */
     private function setLoanerInventoryStatus(mixed $loanerId, int $status): void
     {
@@ -1220,35 +1510,6 @@ class LoanerRecordController extends Controller
             ->update([$statusColumn => $status]);
     }
 
-    /**
-     * statusmaster_loaner の「在庫有り」processID_new。
-     * 返却完了（在庫復帰）の判定に使う。
-     */
-    private function resolveStockStatusId(): int
-    {
-        static $cached = null;
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $row = StatusLoaner::query()
-            ->select(['processID_new', 'status'])
-            ->where('processID_new', 0)
-            ->first();
-
-        if ($row) {
-            return $cached = (int) $row->processID_new;
-        }
-
-        $byName = StatusLoaner::query()
-            ->select(['processID_new', 'status'])
-            ->where('status', 'like', '%在庫%')
-            ->orderBy('processID_new')
-            ->first();
-
-        return $cached = (int) ($byName?->processID_new ?? 0);
-    }
-
     private function resolveUnregisteredStatus(): ?StatusLoaner
     {
         // processID_new=20 は「案件未登録」（新規登録時の初期 status）。
@@ -1268,7 +1529,7 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * 返却（status=在庫有り）時に同 productName の waiting_list を繰り上がり候補としてマークする。
+     * 返却（在庫復帰）時に同 productName の waiting_list を繰り上がり候補としてマークする。
      *
      * @return array<int, array<string, mixed>>
      */

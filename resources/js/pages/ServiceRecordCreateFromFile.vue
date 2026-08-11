@@ -111,169 +111,181 @@
                     </button>
                 </div>
 
-                <div v-show="activeTab === 'basic'" class="tab-panel">
-                    <div v-if="isLoanerCase" class="form-stack">
-                        <section class="info-card info-card-loaner-top">
-                            <div class="loaner-top-row">
-                                <label class="field field-inline">
-                                    <span>機種</span>
-                                    <button
-                                        type="button"
-                                        class="field-button"
-                                        :class="{ placeholder: !form.productName }"
-                                        @click="openSelectDialog('loanerProduct')"
-                                    >
-                                        {{ form.productName || 'productName' }}
-                                    </button>
-                                </label>
-                                <label class="field field-inline field-sn">
-                                    <span>SN</span>
-                                    <input
-                                        v-model="form.SN"
-                                        type="text"
-                                        placeholder="SN"
-                                        :readonly="Boolean(selectedLoanerUnit?.SN)"
-                                    >
-                                </label>
-                                <label class="field field-inline field-date">
-                                    <span>開始日</span>
-                                    <input v-model="form.plannedSentDate" type="date">
-                                </label>
-                                <label class="field field-inline field-date">
-                                    <span>終了日</span>
-                                    <input v-model="form.plannedReturnedDate" type="date">
-                                </label>
-                                <p v-if="loanerAvailabilityChecking" class="availability-hint availability-inline">
-                                    在庫確認中...
-                                </p>
-                                <p
-                                    v-else-if="loanerAvailability?.order_type === 'waiting_list'"
-                                    class="availability-hint availability-inline wait"
-                                >
-                                    在庫なし → waiting_list
-                                </p>
-                                <p
-                                    v-else-if="loanerAvailability?.order_type === 'loaner'"
-                                    class="availability-hint availability-inline ok"
-                                >
-                                    在庫あり
-                                    <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
-                                </p>
-                                <button
-                                    type="button"
-                                    class="btn btn-primary btn-stock-list"
-                                    :disabled="!form.productName"
-                                    @click="openLoanerStockDialog"
-                                >
-                                    在庫リスト
-                                </button>
-                            </div>
-                        </section>
+                <div v-show="activeTab === 'basic'" class="tab-panel" :class="{ 'tab-panel-loaner-basic': isLoanerCase }">
+                    <div v-if="isLoanerCase" class="form-stack form-stack-loaner">
+                        <Splitpanes
+                            horizontal
+                            class="default-theme loaner-basic-split"
+                            @resized="onLoanerBasicSplitResized"
+                        >
+                            <Pane class="loaner-basic-pane loaner-basic-pane-top" :size="loanerTopPaneSize" :min-size="32">
+                                <section class="info-card info-card-loaner-top">
+                                    <div class="loaner-top-row">
+                                        <label class="field field-inline">
+                                            <span>機種</span>
+                                            <button
+                                                type="button"
+                                                class="field-button"
+                                                :class="{ placeholder: !form.productName }"
+                                                @click="openSelectDialog('loanerProduct')"
+                                            >
+                                                {{ form.productName || 'productName' }}
+                                            </button>
+                                        </label>
+                                        <label class="field field-inline field-sn">
+                                            <span>SN</span>
+                                            <input
+                                                v-model="form.SN"
+                                                type="text"
+                                                placeholder="SN"
+                                                :readonly="Boolean(selectedLoanerUnit?.SN)"
+                                            >
+                                        </label>
+                                        <label class="field field-inline field-date">
+                                            <span>開始日</span>
+                                            <input v-model="form.plannedSentDate" type="date">
+                                        </label>
+                                        <label class="field field-inline field-date">
+                                            <span>終了日</span>
+                                            <input v-model="form.plannedReturnedDate" type="date">
+                                        </label>
+                                        <p v-if="loanerAvailabilityChecking" class="availability-hint availability-inline">
+                                            在庫確認中...
+                                        </p>
+                                        <p
+                                            v-else-if="loanerAvailability?.order_type === 'waiting_list'"
+                                            class="availability-hint availability-inline wait"
+                                        >
+                                            在庫なし → waiting_list
+                                        </p>
+                                        <p
+                                            v-else-if="loanerAvailability?.order_type === 'loaner'"
+                                            class="availability-hint availability-inline ok"
+                                        >
+                                            在庫あり
+                                            <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
+                                        </p>
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary btn-stock-list"
+                                            :disabled="!form.productName"
+                                            @click="openLoanerStockDialog"
+                                        >
+                                            在庫リスト
+                                        </button>
+                                    </div>
+                                </section>
 
-                        <section class="info-card info-card-loaner-calendar">
-                            <div class="loaner-calendar-header">
-                                <h3 class="loaner-list-title">貸出・予約カレンダー</h3>
-                                <div class="loaner-calendar-legend">
-                                    <span class="legend-chip draft">今回の予定</span>
-                                    <span class="legend-chip status-20">貸出(未登録)</span>
-                                    <span class="legend-chip status-200">貸出(出荷準備以降)</span>
-                                    <span class="legend-chip waiting">waiting_list</span>
-                                </div>
-                            </div>
-                            <p v-if="!form.productName" class="availability-hint">機種を選択するとカレンダーを表示します</p>
-                            <template v-else>
-                                <p v-if="loanerCalendarError" class="availability-hint wait">{{ loanerCalendarError }}</p>
-                                <p v-if="loanerCalendarSuccess" class="availability-hint ok">{{ loanerCalendarSuccess }}</p>
-                                <div class="loaner-calendar-shell">
-                                    <FullCalendar ref="loanerCalendarRef" :options="loanerCalendarOptions" />
-                                </div>
-                            </template>
-                        </section>
+                                <section class="info-card info-card-loaner-calendar">
+                                    <div class="loaner-calendar-header">
+                                        <h3 class="loaner-list-title">貸出・予約カレンダー</h3>
+                                        <div class="loaner-calendar-legend">
+                                            <span class="legend-chip draft">今回の予定</span>
+                                            <span class="legend-chip status-20">貸出(未登録)</span>
+                                            <span class="legend-chip status-200">貸出(出荷準備以降)</span>
+                                            <span class="legend-chip waiting">waiting_list</span>
+                                        </div>
+                                    </div>
+                                    <p v-if="!form.productName" class="availability-hint">機種を選択するとカレンダーを表示します</p>
+                                    <template v-else>
+                                        <p v-if="loanerCalendarError" class="availability-hint wait">{{ loanerCalendarError }}</p>
+                                        <p v-if="loanerCalendarSuccess" class="availability-hint ok">{{ loanerCalendarSuccess }}</p>
+                                        <div class="loaner-calendar-shell">
+                                            <FullCalendar ref="loanerCalendarRef" :options="loanerCalendarOptions" />
+                                        </div>
+                                    </template>
+                                </section>
+                            </Pane>
 
-                        <section class="info-card info-card-dealer stakeholder-card">
-                            <aside class="stakeholder-side">
-                                <div class="stakeholder-label">dealer</div>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
-                                    switch delivery
-                                </button>
-                            </aside>
-                            <div class="stakeholder-body">
-                                <div class="form-row row-full">
-                                    <button
-                                        type="button"
-                                        class="field-button"
-                                        :class="{ placeholder: !form.dealer }"
-                                        @click="openSelectDialog('dealer')"
-                                    >
-                                        {{ form.dealer || 'dealer' }}
-                                    </button>
-                                </div>
-                                <div class="form-row row-full">
-                                    <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
-                                </div>
-                                <div class="form-row row-contact">
-                                    <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
-                                </div>
-                                <div class="form-row row-phone-email">
-                                    <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
-                                    <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
-                                </div>
-                                <div class="form-row row-zip">
-                                    <input
-                                        v-model="form.zipcode"
-                                        type="text"
-                                        class="w-zip"
-                                        inputmode="numeric"
-                                        maxlength="8"
-                                        placeholder="Zipcode"
-                                        @input="onZipcodeInput('dealer')"
-                                    >
-                                </div>
-                                <div class="form-row row-address">
-                                    <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
-                                    <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
-                                </div>
-                            </div>
-                        </section>
+                            <Pane class="loaner-basic-pane loaner-basic-pane-bottom" :size="loanerBottomPaneSize" :min-size="18">
+                                <div class="loaner-stakeholder-stack">
+                                    <section class="info-card info-card-dealer stakeholder-card">
+                                        <aside class="stakeholder-side">
+                                            <div class="stakeholder-label">dealer</div>
+                                            <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
+                                                switch delivery
+                                            </button>
+                                        </aside>
+                                        <div class="stakeholder-body">
+                                            <div class="form-row row-full">
+                                                <button
+                                                    type="button"
+                                                    class="field-button"
+                                                    :class="{ placeholder: !form.dealer }"
+                                                    @click="openSelectDialog('dealer')"
+                                                >
+                                                    {{ form.dealer || 'dealer' }}
+                                                </button>
+                                            </div>
+                                            <div class="form-row row-full">
+                                                <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
+                                            </div>
+                                            <div class="form-row row-contact">
+                                                <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                            </div>
+                                            <div class="form-row row-phone-email">
+                                                <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
+                                                <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
+                                            </div>
+                                            <div class="form-row row-zip">
+                                                <input
+                                                    v-model="form.zipcode"
+                                                    type="text"
+                                                    class="w-zip"
+                                                    inputmode="numeric"
+                                                    maxlength="8"
+                                                    placeholder="Zipcode"
+                                                    @input="onZipcodeInput('dealer')"
+                                                >
+                                            </div>
+                                            <div class="form-row row-address">
+                                                <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
+                                                <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
+                                            </div>
+                                        </div>
+                                    </section>
 
-                        <section class="info-card info-card-delivery stakeholder-card">
-                            <aside class="stakeholder-side">
-                                <div class="stakeholder-label">delivery</div>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                    switch dealer
-                                </button>
-                            </aside>
-                            <div class="stakeholder-body">
-                                <div class="form-row row-full">
-                                    <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                    <section class="info-card info-card-delivery stakeholder-card">
+                                        <aside class="stakeholder-side">
+                                            <div class="stakeholder-label">delivery</div>
+                                            <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                                switch dealer
+                                            </button>
+                                        </aside>
+                                        <div class="stakeholder-body">
+                                            <div class="form-row row-full">
+                                                <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                            </div>
+                                            <div class="form-row row-full">
+                                                <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
+                                            </div>
+                                            <div class="form-row row-contact">
+                                                <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                            </div>
+                                            <div class="form-row row-phone-email">
+                                                <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
+                                                <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
+                                            </div>
+                                            <div class="form-row row-zip">
+                                                <input
+                                                    v-model="form.deliveryDestination_zipcode"
+                                                    type="text"
+                                                    class="w-zip"
+                                                    inputmode="numeric"
+                                                    maxlength="8"
+                                                    placeholder="Zipcode"
+                                                    @input="onZipcodeInput('delivery')"
+                                                >
+                                            </div>
+                                            <div class="form-row row-address">
+                                                <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
+                                                <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
+                                            </div>
+                                        </div>
+                                    </section>
                                 </div>
-                                <div class="form-row row-full">
-                                    <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
-                                </div>
-                                <div class="form-row row-contact">
-                                    <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
-                                </div>
-                                <div class="form-row row-phone-email">
-                                    <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
-                                    <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
-                                </div>
-                                <div class="form-row row-zip">
-                                    <input
-                                        v-model="form.deliveryDestination_zipcode"
-                                        type="text"
-                                        class="w-zip"
-                                        inputmode="numeric"
-                                        maxlength="8"
-                                        placeholder="Zipcode"
-                                        @input="onZipcodeInput('delivery')"
-                                    >
-                                </div>
-                                <div class="form-row row-address">
-                                    <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
-                                    <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
-                                </div>
-                            </div>
-                        </section>
+                            </Pane>
+                        </Splitpanes>
                     </div>
 
                     <div v-else class="form-stack">
@@ -281,12 +293,19 @@
                             <div class="form-row row-product-top">
                                 <button
                                     type="button"
-                                    class="field-button"
-                                    :class="{ placeholder: !form.productName }"
+                                    class="field-button field-button-pick"
+                                    :class="{ placeholder: !form.serviceID }"
                                     @click="openSelectDialog('serviceMaster')"
                                 >
-                                    {{ selectedProductLabel }}
+                                    {{ form.serviceID ? `選択 (#${form.serviceID})` : '機種選択' }}
                                 </button>
+                                <input
+                                    v-model="form.productName"
+                                    type="text"
+                                    class="w-product-name"
+                                    placeholder="productName"
+                                    @input="onProductNameTyped"
+                                >
                                 <input :value="form.entityID || ''" type="text" placeholder="entityID" readonly>
                             </div>
                             <div class="form-row row-product-sn">
@@ -628,7 +647,17 @@
                 </div>
                 <div class="confirm-body stock-list-body">
                     <p class="confirm-detail">機種: {{ form.productName || '—' }}</p>
-                    <p v-if="hasLoanerStock" class="confirm-detail ok-text">在庫ありの行をクリックして選択できます</p>
+                    <div v-if="hasLoanerStock" class="stock-list-hint-row">
+                        <p class="confirm-detail ok-text">在庫ありの行をクリックして選択できます</p>
+                        <div class="stock-status-legend">
+                            <span class="stock-legend-item stock-legend-available">
+                                <span class="stock-legend-swatch" aria-hidden="true">■</span>在庫有
+                            </span>
+                            <span class="stock-legend-item stock-legend-loaned">
+                                <span class="stock-legend-swatch" aria-hidden="true">■</span>貸し出し中
+                            </span>
+                        </div>
+                    </div>
                     <p v-else-if="loanerAvailability?.order_type === 'waiting_list'" class="confirm-detail wait-text">
                         在庫なし（参考表示）
                     </p>
@@ -636,10 +665,15 @@
                         <table v-if="loanerUnitsForProduct.length" class="loaner-unit-table">
                             <thead>
                                 <tr>
-                                    <th>loanerID</th>
+                                    <th class="col-loaner-id">loanerID</th>
+                                    <th>item</th>
+                                    <th>productName</th>
                                     <th>SN</th>
                                     <th>manageNum</th>
-                                    <th>状態</th>
+                                    <th>certificatedDate</th>
+                                    <th>Note1</th>
+                                    <th>Note2</th>
+                                    <th>Note3</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -652,12 +686,18 @@
                                         selected: isSelectedLoanerUnit(unit),
                                         selectable: canSelectLoanerUnit(unit),
                                     }"
+                                    :title="isLoanerUnitAvailable(unit) ? '在庫' : '貸出中等'"
                                     @click="selectLoanerUnit(unit)"
                                 >
-                                    <td>{{ unit.loanerID || '—' }}</td>
+                                    <td class="col-loaner-id">{{ unit.loanerID || '—' }}</td>
+                                    <td>{{ unit.item || '—' }}</td>
+                                    <td>{{ unit.productName || '—' }}</td>
                                     <td>{{ unit.SN || '—' }}</td>
                                     <td>{{ unit.manageNum || '—' }}</td>
-                                    <td>{{ isLoanerUnitAvailable(unit) ? '在庫' : '貸出中等' }}</td>
+                                    <td>{{ formatLoanerDate(unit.certificatedDate) }}</td>
+                                    <td class="col-note">{{ unit.note1 || '—' }}</td>
+                                    <td class="col-note">{{ unit.note2 || '—' }}</td>
+                                    <td class="col-note">{{ unit.note3 || '—' }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -686,6 +726,12 @@ import interactionPlugin from '@fullcalendar/interaction'
 import { apiFetch } from '@/utils/apiFetch'
 import { startFileImport } from '@/utils/startFileImport'
 import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
+import {
+    handleMonthCellDoubleClickToDayView,
+    ROLLING_MONTH_VIEW,
+    fullCalendarDayCellClassNames,
+    rollingMonthViewConfig,
+} from '@/utils/fullCalendarCommon'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
@@ -765,11 +811,27 @@ const pendingLoanerRecord = ref(null)
 const loanerRequirementContext = ref(null) // 'select' | 'save'
 const leftPaneSize = ref(42)
 const rightPaneSize = ref(58)
+const loanerTopPaneSize = ref(62)
+const loanerBottomPaneSize = ref(38)
 
 function syncPaneSizes({ panes } = {}) {
     if (!Array.isArray(panes) || panes.length < 2) return
     leftPaneSize.value = panes[0].size
     rightPaneSize.value = panes[1].size
+    nextTick(() => {
+        loanerCalendarRef.value?.getApi?.()?.updateSize?.()
+    })
+}
+
+function onLoanerBasicSplitResized({ panes } = {}) {
+    if (Array.isArray(panes) && panes.length >= 2) {
+        loanerTopPaneSize.value = panes[0].size
+        loanerBottomPaneSize.value = panes[1].size
+    }
+    nextTick(() => {
+        loanerCalendarRef.value?.getApi?.()?.updateSize?.()
+        window.dispatchEvent(new Event('resize'))
+    })
 }
 
 function defaultPeriodStart() {
@@ -778,13 +840,13 @@ function defaultPeriodStart() {
 
 function defaultPeriodEnd() {
     const d = new Date()
-    d.setDate(d.getDate() + 7)
+    d.setDate(d.getDate() + 14)
     return d.toISOString().slice(0, 10)
 }
 
 const form = reactive({
     receivedDate: '',
-    status: '',
+    status: '0',
     serviceID: '',
     productName: '',
     entityID: '',
@@ -889,17 +951,26 @@ const loanerUnits = computed(() => {
     return unique
 })
 const loanerProductOptions = computed(() =>
-    (props.loanerProducts ?? []).map(item => ({
-        productName: item.productName,
-        availableCount: item.availableCount,
-        totalCount: item.totalCount,
-        order_type: item.order_type,
-    })),
+    (props.loanerProducts ?? [])
+        .filter((item) => {
+            const text = String(item?.item ?? '')
+            return !text.includes('使用不可') && !text.includes('サービス終了')
+        })
+        .map(item => ({
+            item: item.item ?? '',
+            productName: item.productName,
+            availableCount: item.availableCount,
+            totalCount: item.totalCount,
+            order_type: item.order_type,
+        })),
 )
 const loanerUnitsForProduct = computed(() => {
     const productName = String(form.productName || '').trim()
     if (!productName) return []
-    return loanerUnits.value.filter(unit => String(unit.productName || '') === productName)
+    return loanerUnits.value.filter((unit) => {
+        if (String(unit.productName || '') !== productName) return false
+        return !isExcludedLoanerItem(unit?.item)
+    })
 })
 
 const selectedLoanerUnit = computed(() => {
@@ -908,6 +979,11 @@ const selectedLoanerUnit = computed(() => {
 })
 
 const hasLoanerStock = computed(() => loanerAvailability.value?.order_type === 'loaner')
+
+function isExcludedLoanerItem(itemText) {
+    const text = String(itemText ?? '')
+    return text.includes('使用不可') || text.includes('サービス終了')
+}
 
 function loanerUnitStatusValue(unit) {
     const column = props.loanerStatusColumn || 'currentStatus'
@@ -918,7 +994,14 @@ function loanerUnitStatusValue(unit) {
 }
 
 function isLoanerUnitAvailable(unit) {
+    if (isExcludedLoanerItem(unit?.item)) return false
     return loanerUnitStatusValue(unit) === 0
+}
+
+function formatLoanerDate(value) {
+    if (value == null || value === '') return '—'
+    if (typeof value === 'string') return value.slice(0, 10)
+    return String(value).slice(0, 10)
 }
 
 function canSelectLoanerUnit(unit) {
@@ -930,7 +1013,7 @@ function isSelectedLoanerUnit(unit) {
 }
 
 function selectLoanerUnit(unit) {
-    if (!canSelectLoanerUnit(unit)) return
+    if (!canSelectLoanerUnit(unit) || isExcludedLoanerItem(unit?.item)) return
     form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
     form.SN = unit.SN ?? ''
     showLoanerStockDialog.value = false
@@ -1005,7 +1088,7 @@ const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / 
 
 const missingLoanerLinkFields = computed(() => {
     const missing = []
-    if (!form.serviceID || !form.productName) missing.push('productName')
+    if (!String(form.productName || '').trim()) missing.push('productName')
     if (!String(form.SN || '').trim()) missing.push('SN')
     if (!String(form.dealer || '').trim()) missing.push('dealer')
     if (!String(form.contactPerson || '').trim()) missing.push('contactPerson')
@@ -1083,6 +1166,12 @@ function toggleAdditionalFile(file) {
     }
 
     form.additionalFileIds.splice(index, 1)
+}
+
+function onProductNameTyped() {
+    // 手入力時はマスタ選択との紐づけを外す（再選択で再設定）
+    form.serviceID = ''
+    form.entityID = ''
 }
 
 function onMasterSelected(result) {
@@ -1426,18 +1515,23 @@ function applyLoanerCalendarEventColors(info) {
 
 const loanerCalendarOptions = {
     plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-    initialView: 'dayGridMonth',
+    initialView: ROLLING_MONTH_VIEW,
     locale: 'ja',
-    height: 380,
+    firstDay: 0,
+    height: 420,
     headerToolbar: {
         left: 'prev,next today',
         center: 'title',
-        right: 'dayGridMonth,timeGridWeek',
+        right: `${ROLLING_MONTH_VIEW},timeGridWeek`,
     },
     buttonText: {
         today: '今日',
-        month: '月',
         week: '週',
+    },
+    views: {
+        [ROLLING_MONTH_VIEW]: {
+            ...rollingMonthViewConfig,
+        },
     },
     editable: true,
     eventStartEditable: true,
@@ -1446,6 +1540,8 @@ const loanerCalendarOptions = {
     selectable: false,
     dayMaxEvents: true,
     eventDisplay: 'block',
+    dayCellClassNames: fullCalendarDayCellClassNames,
+    dateClick: handleMonthCellDoubleClickToDayView,
     events: fetchLoanerCalendarEvents,
     eventDrop: handleLoanerCalendarDropOrResize,
     eventResize: handleLoanerCalendarDropOrResize,
@@ -1646,7 +1742,12 @@ function addSelectedLoaner(record) {
     if (selectedLoaners.value.some(item => String(item.orderID) === String(record.orderID))) {
         return
     }
+    const isFirst = selectedLoaners.value.length === 0
     selectedLoaners.value = [...selectedLoaners.value, record]
+    // 初回紐づけ時、未設定/未着荷なら「未着荷―貸出機先行」へ
+    if (isFirst && (form.status === '' || form.status === '0')) {
+        form.status = '3'
+    }
     error.value = ''
 }
 
@@ -1739,7 +1840,7 @@ async function linkToExistingRecord(payload) {
             throw new Error(validationMessage || data.message || `紐付けに失敗しました。（HTTP ${response.status}）`)
         }
 
-        window.location.href = adminUrl.value
+        window.location.href = intakeListUrl.value
     } catch (e) {
         error.value = e.message || '紐付けに失敗しました。'
     } finally {
@@ -1855,7 +1956,7 @@ async function saveLoanerCase() {
         if (data.attachedLoanerId) {
             window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/period/${data.attachedLoanerId}`
         } else {
-            window.location.href = adminUrl.value
+            window.location.href = intakeListUrl.value
         }
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
@@ -1875,8 +1976,8 @@ async function save() {
             openLoanerRequirementDialog('save')
             return
         }
-    } else if (!form.serviceID) {
-        error.value = 'productName を選択してください。'
+    } else if (!String(form.productName || '').trim()) {
+        error.value = 'productName を入力または選択してください。'
         return
     }
 
@@ -1897,7 +1998,8 @@ async function save() {
                 additionalFileIds: form.additionalFileIds.map(id => Number(id)),
                 receivedDate: form.receivedDate || null,
                 status: form.status === '' ? null : Number(form.status),
-                serviceID: Number(form.serviceID),
+                serviceID: form.serviceID === '' ? null : Number(form.serviceID),
+                productName: String(form.productName || '').trim() || null,
                 SN: form.SN || null,
                 returnCode: form.returnCode === '' ? null : Number(form.returnCode),
                 dealer: form.dealer || null,
@@ -1941,7 +2043,7 @@ async function save() {
             throw new Error(validationMessage || data.message || `保存に失敗しました。（HTTP ${response.status}）`)
         }
 
-        window.location.href = adminUrl.value
+        window.location.href = intakeListUrl.value
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
     } finally {
@@ -2052,6 +2154,11 @@ async function save() {
     min-width: 8px;
 }
 
+:deep(.splitpanes--horizontal > .splitpanes__splitter) {
+    min-height: 8px;
+    min-width: 100%;
+}
+
 :deep(.splitpanes__splitter:hover) {
     background: #94a3b8;
 }
@@ -2094,6 +2201,10 @@ async function save() {
     overflow: auto;
     display: flex;
     flex-direction: column;
+}
+
+.tab-panel-loaner-basic {
+    overflow: hidden;
 }
 
 .tab-panel-existing {
@@ -2233,6 +2344,46 @@ async function save() {
     padding-bottom: 8px;
 }
 
+.form-stack-loaner {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+}
+
+.loaner-basic-split {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.loaner-basic-pane {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.loaner-basic-pane-top {
+    gap: 8px;
+    padding-bottom: 4px;
+    overflow: auto;
+}
+
+.loaner-basic-pane-bottom {
+    overflow: auto;
+    padding-top: 4px;
+}
+
+.loaner-stakeholder-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+}
+
 .info-card {
     border: 1px solid #cbd5e1;
     border-radius: 6px;
@@ -2263,11 +2414,15 @@ async function save() {
 .info-card-loaner-top {
     border-color: #000000;
     background: #cdcdcd;
+    flex: 0 0 auto;
 }
 
 .info-card-loaner-calendar {
     border-color: #000000;
     background: #f8fafc;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .btn-stock-list {
@@ -2341,16 +2496,63 @@ async function save() {
 }
 
 .loaner-unit-panel-dialog {
-    max-height: min(50vh, 420px);
+    max-height: min(62vh, 560px);
 }
 
 .stock-list-panel {
-    width: min(720px, 94vw);
-    max-width: 94vw;
+    width: min(1280px, 96vw);
+    max-width: 96vw;
 }
 
 .stock-list-body {
     padding-top: 4px;
+}
+
+.stock-list-hint-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 100px;
+    margin-bottom: 8px;
+}
+
+.stock-list-hint-row .confirm-detail {
+    margin: 0;
+}
+
+.stock-status-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.stock-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stock-legend-swatch {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.stock-legend-available {
+    color: #166534;
+}
+
+.stock-legend-available .stock-legend-swatch {
+    color: #22c55e;
+}
+
+.stock-legend-loaned {
+    color: #475569;
+}
+
+.stock-legend-loaned .stock-legend-swatch {
+    color: #94a3b8;
 }
 
 .ok-text {
@@ -2365,6 +2567,7 @@ async function save() {
 
 .loaner-unit-table {
     width: 100%;
+    min-width: 1080px;
     border-collapse: collapse;
     color: #e2e8f0;
     font-size: 12px;
@@ -2384,6 +2587,18 @@ async function save() {
     position: sticky;
     top: 0;
     background: #0f172a;
+}
+
+.loaner-unit-table .col-loaner-id {
+    width: 64px;
+    max-width: 72px;
+    white-space: nowrap;
+}
+
+.loaner-unit-table .col-note {
+    max-width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .loaner-unit-row.available td {
@@ -2418,6 +2633,7 @@ async function save() {
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 8px;
+    flex: 0 0 auto;
 }
 
 .loaner-calendar-header .loaner-list-title {
@@ -2457,14 +2673,18 @@ async function save() {
 }
 
 .loaner-calendar-shell {
-    min-height: 380px;
+    flex: 0 0 auto;
+    height: 420px;
+    min-height: 420px;
     background: #fff;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     padding: 4px;
+    overflow: hidden;
 }
 
 .loaner-calendar-shell :deep(.fc) {
+    height: 420px;
     font-size: 11px;
 }
 
@@ -2593,7 +2813,23 @@ async function save() {
 }
 
 .row-product-top {
-    grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.7fr);
+    grid-template-columns: 80px minmax(0, 1fr) minmax(120px, 0.7fr);
+}
+
+.row-product-top .field-button-pick {
+    width: 80px;
+    max-width: 80px;
+    min-width: 80px;
+    padding-left: 4px;
+    padding-right: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.row-product-top .w-product-name {
+    width: 100%;
 }
 
 .row-product-sn {

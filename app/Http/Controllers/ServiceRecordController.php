@@ -185,16 +185,22 @@ class ServiceRecordController extends Controller
                     })
                     ->orWhere(function ($loanerQuery) {
                         $loanerQuery->where('order_type', 'loaner')
-                            ->whereIn('status', \App\Models\StatusLoaner::query()->select('processID_new'));
+                            ->where('status', '>=', 0)
+                            ->where('status', '<', 400);
                     })
                     ->orWhere('order_type', 'waiting_list');
             });
         }
 
         if ($mode === 'shippingPrep') {
-            $query->orderBy('status', 'asc');
+            $records = $query
+                ->orderByDesc('shippingOut_requiredDate')
+                ->orderBy('status', 'asc')
+                ->orderBy('receivedDate', 'asc')
+                ->get();
+        } else {
+            $records = $query->orderBy('receivedDate', 'asc')->get();
         }
-        $records = $query->orderBy('receivedDate', 'asc')->get();
 
         $records->each(function (ServiceRecord $record) {
             if ($record->order_type === 'loaner') {
@@ -323,9 +329,19 @@ class ServiceRecordController extends Controller
             abort(404, '指定された作業内容は存在しません。');
         }
 
-        $notes = $this->serializeNotes(
-            AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
-        );
+        $linkedLoanerOrderIds = ServiceRecord::query()
+            ->where('parentID', $orderID)
+            ->whereIn('order_type', ['loaner', 'waiting_list'])
+            ->pluck('orderID')
+            ->all();
+        $includeLinkedLoanerNotes = $record->order_type === 'service'
+            || $record->order_type === null
+            || $record->order_type === '';
+        $notes = $includeLinkedLoanerNotes
+            ? $this->serializeNotesForServiceDetail((int) $orderID, $linkedLoanerOrderIds)
+            : $this->serializeNotes(
+                AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
+            );
         $files = AttachedFile::query()
             ->where('associatedID', $orderID)
             ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
@@ -480,7 +496,9 @@ class ServiceRecordController extends Controller
                     ->where('status', '>', -1);
             }
         } elseif ($orderTypeFilter === 'loaner') {
-            $query->where('order_type', 'loaner');
+            $query->where('order_type', 'loaner')
+                ->where('status', '>=', 0)
+                ->where('status', '<', 400);
         } elseif ($orderTypeFilter === 'waiting_list') {
             $query->where('order_type', 'waiting_list');
         } else {
@@ -498,7 +516,8 @@ class ServiceRecordController extends Controller
                     })
                     ->orWhere(function ($loanerQuery) {
                         $loanerQuery->where('order_type', 'loaner')
-                            ->whereIn('status', \App\Models\StatusLoaner::query()->select('processID_new'));
+                            ->where('status', '>=', 0)
+                            ->where('status', '<', 400);
                     });
             });
         }
@@ -1736,6 +1755,10 @@ class ServiceRecordController extends Controller
                     'manageNum',
                     'item',
                     'groupName',
+                    'certificatedDate',
+                    'note1',
+                    'note2',
+                    'note3',
                     'validDateMin',
                     'validDateMax',
                     $loanerStatusColumn,
@@ -1747,13 +1770,19 @@ class ServiceRecordController extends Controller
         ])->values();
 
         $loanerProducts = $loaners
+            ->filter(fn ($row) => !LoanerMaster::isExcludedFromProductSelect($row->item ?? null))
             ->groupBy('productName')
             ->map(function ($rows, $productName) use ($loanerStatusColumn) {
                 $availableCount = $rows
                     ->filter(fn ($row) => (int) ($row->{$loanerStatusColumn} ?? -1) === 0)
                     ->count();
 
+                $item = $rows
+                    ->map(fn ($row) => trim((string) ($row->item ?? '')))
+                    ->first(fn ($value) => $value !== '');
+
                 return [
+                    'item' => $item !== null && $item !== '' ? $item : null,
                     'productName' => $productName,
                     'totalCount' => $rows->count(),
                     'availableCount' => $availableCount,
@@ -1787,7 +1816,7 @@ class ServiceRecordController extends Controller
         try {
             $parentRecord = ServiceRecord::query()
                 ->where('orderID', $orderID)
-                ->first(['orderID', 'orderDate', 'returnCode']);
+                ->first(['orderID', 'orderDate', 'returnCode', 'order_type']);
             $resolver = app(MasterPriceVersionResolver::class);
             $asOfDate = $parentRecord?->orderDate;
 
@@ -1796,7 +1825,9 @@ class ServiceRecordController extends Controller
                 ->where('parentID', $orderID)
                 ->whereIn('order_type', ['loaner', 'waiting_list'])
                 ->orderBy('orderID')
-                ->get()
+                ->get();
+
+            $linkedLoanerPayload = $linkedLoaners
                 ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord, $asOfDate) {
                     $attached = AttachedLoaner::query()
                         ->where('associatedID', $loaner->orderID)
@@ -1857,9 +1888,17 @@ class ServiceRecordController extends Controller
                 })
                 ->values();
 
+            $includeLinkedLoanerNotes = $parentRecord
+                && (
+                    $parentRecord->order_type === 'service'
+                    || $parentRecord->order_type === null
+                    || $parentRecord->order_type === ''
+                );
+
             return [
-                'notes' => $this->serializeNotes(
-                    AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
+                'notes' => $this->serializeNotesForServiceDetail(
+                    (int) $orderID,
+                    $includeLinkedLoanerNotes ? $linkedLoaners->pluck('orderID')->all() : [],
                 ),
                 'files' => AttachedFile::where('associatedID', $orderID)
                     ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
@@ -1873,8 +1912,8 @@ class ServiceRecordController extends Controller
                     ->with('stockedPartMaster')
                     ->orderBy('id')
                     ->get(),
-                'loaner' => $linkedLoaners->first(),
-                'loaners' => $linkedLoaners,
+                'loaner' => $linkedLoanerPayload->first(),
+                'loaners' => $linkedLoanerPayload,
                 'priceAsOfDate' => $resolver->normalizeDate($asOfDate),
             ];
         } catch (\Throwable $e) {
@@ -2058,6 +2097,69 @@ class ServiceRecordController extends Controller
             ->values();
     }
 
+    /**
+     * service 詳細用: 自案件 Notes + 紐づく loaner/waiting_list Notes をマージする。
+     *
+     * @param  list<int|string>  $linkedLoanerOrderIds
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function serializeNotesForServiceDetail(int $orderID, array $linkedLoanerOrderIds = [])
+    {
+        $serviceNotes = AttachedNote::query()
+            ->where('associatedID', $orderID)
+            ->orderByDesc('whenWrote')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (AttachedNote $note) use ($orderID) {
+                $payload = $this->serializeNote($note);
+                if (!$payload) {
+                    return null;
+                }
+                $payload['note_source'] = 'service';
+                $payload['source_orderID'] = $orderID;
+
+                return $payload;
+            })
+            ->filter();
+
+        $loanerOrderIds = collect($linkedLoanerOrderIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0 && $id !== $orderID)
+            ->unique()
+            ->values();
+
+        $loanerNotes = $loanerOrderIds->isEmpty()
+            ? collect()
+            : AttachedNote::query()
+                ->whereIn('associatedID', $loanerOrderIds->all())
+                ->orderByDesc('whenWrote')
+                ->orderByDesc('id')
+                ->get()
+                ->map(function (AttachedNote $note) {
+                    $payload = $this->serializeNote($note);
+                    if (!$payload) {
+                        return null;
+                    }
+                    $payload['note_source'] = 'loaner';
+                    $payload['source_orderID'] = $note->associatedID;
+
+                    return $payload;
+                })
+                ->filter();
+
+        return $serviceNotes
+            ->concat($loanerNotes)
+            ->sortByDesc(function (array $note) {
+                $when = $note['whenWrote'] ?? null;
+                if ($when instanceof \DateTimeInterface) {
+                    return $when->format('Y-m-d H:i:s.u');
+                }
+
+                return sprintf('%s-%010d', (string) $when, (int) ($note['id'] ?? 0));
+            })
+            ->values();
+    }
+
     private function serializeNote(?AttachedNote $note): ?array
     {
         if (!$note) {
@@ -2076,6 +2178,8 @@ class ServiceRecordController extends Controller
             'important' => (bool) $note->important,
             'personal' => (bool) $note->personal,
             'is_mine' => $kanjiName !== '' && $whoWrote !== '' && $whoWrote === $kanjiName,
+            'note_source' => 'service',
+            'source_orderID' => $note->associatedID,
         ];
     }
 
@@ -2349,7 +2453,8 @@ class ServiceRecordController extends Controller
             'additionalFileIds.*' => 'integer',
             'receivedDate' => 'nullable|date',
             'status' => ['nullable', 'integer', Rule::exists('statusmaster', 'processID_new')],
-            'serviceID' => 'required|integer',
+            'serviceID' => 'nullable|integer',
+            'productName' => 'nullable|string|max:255',
             'SN' => 'nullable|string|max:255',
             'returnCode' => 'nullable|integer',
             'dealer' => 'nullable|string|max:255',
@@ -2404,15 +2509,34 @@ class ServiceRecordController extends Controller
             }
         }
 
-        $service = ServiceMaster::query()
-            ->select(['serviceID', 'productName', 'entityID'])
-            ->where('serviceID', $validated['serviceID'])
-            ->first();
+        $requestedProductName = trim((string) ($validated['productName'] ?? ''));
+        $serviceId = $validated['serviceID'] ?? null;
+        $service = null;
+        $resolvedProductName = $requestedProductName;
+        $resolvedEntityId = null;
 
-        if (!$service) {
+        if ($serviceId !== null && $serviceId !== '') {
+            $service = ServiceMaster::query()
+                ->select(['serviceID', 'productName', 'entityID'])
+                ->where('serviceID', $serviceId)
+                ->first();
+
+            if (!$service) {
+                return response()->json([
+                    'message' => '指定された serviceID が見つかりません。',
+                ], 404);
+            }
+
+            $resolvedProductName = $requestedProductName !== ''
+                ? $requestedProductName
+                : (string) $service->productName;
+            $resolvedEntityId = $service->entityID;
+        }
+
+        if ($resolvedProductName === '') {
             return response()->json([
-                'message' => '指定された serviceID が見つかりません。',
-            ], 404);
+                'message' => 'productName を入力するか、機種マスタから選択してください。',
+            ], 422);
         }
 
         $loanerOrderIds = collect($validated['loanerOrderIds'] ?? [])
@@ -2457,20 +2581,28 @@ class ServiceRecordController extends Controller
 
         $user = $request->user();
 
+        // status は NOT NULL。未指定時は 0（未着荷）。loaner 紐づけ時は 3（未着荷―貸出機先行）
+        $resolvedStatus = array_key_exists('status', $validated) && $validated['status'] !== null
+            ? (int) $validated['status']
+            : ($loanerOrderIds->isNotEmpty() ? 3 : 0);
+
         $record = \Illuminate\Support\Facades\DB::transaction(function () use (
             $validated,
             $service,
+            $resolvedProductName,
+            $resolvedEntityId,
             $user,
             $fileIds,
             $loanerOrderIds,
             $orderType,
+            $resolvedStatus,
         ) {
             $record = ServiceRecord::create([
                 'receivedDate' => $validated['receivedDate'] ?? null,
-                'status' => $validated['status'] ?? null,
-                'serviceID' => $service->serviceID,
-                'productName' => $service->productName,
-                'entityID' => $service->entityID,
+                'status' => $resolvedStatus,
+                'serviceID' => $service?->serviceID,
+                'productName' => $resolvedProductName,
+                'entityID' => $resolvedEntityId,
                 'SN' => $validated['SN'] ?? null,
                 'returnCode' => $validated['returnCode'] ?? null,
                 'dealer' => $validated['dealer'] ?? null,
@@ -2699,7 +2831,7 @@ class ServiceRecordController extends Controller
     }
 
     /**
-     * 出荷予定カレンダー用イベント（status >= 300 かつ shippingOut_requiredDate あり）
+     * 出荷予定カレンダー用イベント（service / loaner、status >= 300 かつ shippingOut_requiredDate あり）
      */
     public function shippingCalendarEvents(Request $request)
     {
@@ -2718,7 +2850,8 @@ class ServiceRecordController extends Controller
             ->where(function ($typeQuery) {
                 $typeQuery->whereNull('order_type')
                     ->orWhere('order_type', '')
-                    ->orWhere('order_type', 'service');
+                    ->orWhere('order_type', 'service')
+                    ->orWhere('order_type', 'loaner');
             })
             ->whereDate('shippingOut_requiredDate', '>=', $validated['start'])
             ->whereDate('shippingOut_requiredDate', '<', $validated['end']);
@@ -2747,6 +2880,7 @@ class ServiceRecordController extends Controller
             ->limit(2000)
             ->get([
                 'orderID',
+                'order_type',
                 'SN',
                 'productName',
                 'dealer',
@@ -2770,12 +2904,9 @@ class ServiceRecordController extends Controller
             $recordStatus = (int) $row->getRawOriginal('status');
 
             $titleParts = array_filter([
-                (string) $row->orderID,
-                $row->SN,
                 $row->productName,
+                $row->SN,
                 $row->dealer,
-                $row->dealer_depart,
-                $row->contactPerson,
             ], fn ($part) => $part !== null && $part !== '');
 
             // 色分け: 300=黄 / 350=緑 / 385=青
@@ -2812,6 +2943,7 @@ class ServiceRecordController extends Controller
                 'classNames' => array_values(array_filter(['shipping-event', $statusClass])),
                 'extendedProps' => [
                     'orderID' => $row->orderID,
+                    'order_type' => $row->order_type ?: 'service',
                     'SN' => $row->SN,
                     'productName' => $row->productName,
                     'dealer' => $row->dealer,

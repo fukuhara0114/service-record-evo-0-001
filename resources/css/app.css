@@ -9,3 +9,36 @@
 
     --font-times: "Times New Roman", Times, serif;
 }
+
+/* FullCalendar: 土日祝の背景色 */
+.fc .fc-daygrid-day.fc-day-sat-tint,
+.fc .fc-daygrid-day.fc-day-sat-tint .fc-daygrid-day-frame,
+.fc td.fc-day-sat-tint {
+    background-color: #eff6ff !important;
+}
+
+.fc .fc-daygrid-day.fc-day-sun-tint,
+.fc .fc-daygrid-day.fc-day-sun-tint .fc-daygrid-day-frame,
+.fc td.fc-day-sun-tint {
+    background-color: #fef2f2 !important;
+}
+
+.fc .fc-daygrid-day.fc-day-holiday-tint,
+.fc .fc-daygrid-day.fc-day-holiday-tint .fc-daygrid-day-frame,
+.fc td.fc-day-holiday-tint {
+    background-color: #fff1f2 !important;
+}
+
+.fc .fc-daygrid-day.fc-day-holiday-tint .fc-daygrid-day-number {
+    color: #be123c;
+    font-weight: 700;
+}
+
+.fc .fc-timegrid-col.fc-day-sat-tint {
+    background-color: #eff6ff !important;
+}
+
+.fc .fc-timegrid-col.fc-day-sun-tint,
+.fc .fc-timegrid-col.fc-day-holiday-tint {
+    background-color: #fef2f2 !important;
+}
