@@ -152,9 +152,11 @@
             v-if="previewFile"
             :file="previewFile"
             :files="files"
+            :show-create-action="true"
             @close="previewFile = null"
             @saved="onPreviewSaved"
             @navigate="openPreview"
+            @create="onPreviewCreate"
         />
 
         <IntakeCaseTypeDialog
@@ -322,6 +324,13 @@ function isImage(file) {
 
 function openPreview(file) {
     previewFile.value = file
+}
+
+function onPreviewCreate(file) {
+    const target = file || previewFile.value
+    if (!target?.id) return
+    previewFile.value = null
+    openCaseTypeDialog({ mode: 'file', file: target })
 }
 
 function onPreviewSaved() {

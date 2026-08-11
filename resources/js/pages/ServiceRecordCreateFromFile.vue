@@ -14,6 +14,7 @@
         </div>
 
         <p v-if="error" class="global-error">{{ error }}</p>
+        <p v-if="success" class="global-success">{{ success }}</p>
 
         <div class="create-layout">
             <Splitpanes class="default-theme create-splitpanes" @resized="syncPaneSizes">
@@ -31,14 +32,23 @@
                                     <span>情報入力のみで新規案件を作成します</span>
                                 </div>
                             </div>
-                            <button
-                                v-if="hasSourceFile"
-                                type="button"
-                                class="btn btn-secondary"
-                                @click="openPreview(sourceFile)"
-                            >
-                                拡大・回転
-                            </button>
+                            <div v-if="hasSourceFile" class="panel-header-actions">
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary"
+                                    :disabled="ocrLoading"
+                                    @click="() => runOcrFromSourceFile()"
+                                >
+                                    {{ ocrLoading ? 'OCR読取中...' : 'OCR読取' }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary"
+                                    @click="openPreview(sourceFile)"
+                                >
+                                    拡大・回転
+                                </button>
+                            </div>
                         </div>
                         <div v-if="hasSourceFile" class="pdf-preview-shell">
                             <iframe
@@ -582,12 +592,14 @@
                     <ul class="missing-fields">
                         <li v-for="field in missingLoanerLinkFields" :key="field">{{ field }}</li>
                     </ul>
-                    <p>不足項目を OCR で読み取りますか？（OCR 未実装の場合は手入力へ進みます）</p>
+                    <p>不足項目を OCR で読み取りますか？</p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-secondary" @click="cancelLoanerRequirementDialog">キャンセル</button>
                     <button type="button" class="btn btn-secondary" @click="chooseManualEntryForLoaner">手入力する</button>
-                    <button type="button" class="btn btn-primary" @click="chooseOcrForLoaner">OCRで読み取る</button>
+                    <button type="button" class="btn btn-primary" :disabled="ocrLoading || !hasSourceFile" @click="chooseOcrForLoaner">
+                        {{ ocrLoading ? 'OCR読取中...' : 'OCRで読み取る' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -597,6 +609,7 @@
             :kind="activeSelectKind"
             :items="activeSelectItems"
             :initial-value="activeSelectInitialValue"
+            :initial-search-query="activeSelectSearchQuery"
             @close="activeSelectKind = null"
             @selected="onMasterSelected"
         />
@@ -795,6 +808,8 @@ const pageTitle = computed(() => (
 ))
 const saving = ref(false)
 const error = ref('')
+const success = ref('')
+const ocrLoading = ref(false)
 const activeTab = ref('basic')
 const activeSelectKind = ref(null)
 const previewFile = ref(null)
@@ -1141,6 +1156,13 @@ const activeSelectInitialValue = computed(() => {
         return matched?.id ?? null
     }
     return null
+})
+
+const activeSelectSearchQuery = computed(() => {
+    if (activeSelectKind.value === 'serviceMaster' || activeSelectKind.value === 'loanerProduct') {
+        return String(form.productName ?? '').trim()
+    }
+    return ''
 })
 
 function openSelectDialog(kind) {
@@ -1769,11 +1791,83 @@ function chooseManualEntryForLoaner() {
     error.value = `不足項目を入力してください: ${missingLoanerLinkFields.value.join(', ')}（入力後、loaner案件検索から再度追加できます）`
 }
 
-function chooseOcrForLoaner() {
-    showLoanerRequirementDialog.value = false
+function applyOcrFields(fields) {
+    if (!fields || typeof fields !== 'object') return 0
+    let applied = 0
+    Object.entries(fields).forEach(([key, value]) => {
+        if (!(key in form)) return
+        if (value === null || value === undefined) return
+        const text = String(value).trim()
+        if (text === '' || text.toLowerCase() === 'null') return
+        form[key] = text
+        applied += 1
+    })
+    return applied
+}
+
+async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
+    if (!hasSourceFile.value) {
+        error.value = 'OCR 対象の申請フォームがありません。'
+        return false
+    }
+    if (ocrLoading.value) return false
+
+    ocrLoading.value = true
+    error.value = ''
+    success.value = ''
     activeTab.value = 'basic'
-    // OCR 未実装: 手入力へ誘導。実装後はここで OCR API を呼び結果を form に流し込む。
-    error.value = 'OCR機能はまだ未実装です。productName / SN / dealer / contactPerson を手入力してください。'
+
+    try {
+        const url = `${page.props.appBaseUrl}/servicerecord/intake/ocr`
+        const result = await apiFetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                fileId: Number(props.sourceFile.id),
+            }),
+        })
+
+        if (!result) {
+            throw new Error('OCR の実行に失敗しました。')
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data?.message || `OCR の実行に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        const applied = applyOcrFields(data?.fields ?? {})
+        success.value = data?.message
+            ? `${data.message}（${applied}項目を反映）`
+            : `OCR 読み取り結果を反映しました。（${applied}項目）`
+
+        if (continueLoanerFlow) {
+            if (hasLoanerLinkRequiredFields.value && pendingLoanerRecord.value) {
+                const record = pendingLoanerRecord.value
+                showLoanerRequirementDialog.value = false
+                pendingLoanerRecord.value = null
+                loanerRequirementContext.value = null
+                addSelectedLoaner(record)
+            } else {
+                showLoanerRequirementDialog.value = false
+                error.value = `OCR 後も不足があります: ${missingLoanerLinkFields.value.join(', ') || '必須項目'}`
+            }
+        }
+
+        return true
+    } catch (e) {
+        error.value = e.message || 'OCR の実行に失敗しました。'
+        return false
+    } finally {
+        ocrLoading.value = false
+    }
+}
+
+async function chooseOcrForLoaner() {
+    await runOcrFromSourceFile({ continueLoanerFlow: true })
 }
 
 function onLoanerSelected(payload) {
@@ -2097,6 +2191,15 @@ async function save() {
     border-radius: 6px;
     background: #fef2f2;
     color: #b91c1c;
+}
+
+.global-success {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid #86efac;
+    border-radius: 6px;
+    background: #f0fdf4;
+    color: #166534;
 }
 
 .create-layout {
@@ -2978,6 +3081,13 @@ async function save() {
     gap: 12px;
     margin-bottom: 12px;
     flex: 0 0 auto;
+}
+
+.panel-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .panel-header h2 {

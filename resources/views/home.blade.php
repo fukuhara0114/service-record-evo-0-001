@@ -131,7 +131,7 @@
 
     <div class="menu-container menu-desktop">
         <a href="{{ url('/servicerecord_q') }}" class="btn">ServiceRecord</a>
-        <a href="{{ url('/servicerecord/administrator') }}" class="btn">Admin</a>
+        <a href="{{ url('/servicerecord/administrator') }}?orderType=service&arrival=hide_future" class="btn">Admin</a>
         <a href="{{ url('/servicerecord/intake') }}" class="btn">案件登録</a>
         <a href="{{ url('/servicerecord/engineer') }}" class="btn">Engineer</a>
         <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">出荷準備</a>

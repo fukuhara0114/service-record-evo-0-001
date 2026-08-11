@@ -89,6 +89,10 @@ const props = defineProps({
         type: [String, Number],
         default: null,
     },
+    initialSearchQuery: {
+        type: String,
+        default: '',
+    },
 })
 
 const emit = defineEmits(['close', 'selected'])
@@ -235,9 +239,10 @@ const selectedItem = computed(() =>
 )
 
 watch(
-    () => [props.kind, props.initialValue, props.items],
+    () => [props.kind, props.initialValue, props.initialSearchQuery, props.items],
     () => {
-        searchQuery.value = ''
+        const seed = String(props.initialSearchQuery ?? '').trim()
+        searchQuery.value = usesLatinSearch.value ? toHalfWidthAlnum(seed) : seed
         error.value = ''
         selectedValue.value = props.initialValue ?? null
     },
@@ -247,6 +252,9 @@ watch(
 onMounted(async () => {
     await nextTick()
     searchInput.value?.focus()
+    if (searchQuery.value) {
+        searchInput.value?.select?.()
+    }
 })
 
 function toHalfWidthAlnum(value) {

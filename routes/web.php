@@ -3,6 +3,7 @@
 // routes/web.php
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\FileImportController;
+use App\Http\Controllers\IntakeOcrController;
 use App\Http\Controllers\LoanerCalendarController;
 use App\Http\Controllers\LoanerRecordController;
 use App\Http\Controllers\MasterPriceRevisionController;
@@ -71,6 +72,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/files/{fileId}/eml-attachment/{index}', [ServiceRecordController::class, 'emlAttachment'])->name('servicerecord.files.eml-attachment');
     Route::post('/servicerecord/files/{fileId}/eml-reply-draft', [ServiceRecordController::class, 'emlReplyDraft'])->name('servicerecord.files.eml-reply-draft');
     Route::post('/servicerecord/intake/store', [ServiceRecordController::class, 'storeFromIntake'])->name('servicerecord.intake.store');
+    Route::post('/servicerecord/intake/ocr', IntakeOcrController::class)->name('servicerecord.intake.ocr');
     Route::get('/servicerecord/loaner/create', [LoanerRecordController::class, 'create'])->name('servicerecord.loaner.create');
     Route::get('/servicerecord/loaner/availability', [LoanerRecordController::class, 'availability'])->name('servicerecord.loaner.availability');
     Route::post('/servicerecord/loaner/store', [LoanerRecordController::class, 'store'])->name('servicerecord.loaner.store');

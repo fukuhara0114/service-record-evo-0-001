@@ -39,6 +39,12 @@ return [
         'api_key' => env('POWER_AUTOMATE_API_KEY'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 120),
+    ],
+
     /*
     | Microsoft Purview 秘密度ラベル（abroad Excel 出力用）
     | Public ラベル付き既存 .xlsx を解凍し docMetadata/LabelInfo.xml の

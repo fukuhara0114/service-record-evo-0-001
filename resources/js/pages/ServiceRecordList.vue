@@ -1061,6 +1061,14 @@ const ARRIVAL_FILTER_STORAGE_KEY = 'serviceRecordArrivalFilter'
 const ARRIVAL_FILTERS = ['all', 'hide_future', 'today', '1day', '2day', '3day', '1wk']
 
 function loadArrivalFilter() {
+    if (typeof window !== 'undefined') {
+        try {
+            const fromQuery = new URLSearchParams(window.location.search).get('arrival')
+            if (ARRIVAL_FILTERS.includes(fromQuery)) return fromQuery
+        } catch {
+            // ignore
+        }
+    }
     if (typeof sessionStorage === 'undefined') return 'hide_future'
     try {
         const raw = sessionStorage.getItem(ARRIVAL_FILTER_STORAGE_KEY)
@@ -1080,7 +1088,28 @@ function saveArrivalFilter(value) {
     }
 }
 
+function syncArrivalQuery(value) {
+    if (typeof window === 'undefined' || !window.history?.replaceState) return
+    try {
+        const url = new URL(window.location.href)
+        if (ARRIVAL_FILTERS.includes(value) && value !== 'hide_future') {
+            url.searchParams.set('arrival', value)
+        } else {
+            url.searchParams.delete('arrival')
+        }
+        window.history.replaceState({}, '', url.href)
+    } catch {
+        // ignore
+    }
+}
+
 const arrivalFilter = ref(loadArrivalFilter())
+
+// /home → Admin のクエリ指定、または詳細復帰時の URL を session に同期
+persistOrderTypeFilter(orderTypeFilter.value)
+saveArrivalFilter(arrivalFilter.value)
+syncOrderTypeQuery(orderTypeFilter.value)
+syncArrivalQuery(arrivalFilter.value)
 const selectedOrderId = ref(null)
 const abroadSelectedIds = ref(new Set())
 const abroadExcelMessage = ref('')
@@ -1846,6 +1875,7 @@ watch(smListAutoUpdate, (enabled) => {
 watch(arrivalFilter, (value) => {
     if (ARRIVAL_FILTERS.includes(value)) {
         saveArrivalFilter(value)
+        syncArrivalQuery(value)
     }
 })
 
@@ -2091,6 +2121,11 @@ async function openSecondLayer(record) {
         try {
             const url = new URL(returnUrl || window.location.href)
             url.searchParams.set('orderType', orderTypeFilter.value)
+            if (ARRIVAL_FILTERS.includes(arrivalFilter.value) && arrivalFilter.value !== 'hide_future') {
+                url.searchParams.set('arrival', arrivalFilter.value)
+            } else {
+                url.searchParams.delete('arrival')
+            }
             returnUrl = url.href
         } catch {
             // keep original returnUrl

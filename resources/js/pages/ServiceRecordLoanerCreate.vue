@@ -288,6 +288,7 @@
             :kind="activeSelectKind"
             :items="activeSelectItems"
             :initial-value="activeSelectInitialValue"
+            :initial-search-query="activeSelectSearchQuery"
             @close="activeSelectKind = null"
             @selected="onMasterSelected"
         />
@@ -531,6 +532,13 @@ const activeSelectInitialValue = computed(() => {
         return matched?.id ?? null
     }
     return null
+})
+
+const activeSelectSearchQuery = computed(() => {
+    if (activeSelectKind.value === 'loanerProduct') {
+        return String(form.productName ?? '').trim()
+    }
+    return ''
 })
 
 function unitStatusValue(unit) {

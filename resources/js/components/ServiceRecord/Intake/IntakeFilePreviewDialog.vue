@@ -55,6 +55,15 @@
                             {{ saving ? '保存中...' : '正対させて上書き保存' }}
                         </button>
                     </template>
+                    <button
+                        v-if="showCreateAction"
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="busy || !file?.id"
+                        @click="emitCreate"
+                    >
+                        このファイルで新規登録
+                    </button>
                     <a
                         v-if="originalFileUrl"
                         :href="originalFileUrl"
@@ -119,9 +128,13 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    showCreateAction: {
+        type: Boolean,
+        default: false,
+    },
 })
 
-const emit = defineEmits(['close', 'saved', 'navigate', 'toggle-selected'])
+const emit = defineEmits(['close', 'saved', 'navigate', 'toggle-selected', 'create'])
 
 const page = usePage()
 const rotationDegrees = ref(0)
@@ -326,6 +339,11 @@ async function saveRotated() {
 function close() {
     if (busy.value) return
     emit('close')
+}
+
+function emitCreate() {
+    if (busy.value || !props.file?.id) return
+    emit('create', props.file)
 }
 
 function goPrev() {
