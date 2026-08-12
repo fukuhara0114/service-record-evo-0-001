@@ -125,7 +125,7 @@ const tableStyleVars = computed(() => {
     return {
         '--notes-date-col-width': dateWidth || '134px',
         '--notes-author-col-width': authorWidth || '66px',
-        '--notes-confirm-col-width': props.showConfirmStatus ? '72px' : '0px',
+        '--notes-confirm-col-width': props.showConfirmStatus ? '36px' : '0px',
         '--notes-font-size': fontSize || '12px',
     }
 })
@@ -165,15 +165,15 @@ function isTruthyFlag(value) {
 function confirmStatusLabel(note) {
     const tbc = isTruthyFlag(note?.tbc)
     const done = isTruthyFlag(note?.done)
-    if (tbc && done) return '確認済'
-    if (tbc) return '要確認'
+    if (tbc && done) return '済'
+    if (tbc) return '要'
     return ''
 }
 
 function confirmStatusClass(note) {
     const label = confirmStatusLabel(note)
-    if (label === '確認済') return 'is-done'
-    if (label === '要確認') return 'is-tbc'
+    if (label === '済') return 'is-done'
+    if (label === '要') return 'is-tbc'
     return ''
 }
 
@@ -340,14 +340,14 @@ function normalizeCssWidth(value) {
 
 .notes-table .col-note-confirm-col,
 .notes-table .col-note-confirm {
-    width: var(--notes-confirm-col-width, 72px);
-    min-width: var(--notes-confirm-col-width, 72px);
-    max-width: var(--notes-confirm-col-width, 72px);
+    width: var(--notes-confirm-col-width, 36px);
+    min-width: var(--notes-confirm-col-width, 36px);
+    max-width: var(--notes-confirm-col-width, 36px);
     box-sizing: border-box;
     text-align: center;
     vertical-align: middle;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 2px;
+    padding-right: 2px;
 }
 
 .note-confirm-label {

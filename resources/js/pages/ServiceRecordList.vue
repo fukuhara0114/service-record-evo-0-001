@@ -2402,8 +2402,18 @@ function resolveDetailFormAPrice(draft, parts = []) {
     return Number.isFinite(total) ? total : null
 }
 
+function confirmPendingTbcIfStatus300Plus(status) {
+    const n = Number(status)
+    if (!Number.isFinite(n) || n < 300) return true
+    return window.confirm('要確認事項があります')
+}
+
 async function saveRecord() {
     if (!activeRecord.value?.orderID || !draftRecord.value) {
+        return
+    }
+
+    if (!confirmPendingTbcIfStatus300Plus(draftRecord.value.status)) {
         return
     }
 

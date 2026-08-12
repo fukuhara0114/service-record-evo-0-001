@@ -20,7 +20,7 @@
                 :class="{ on: tbc }"
                 @click="toggleTbc"
             >
-                要確認
+                要
             </button>
             <button
                 v-if="tbc"
@@ -29,7 +29,7 @@
                 :class="{ on: done }"
                 @click="done = !done"
             >
-                確認済
+                済
             </button>
         </div>
 

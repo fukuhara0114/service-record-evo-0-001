@@ -1381,6 +1381,10 @@ async function deleteFile() {
 async function save() {
     error.value = ''
     success.value = ''
+    const savingStatus = Number(form.status)
+    if (Number.isFinite(savingStatus) && savingStatus >= 300) {
+        if (!window.confirm('要確認事項があります')) return
+    }
     if (form.plannedSentDate && form.plannedReturnedDate && form.plannedReturnedDate < form.plannedSentDate) {
         error.value = '予定終了日は予定開始日以降にしてください。'
         return

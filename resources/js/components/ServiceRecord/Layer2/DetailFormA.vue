@@ -485,7 +485,10 @@
                                 <div class="pane-content pane-content-scroll">
                                     <section class="section-card section-card-compact section-card-fill notes-card">
                                         <div class="section-header">
-                                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
+                                            <div class="notes-header-title">
+                                                <h3>Notes（{{ sharedNotes.length }}件）</h3>
+                                                <span class="notes-tbc-count">要確認　({{ tbcNotesCount }}件)</span>
+                                            </div>
                                             <div class="section-actions">
                                                 <button type="button" class="action-btn" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteEdit">編集</button>
                                                 <button type="button" class="action-btn action-btn-danger" :disabled="!selectedNoteId" :title="noteEditDeleteTitle" @click="openNoteDelete">削除</button>
@@ -809,6 +812,13 @@ const authUserName = computed(() => {
 })
 const sharedNotes = computed(() =>
     (props.notes ?? []).filter(note => !isPersonalNote(note)),
+)
+const tbcNotesCount = computed(() =>
+    sharedNotes.value.filter((note) => {
+        const tbc = note?.tbc === true || note?.tbc === 1 || note?.tbc === '1'
+        const done = note?.done === true || note?.done === 1 || note?.done === '1'
+        return tbc && !done
+    }).length,
 )
 const selectedNote = computed(() => sharedNotes.value.find(n => Number(n.id) === Number(selectedNoteId.value)))
 
@@ -2787,6 +2797,20 @@ function formatDate(value) {
 .notes-card,
 .parts-card {
     background: #e0f2fe4f;
+}
+
+.notes-header-title {
+    display: flex;
+    align-items: center;
+    gap: 100px;
+    min-width: 0;
+}
+
+.notes-tbc-count {
+    font-size: 14px;
+    font-weight: 700;
+    color: #dc2626;
+    white-space: nowrap;
 }
 
 .parts-table {
