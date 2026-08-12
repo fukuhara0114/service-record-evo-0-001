@@ -27,7 +27,10 @@ return [
         // ページ PDF / 画像の参照用置き場（UUID ファイル名）
         'reference' => env('PDF_IMPORT_REFERENCE_PATH', storage_path('app/pdf_import/reference')),
 
-        // Ghostscript / FPDI / 画像コピーの作業用一時フォルダ
+        // Ghostscript / FPDI / 画像コピーの作業用一時フォルダ（UNC 共有上は PHP/TCPDF が書き込めないため、必ずローカルディスク）
+        'work_temp' => env('PDF_IMPORT_WORK_TEMP_PATH', storage_path('app/pdf_import/work_temp')),
+
+        // 旧キー互換（未指定時 work_temp と同じ。UNC の場合は job 側で work_temp へフォールバック）
         'temp' => env('PDF_IMPORT_TEMP_PATH', storage_path('app/pdf_import/temp')),
 
         // 失敗ファイルの隔離先

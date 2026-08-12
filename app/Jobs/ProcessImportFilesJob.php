@@ -52,6 +52,7 @@ class ProcessImportFilesJob implements ShouldQueue
         try {
             $paths = $this->resolvedPaths();
             $this->ensureDirectories($paths);
+            $this->ensureWorkTempBaseDirectory();
 
             $inboxFiles = $this->listInboxFiles($paths['inbox']);
             if ($inboxFiles === []) {
@@ -112,21 +113,22 @@ class ProcessImportFilesJob implements ShouldQueue
     ): void {
         $basename = basename($sourcePath);
         $ext = strtolower(pathinfo($basename, PATHINFO_EXTENSION));
-        $workDir = $paths['temp'] . DIRECTORY_SEPARATOR . Str::uuid()->toString();
+        $workDir = $this->createWorkDirectory();
+        $localSource = $workDir . DIRECTORY_SEPARATOR . $basename;
 
-        if (!mkdir($workDir, 0775, true) && !is_dir($workDir)) {
-            throw new \RuntimeException('一時作業フォルダを作成できませんでした: ' . $workDir);
+        if (!@copy($sourcePath, $localSource)) {
+            throw new \RuntimeException('作業用ローカルコピーに失敗しました: ' . $basename);
         }
 
         try {
             if ($ext === 'pdf') {
-                $this->processPdfFile($sourcePath, $paths, $gsPath, $associatedID, $gsAvailable, $workDir, $basename);
+                $this->processPdfFile($localSource, $sourcePath, $paths, $gsPath, $associatedID, $gsAvailable, $workDir, $basename);
 
                 return;
             }
 
             if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
-                $generatedJpgs = $this->copyImageToWorkDir($sourcePath, $workDir, $ext);
+                $generatedJpgs = $this->copyImageToWorkDir($localSource, $workDir, $ext);
                 $this->registerImagePagesAsAttachedFiles($generatedJpgs, $sourcePath, $paths, $associatedID, $basename);
 
                 return;
@@ -144,6 +146,7 @@ class ProcessImportFilesJob implements ShouldQueue
      * @param  array{inbox:string,converted:string,reference:string,temp:string,error:string}  $paths
      */
     private function processPdfFile(
+        string $localSourcePath,
         string $sourcePath,
         array $paths,
         string $gsPath,
@@ -152,11 +155,11 @@ class ProcessImportFilesJob implements ShouldQueue
         string $workDir,
         string $basename,
     ): void {
-        $splitSource = $sourcePath;
+        $splitSource = $localSourcePath;
 
         if ($gsAvailable) {
             try {
-                $compatiblePdf = $this->convertPdfToCompatiblePdf($sourcePath, $workDir, $gsPath);
+                $compatiblePdf = $this->convertPdfToCompatiblePdf($localSourcePath, $workDir, $gsPath);
                 if (is_file($compatiblePdf)) {
                     $splitSource = $compatiblePdf;
                 }
@@ -176,14 +179,14 @@ class ProcessImportFilesJob implements ShouldQueue
         try {
             $pagePdfs = $this->splitPdfIntoPagePdfs($splitSource, $workDir);
         } catch (Throwable $e) {
-            // 互換変換済みで失敗した場合は原本でも再試行
-            if ($splitSource !== $sourcePath) {
+            // 互換変換済みで失敗した場合はローカル原本でも再試行
+            if ($splitSource !== $localSourcePath) {
                 Log::warning('PDF import: FPDI split on compatible PDF failed; retrying on original.', [
                     'file' => $basename,
                     'error' => $e->getMessage(),
                 ]);
                 try {
-                    $pagePdfs = $this->splitPdfIntoPagePdfs($sourcePath, $workDir);
+                    $pagePdfs = $this->splitPdfIntoPagePdfs($localSourcePath, $workDir);
                 } catch (Throwable $e2) {
                     Log::warning('PDF import: FPDI/TCPDF page split failed; registering original PDF as reference.', [
                         'file' => $basename,
@@ -592,6 +595,58 @@ class ProcessImportFilesJob implements ShouldQueue
 
         $meta = $dest . '.error.txt';
         @file_put_contents($meta, $reason . PHP_EOL);
+    }
+
+    /**
+     * Ghostscript / FPDI 用の作業ディレクトリを作成する（必ずローカルディスク上）。
+     */
+    private function createWorkDirectory(): string
+    {
+        $base = $this->resolveWorkTempBase();
+        $workDir = $base . DIRECTORY_SEPARATOR . Str::uuid()->toString();
+
+        if (!mkdir($workDir, 0775, true) && !is_dir($workDir)) {
+            throw new \RuntimeException('一時作業フォルダを作成できませんでした: ' . $workDir);
+        }
+
+        return $workDir;
+    }
+
+    /**
+     * FPDI/TCPDF が UNC 上に書き込めないため、作業 temp はローカル固定。
+     */
+    private function resolveWorkTempBase(): string
+    {
+        $configured = (string) config('pdf_import.paths.work_temp', '');
+        if ($configured !== '') {
+            $path = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $configured), DIRECTORY_SEPARATOR);
+            if (!$this->isUncPath($path)) {
+                return $path;
+            }
+        }
+
+        $legacyTemp = (string) config('pdf_import.paths.temp', '');
+        if ($legacyTemp !== '') {
+            $path = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $legacyTemp), DIRECTORY_SEPARATOR);
+            if (!$this->isUncPath($path)) {
+                return $path;
+            }
+        }
+
+        return rtrim(storage_path('app/pdf_import/work_temp'), DIRECTORY_SEPARATOR);
+    }
+
+    private function isUncPath(string $path): bool
+    {
+        return str_starts_with($path, '\\\\') || str_starts_with($path, '//');
+    }
+
+    private function ensureWorkTempBaseDirectory(): void
+    {
+        $base = $this->resolveWorkTempBase();
+        if (!is_dir($base) && !mkdir($base, 0775, true) && !is_dir($base)) {
+            throw new \RuntimeException('作業用 temp ディレクトリを作成できませんでした: ' . $base);
+        }
     }
 
     /**
