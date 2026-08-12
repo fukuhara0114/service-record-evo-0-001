@@ -13,6 +13,26 @@
         </label>
         <p v-else class="remand-important-hint">差戻理由は重要 Note として登録されます。</p>
 
+        <div class="confirm-toggles">
+            <button
+                type="button"
+                class="toggle-btn"
+                :class="{ on: tbc }"
+                @click="toggleTbc"
+            >
+                要確認
+            </button>
+            <button
+                v-if="tbc"
+                type="button"
+                class="toggle-btn toggle-btn-done"
+                :class="{ on: done }"
+                @click="done = !done"
+            >
+                確認済
+            </button>
+        </div>
+
         <p v-if="error" class="error-message">{{ error }}</p>
 
         <template #footer>
@@ -40,6 +60,8 @@ const emit = defineEmits(['close', 'saved'])
 
 const noteText = ref('')
 const important = ref(false)
+const tbc = ref(false)
+const done = ref(false)
 const saving = ref(false)
 const error = ref('')
 
@@ -56,9 +78,13 @@ watch(
         if (payload?.mode === 'edit' && payload.note) {
             noteText.value = payload.note.note ?? ''
             important.value = !!payload.note.important
+            tbc.value = isTruthyFlag(payload.note.tbc)
+            done.value = tbc.value && isTruthyFlag(payload.note.done)
         } else {
             noteText.value = ''
             important.value = !!payload?.remand
+            tbc.value = false
+            done.value = false
         }
         error.value = ''
     },
@@ -71,6 +97,15 @@ function getApiBasePath() {
 
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function isTruthyFlag(value) {
+    return value === true || value === 1 || value === '1'
+}
+
+function toggleTbc() {
+    tbc.value = !tbc.value
+    if (!tbc.value) done.value = false
 }
 
 async function save() {
@@ -95,13 +130,19 @@ async function save() {
         return text
     })()
 
+    const confirmFlags = {
+        tbc: tbc.value ? true : null,
+        done: tbc.value && done.value ? true : null,
+    }
+
     const body = isEdit.value
-        ? { note: noteBody, important: important.value }
+        ? { note: noteBody, important: important.value, ...confirmFlags }
         : {
             associatedID: props.record?.orderID,
             note: noteBody,
             important: props.payload?.remand ? true : important.value,
             personal: !!props.payload?.personal,
+            ...confirmFlags,
         }
 
     try {
@@ -168,6 +209,35 @@ async function save() {
     gap: 8px;
     font-size: 14px;
     margin-bottom: 8px;
+}
+
+.confirm-toggles {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+.toggle-btn {
+    padding: 6px 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.toggle-btn.on {
+    background: #dc2626;
+    border-color: #b91c1c;
+    color: #fff;
+}
+
+.toggle-btn-done.on {
+    background: #166534;
+    border-color: #14532d;
+    color: #fff;
 }
 
 .remand-important-hint {

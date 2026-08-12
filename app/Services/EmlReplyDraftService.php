@@ -291,7 +291,9 @@ HTML;
 <div style="color:#000;">
 <p style="margin:0 0 12px;">{dealer}&emsp;{contactPerson} 様</p>
 <p style="margin:0 0 12px;">いつも大変お世話になっております。<br>エックスライトサービスセンター{sender}です。</p>
-<p style="margin:0 0 12px;">ご依頼いただきました機材（製品:{productName} SN:{SN}）を{displayDate}にX-riteにて受領いたしました。<br>作業を進めさせていただきます。<br>何卒よろしくお願いいたします。<br><br></p>
+<p style="margin:0 0 12px;">ご依頼いただきました機材（製品:{productName} SN:{SN}）を{displayDate}にX-riteにて受領いたしました。<br></p>
+<div id="gallery-images"></div>
+<p style="margin:0 0 12px;"><br>作業を進めさせていただきます。<br>何卒よろしくお願いいたします。<br><br></p>
 <p style="margin:0 0 12px;">なお、お問い合わせは出来るだけメールにてお願いいたします。</p>
 <p style="margin:0 0 16px;">また、電子帳簿保存法の改正に伴い、発注書・納品書等の書類はメールでの送付をお願いいたします。</p>
 <p style="margin:0 0 4px;">*******************************************************************</p>
@@ -315,6 +317,7 @@ TPL;
 <tr><td style="padding:4px 12px 4px 0;color:#64748b;">製品名</td><td style="padding:4px 0;font-weight:700;">{productName}</td></tr>
 <tr><td style="padding:4px 12px 4px 0;color:#64748b;">S/N</td><td style="padding:4px 0;font-weight:700;">{SN}</td></tr>
 </table>
+<div id="gallery-images"></div>
 <p style="margin:0 0 12px;">ご確認のほど、よろしくお願いいたします。</p>
 TPL;
     }
@@ -329,6 +332,7 @@ TPL;
 <tr><td style="padding:4px 12px 4px 0;color:#64748b;">製品名</td><td style="padding:4px 0;font-weight:700;">{productName}</td></tr>
 <tr><td style="padding:4px 12px 4px 0;color:#64748b;">S/N</td><td style="padding:4px 0;font-weight:700;">{SN}</td></tr>
 </table>
+<div id="gallery-images"></div>
 <p style="margin:0 0 12px;">変更内容の詳細は本文をご確認ください。<br>ご不明点がございましたらお知らせください。<br>何卒よろしくお願いいたします。</p>
 TPL;
     }

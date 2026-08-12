@@ -340,7 +340,10 @@ class ServiceRecordController extends Controller
         $notes = $includeLinkedLoanerNotes
             ? $this->serializeNotesForServiceDetail((int) $orderID, $linkedLoanerOrderIds)
             : $this->serializeNotes(
-                AttachedNote::where('associatedID', $orderID)->orderBy('id')->get()
+                AttachedNote::where('associatedID', $orderID)
+                    ->orderBy('whenWrote')
+                    ->orderBy('id')
+                    ->get()
             );
         $files = AttachedFile::query()
             ->where('associatedID', $orderID)
@@ -1944,8 +1947,8 @@ class ServiceRecordController extends Controller
     private function fetchUnregisteredEmailNotes()
     {
         return UnregisteredEmailNote::query()
-            ->orderByDesc('whenWrote')
-            ->orderByDesc('id')
+            ->orderBy('whenWrote')
+            ->orderBy('id')
             ->get();
     }
 
@@ -2012,6 +2015,8 @@ class ServiceRecordController extends Controller
             'note' => 'required|string',
             'important' => 'nullable|boolean',
             'personal' => 'nullable|boolean',
+            'tbc' => 'nullable|boolean',
+            'done' => 'nullable|boolean',
         ]);
 
         if (!ServiceRecord::where('orderID', $validated['associatedID'])->exists()) {
@@ -2021,14 +2026,21 @@ class ServiceRecordController extends Controller
         $user = $request->user();
         $whoWrote = $user?->kanji_name ?: 'unknown';
 
-        $note = AttachedNote::create([
+        $tbc = $this->nullableTrue($request->input('tbc'));
+        $done = $tbc === true ? $this->nullableTrue($request->input('done')) : null;
+
+        $payload = [
             'associatedID' => $validated['associatedID'],
             'note' => $validated['note'],
             'whoWrote' => $whoWrote,
             'whenWrote' => now(),
             'important' => $request->boolean('important'),
             'personal' => $request->boolean('personal'),
-        ]);
+            'tbc' => $tbc,
+            'done' => $done,
+        ];
+
+        $note = AttachedNote::create($payload);
 
         return response()->json([
             'message' => 'Note を登録しました。',
@@ -2047,12 +2059,21 @@ class ServiceRecordController extends Controller
         $validated = $request->validate([
             'note' => 'required|string',
             'important' => 'nullable|boolean',
+            'tbc' => 'nullable|boolean',
+            'done' => 'nullable|boolean',
         ]);
 
-        $note->update([
+        $tbc = $this->nullableTrue($request->input('tbc'));
+        $done = $tbc === true ? $this->nullableTrue($request->input('done')) : null;
+
+        $updates = [
             'note' => $validated['note'],
             'important' => $request->boolean('important'),
-        ]);
+            'tbc' => $tbc,
+            'done' => $done,
+        ];
+
+        $note->update($updates);
 
         return response()->json([
             'message' => 'Note を更新しました。',
@@ -2094,6 +2115,8 @@ class ServiceRecordController extends Controller
     {
         return collect($notes)
             ->map(fn ($note) => $this->serializeNote($note))
+            ->filter()
+            ->sortBy(fn (array $note) => $this->noteSortKey($note))
             ->values();
     }
 
@@ -2107,8 +2130,8 @@ class ServiceRecordController extends Controller
     {
         $serviceNotes = AttachedNote::query()
             ->where('associatedID', $orderID)
-            ->orderByDesc('whenWrote')
-            ->orderByDesc('id')
+            ->orderBy('whenWrote')
+            ->orderBy('id')
             ->get()
             ->map(function (AttachedNote $note) use ($orderID) {
                 $payload = $this->serializeNote($note);
@@ -2132,8 +2155,8 @@ class ServiceRecordController extends Controller
             ? collect()
             : AttachedNote::query()
                 ->whereIn('associatedID', $loanerOrderIds->all())
-                ->orderByDesc('whenWrote')
-                ->orderByDesc('id')
+                ->orderBy('whenWrote')
+                ->orderBy('id')
                 ->get()
                 ->map(function (AttachedNote $note) {
                     $payload = $this->serializeNote($note);
@@ -2149,15 +2172,25 @@ class ServiceRecordController extends Controller
 
         return $serviceNotes
             ->concat($loanerNotes)
-            ->sortByDesc(function (array $note) {
-                $when = $note['whenWrote'] ?? null;
-                if ($when instanceof \DateTimeInterface) {
-                    return $when->format('Y-m-d H:i:s.u');
-                }
-
-                return sprintf('%s-%010d', (string) $when, (int) ($note['id'] ?? 0));
-            })
+            ->sortBy(fn (array $note) => $this->noteSortKey($note))
             ->values();
+    }
+
+    /**
+     * Notes を日付の古い順（同日時は id 昇順）で並べるためのキー。
+     *
+     * @param  array<string, mixed>  $note
+     */
+    private function noteSortKey(array $note): string
+    {
+        $when = $note['whenWrote'] ?? null;
+        if ($when instanceof \DateTimeInterface) {
+            $whenStr = $when->format('Y-m-d H:i:s.u');
+        } else {
+            $whenStr = (string) $when;
+        }
+
+        return sprintf('%s-%010d', $whenStr, (int) ($note['id'] ?? 0));
     }
 
     private function serializeNote(?AttachedNote $note): ?array
@@ -2177,10 +2210,22 @@ class ServiceRecordController extends Controller
             'whenWrote' => $note->whenWrote,
             'important' => (bool) $note->important,
             'personal' => (bool) $note->personal,
+            'tbc' => $this->nullableTrue($note->getAttributes()['tbc'] ?? null),
+            'done' => $this->nullableTrue($note->getAttributes()['done'] ?? null),
             'is_mine' => $kanjiName !== '' && $whoWrote !== '' && $whoWrote === $kanjiName,
             'note_source' => 'service',
             'source_orderID' => $note->associatedID,
         ];
+    }
+
+    /** true / null のみ返す（false は未設定扱い） */
+    private function nullableTrue(mixed $value): ?bool
+    {
+        if ($value === true || $value === 1 || $value === '1' || $value === 'true') {
+            return true;
+        }
+
+        return null;
     }
 
     public function storeFile(Request $request)

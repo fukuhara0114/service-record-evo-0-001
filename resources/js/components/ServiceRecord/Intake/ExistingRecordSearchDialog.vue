@@ -74,6 +74,7 @@
                                         :date-column-width="134"
                                         :author-column-width="66"
                                         :table-font-size="12"
+                                        :allow-edit="false"
                                     />
                                 </div>
                             </section>

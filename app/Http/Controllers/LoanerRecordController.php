@@ -240,8 +240,8 @@ class LoanerRecordController extends Controller
             'notes' => $this->serializeLoanerNotes(
                 AttachedNote::query()
                     ->where('associatedID', $record->orderID)
-                    ->orderByDesc('whenWrote')
-                    ->orderByDesc('id')
+                    ->orderBy('whenWrote')
+                    ->orderBy('id')
                     ->get()
             ),
             'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
@@ -1713,9 +1713,31 @@ class LoanerRecordController extends Controller
                 'whenWrote' => $note->whenWrote,
                 'important' => (bool) $note->important,
                 'personal' => (bool) $note->personal,
+                'tbc' => $this->nullableTrue($note->getAttributes()['tbc'] ?? null),
+                'done' => $this->nullableTrue($note->getAttributes()['done'] ?? null),
                 'is_mine' => $kanjiName !== '' && $whoWrote !== '' && $whoWrote === $kanjiName,
             ];
-        })->values();
+        })
+            ->sortBy(function (array $note) {
+                $when = $note['whenWrote'] ?? null;
+                if ($when instanceof \DateTimeInterface) {
+                    $whenStr = $when->format('Y-m-d H:i:s.u');
+                } else {
+                    $whenStr = (string) $when;
+                }
+
+                return sprintf('%s-%010d', $whenStr, (int) ($note['id'] ?? 0));
+            })
+            ->values();
+    }
+
+    private function nullableTrue(mixed $value): ?bool
+    {
+        if ($value === true || $value === 1 || $value === '1' || $value === 'true') {
+            return true;
+        }
+
+        return null;
     }
 
     private function resolveStatusColumn(): string

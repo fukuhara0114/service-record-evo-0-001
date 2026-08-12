@@ -1,22 +1,24 @@
 <template>
     <div class="notes-table-root">
-        <div v-if="notes.length" class="attachment-table-wrap notes-table-wrap">
+        <div v-if="sortedNotes.length" class="attachment-table-wrap notes-table-wrap">
             <table class="data-table notes-table" :style="tableStyleVars">
                 <colgroup>
                     <col class="col-note-date-col">
                     <col class="col-note-author-col">
+                    <col v-if="showConfirmStatus" class="col-note-confirm-col">
                     <col class="col-note-body-col">
                 </colgroup>
                 <thead>
                     <tr>
                         <th class="col-note-date">日時</th>
                         <th class="col-note-author">記入者</th>
+                        <th v-if="showConfirmStatus" class="col-note-confirm"></th>
                         <th class="col-note-body">内容</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="note in notes"
+                        <tr
+                        v-for="note in sortedNotes"
                         :key="note.id"
                         class="table-row"
                     :class="{
@@ -24,12 +26,23 @@
                         'active-row': Number(selectedId) === Number(note.id),
                     }"
                         @click="selectNote(note.id)"
+                        @dblclick="onNoteDblclick(note)"
                     >
                         <td class="col-note-date">{{ formatDate(note.whenWrote) }}</td>
                         <td class="col-note-author">{{ note.whoWrote || '—' }}</td>
+                        <td v-if="showConfirmStatus" class="col-note-confirm">
+                            <span
+                                v-if="confirmStatusLabel(note)"
+                                class="note-confirm-label"
+                                :class="confirmStatusClass(note)"
+                            >
+                                {{ confirmStatusLabel(note) }}
+                            </span>
+                        </td>
                         <td
                             class="text-cell col-note-body"
                             @click.stop="selectNote(note.id)"
+                            @dblclick.stop="onNoteDblclick(note)"
                             v-html="linkifyNote(displayNoteText(note))"
                         />
                     </tr>
@@ -73,9 +86,36 @@ const props = defineProps({
         type: [Number, String, null],
         default: null,
     },
+    showConfirmStatus: {
+        type: Boolean,
+        default: false,
+    },
+    currentUserName: {
+        type: String,
+        default: '',
+    },
+    allowEdit: {
+        type: Boolean,
+        default: true,
+    },
 })
 
-const emit = defineEmits(['update:selectedId', 'select'])
+const emit = defineEmits(['update:selectedId', 'select', 'edit'])
+
+function noteWroteTime(note) {
+    const when = note?.whenWrote
+    if (!when) return 0
+    const time = new Date(when).getTime()
+    return Number.isNaN(time) ? 0 : time
+}
+
+const sortedNotes = computed(() =>
+    [...(props.notes ?? [])].sort((a, b) => {
+        const diff = noteWroteTime(a) - noteWroteTime(b)
+        if (diff !== 0) return diff
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    }),
+)
 
 const tableStyleVars = computed(() => {
     const dateWidth = normalizeCssWidth(props.dateColumnWidth)
@@ -85,6 +125,7 @@ const tableStyleVars = computed(() => {
     return {
         '--notes-date-col-width': dateWidth || '134px',
         '--notes-author-col-width': authorWidth || '66px',
+        '--notes-confirm-col-width': props.showConfirmStatus ? '72px' : '0px',
         '--notes-font-size': fontSize || '12px',
     }
 })
@@ -92,6 +133,48 @@ const tableStyleVars = computed(() => {
 function selectNote(id) {
     emit('update:selectedId', id)
     emit('select', id)
+}
+
+function isNoteOwner(note) {
+    if (!note) return false
+    const who = String(note.whoWrote ?? '').trim()
+    if (!who) return false
+    if (note.is_mine === true || note.is_mine === 1 || note.is_mine === '1') {
+        return true
+    }
+    const me = String(props.currentUserName ?? '').trim()
+    return me !== '' && me === who
+}
+
+function onNoteDblclick(note) {
+    selectNote(note?.id)
+    if (!props.allowEdit) return
+    if (!isNoteOwner(note)) {
+        window.alert(
+            `自分が書いた Note のみ編集できます。\nログイン: ${String(props.currentUserName || '').trim() || '不明'}\n記入者: ${note?.whoWrote || '不明'}`,
+        )
+        return
+    }
+    emit('edit', note)
+}
+
+function isTruthyFlag(value) {
+    return value === true || value === 1 || value === '1'
+}
+
+function confirmStatusLabel(note) {
+    const tbc = isTruthyFlag(note?.tbc)
+    const done = isTruthyFlag(note?.done)
+    if (tbc && done) return '確認済'
+    if (tbc) return '要確認'
+    return ''
+}
+
+function confirmStatusClass(note) {
+    const label = confirmStatusLabel(note)
+    if (label === '確認済') return 'is-done'
+    if (label === '要確認') return 'is-tbc'
+    return ''
 }
 
 function isImportantNote(note) {
@@ -253,6 +336,40 @@ function normalizeCssWidth(value) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.notes-table .col-note-confirm-col,
+.notes-table .col-note-confirm {
+    width: var(--notes-confirm-col-width, 72px);
+    min-width: var(--notes-confirm-col-width, 72px);
+    max-width: var(--notes-confirm-col-width, 72px);
+    box-sizing: border-box;
+    text-align: center;
+    vertical-align: middle;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.note-confirm-label {
+    display: inline-block;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.note-confirm-label.is-tbc {
+    color: #dc2626;
+}
+
+.note-confirm-label.is-done {
+    color: #1bc25b;
+}
+
+.notes-table tbody tr.active-row .note-confirm-label.is-tbc {
+    color: #fca5a5 !important;
+}
+
+.notes-table tbody tr.active-row .note-confirm-label.is-done {
+    color: #00ff5e !important;
 }
 
 .notes-table .col-note-body {

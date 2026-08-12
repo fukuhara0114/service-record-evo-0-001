@@ -7,7 +7,7 @@
     <title>ホーム画面</title>
     <style>
         body {
-            background-color: #f5f5f5;
+            background-color:rgb(189, 189, 189);
             font-family: sans-serif;
             font-size: 16px;
             margin: 0;
@@ -132,11 +132,11 @@
     <div class="menu-container menu-desktop">
         <a href="{{ url('/servicerecord_q') }}" class="btn">ServiceRecord</a>
         <a href="{{ url('/servicerecord/administrator') }}?orderType=service&arrival=hide_future" class="btn">Admin</a>
-        <a href="{{ url('/servicerecord/intake') }}" class="btn">案件登録</a>
+        <a href="{{ url('/servicerecord/intake') }}" class="btn">Intake</a>
         <a href="{{ url('/servicerecord/engineer') }}" class="btn">Engineer</a>
-        <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">出荷準備</a>
+        <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">Invoice</a>
         <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
-        <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">貸出カレンダー</a>
+        <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">Loaner</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
         @if ($showMasterPriceRevision)
             <a href="{{ url('/servicerecord/master-price-revision') }}" class="btn">価格改定</a>
@@ -147,7 +147,6 @@
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
         <a href="{{ url('/servicerecord/camera') }}" class="btn">カメラ</a>
         <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
-        <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">出荷準備</a>
     </div>
 
     <p class="phone-redirect">カメラ画面へ移動しています…</p>

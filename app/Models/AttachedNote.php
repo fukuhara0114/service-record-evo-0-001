@@ -24,12 +24,15 @@ class AttachedNote extends Model
         'whenWrote',
         'important',
         'personal',
+        'tbc',
+        'done',
     ];
 
     protected $casts = [
         'important' => 'boolean',
         'personal' => 'boolean',
         'whenWrote' => 'datetime',
+        // tbc / done は NULL / true を区別するため boolean cast しない
     ];
 
     public function serviceRecord(): BelongsTo

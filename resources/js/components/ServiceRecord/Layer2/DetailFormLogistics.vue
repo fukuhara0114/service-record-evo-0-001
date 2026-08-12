@@ -185,7 +185,9 @@
                             v-model:selected-id="selectedNoteId"
                             :notes="sharedNotes"
                             :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                            :current-user-name="currentUserName"
                             empty-message="Notes"
+                            @edit="openNoteEdit"
                         />
                     </div>
                 </section>

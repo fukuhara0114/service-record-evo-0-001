@@ -152,6 +152,8 @@
                                     v-model:selected-id="selectedNoteId"
                                     :notes="sharedNotes"
                                     :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                    :current-user-name="authUserName"
+                                    @edit="openNoteEdit"
                                 />
                             </section>
                         </Pane>

@@ -99,17 +99,31 @@ const deletingId = ref(null)
 const loadError = ref('')
 const error = ref('')
 
+function noteWroteTime(note) {
+    const when = note?.whenWrote
+    if (!when) return 0
+    const time = new Date(when).getTime()
+    return Number.isNaN(time) ? 0 : time
+}
+
 const filteredNotes = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
-    if (!q) return notes.value
-    return notes.value.filter((note) => {
-        const haystack = [
-            note.mailLink,
-            note.subject,
-            note.whoWrote,
-            note.fromAddress,
-        ].map((v) => String(v || '').toLowerCase()).join(' ')
-        return haystack.includes(q)
+    const list = !q
+        ? [...notes.value]
+        : notes.value.filter((note) => {
+            const haystack = [
+                note.mailLink,
+                note.subject,
+                note.whoWrote,
+                note.fromAddress,
+            ].map((v) => String(v || '').toLowerCase()).join(' ')
+            return haystack.includes(q)
+        })
+
+    return list.sort((a, b) => {
+        const diff = noteWroteTime(a) - noteWroteTime(b)
+        if (diff !== 0) return diff
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
     })
 })
 

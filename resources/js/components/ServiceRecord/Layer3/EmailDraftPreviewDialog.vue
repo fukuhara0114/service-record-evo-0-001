@@ -37,7 +37,7 @@
                         </div>
                     </div>
                 </div>
-                <p v-else class="preview-images-empty">画像未挿入。Gallery から追加できます。</p>
+                <p v-else class="preview-images-empty">画像未挿入。Gallery から追加できます（ひな型の gallery-images 位置へ挿入）。</p>
 
                 <p v-if="actionMessage" class="action-message" :class="{ error: actionError }">{{ actionMessage }}</p>
             </div>
@@ -148,21 +148,55 @@ function extractBodyInner(html) {
     return source
 }
 
-function buildHtmlBody({ useCid = false } = {}) {
-    const imageHtml = attachedImages.value.map((image, index) => {
+function buildGalleryImageHtml({ useCid = false } = {}) {
+    return attachedImages.value.map((image, index) => {
         const src = useCid ? `cid:${image.cid}` : image.dataUrl
         const alt = escapeHtml(image.name || `image-${index + 1}`)
         return `<div style="margin:16px 0;"><img src="${src}" alt="${alt}" style="max-width:100%;height:auto;border:0;"></div>`
     }).join('\n')
+}
 
+/**
+ * ひな型の目印位置へ画像を差し込む。
+ * 対応: <div id="gallery-images"></div> / {galleryImages}
+ * 目印が無い場合は末尾追加用に injected=false を返す。
+ */
+function injectGalleryImages(innerHtml, imageHtml) {
+    const source = String(innerHtml || '')
+    const divMarker = /<div\b[^>]*\bid\s*=\s*["']gallery-images["'][^>]*>[\s\S]*?<\/div>/i
+    if (divMarker.test(source)) {
+        const replacement = `<div id="gallery-images">${imageHtml || ''}</div>`
+        return {
+            html: source.replace(divMarker, replacement),
+            injected: true,
+        }
+    }
+
+    if (source.includes('{galleryImages}')) {
+        return {
+            html: source.split('{galleryImages}').join(imageHtml || ''),
+            injected: true,
+        }
+    }
+
+    return {
+        html: source,
+        injected: false,
+    }
+}
+
+function buildHtmlBody({ useCid = false } = {}) {
+    const imageHtml = buildGalleryImageHtml({ useCid })
     const inner = extractBodyInner(localBodyHtml.value)
+    const { html: bodyInner, injected } = injectGalleryImages(inner, imageHtml)
+
     return [
         '<!DOCTYPE html>',
         '<html lang="ja"><head><meta charset="UTF-8"></head>',
         '<body style="margin:0;padding:0;background:#ffffff;">',
         '<div style="font-family:\'Segoe UI\',Meiryo,\'Hiragino Kaku Gothic ProN\',sans-serif;font-size:14px;line-height:1.7;color:#111827;padding:16px;">',
-        inner,
-        imageHtml,
+        bodyInner,
+        injected ? '' : imageHtml,
         '</div>',
         '</body></html>',
     ].join('\n')

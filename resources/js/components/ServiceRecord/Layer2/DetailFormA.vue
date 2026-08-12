@@ -497,6 +497,9 @@
                                             v-model:selected-id="selectedNoteId"
                                             :notes="sharedNotes"
                                             :record-order-id="record?.orderID"
+                                            :show-confirm-status="true"
+                                            :current-user-name="authUserName"
+                                            @edit="openNoteEdit"
                                         />
                                     </section>
                                 </div>

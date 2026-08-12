@@ -176,6 +176,8 @@
                                 v-model:selected-id="selectedSharedNoteId"
                                 :notes="sharedNotes"
                                 :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                :current-user-name="currentUserName"
+                                @edit="openNoteEdit(false)"
                             />
                         </div>
                     </section>
@@ -194,7 +196,9 @@
                                 v-model:selected-id="selectedPersonalNoteId"
                                 :notes="personalNotes"
                                 :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                :current-user-name="currentUserName"
                                 empty-message="Personal Notes がありません。"
+                                @edit="openNoteEdit(true)"
                             />
                         </div>
                     </section>
@@ -521,6 +525,12 @@ function openNoteCreate(personal) {
 function openNoteEdit(personal) {
     const note = personal ? selectedPersonalNote.value : selectedSharedNote.value
     if (!note) return
+    if (!canModifyNote(note)) {
+        window.alert(
+            `自分が書いた Note のみ編集できます。\nログイン: ${currentUserName.value || '不明'}\n記入者: ${note.whoWrote || '不明'}`,
+        )
+        return
+    }
     emit('open-dialog', 'NOTE', { mode: 'edit', note, personal: !!personal })
 }
 
