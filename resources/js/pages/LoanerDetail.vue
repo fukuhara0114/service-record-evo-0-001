@@ -265,6 +265,12 @@
                                 >
                                     Notes（{{ sharedNotes.length }}件）
                                 </button>
+                                <span
+                                    v-if="bottomTab === 'notes'"
+                                    class="notes-tbc-count"
+                                >
+                                    要確認　({{ tbcNotesCount }}件)
+                                </span>
                                 <button
                                     type="button"
                                     class="tab-btn"
@@ -306,6 +312,7 @@
                                 v-model:selected-id="selectedNoteId"
                                 :notes="sharedNotes"
                                 :record-order-id="record?.orderID"
+                                :show-confirm-status="true"
                                 :current-user-name="authUserName"
                                 @edit="openNoteEdit"
                             />
@@ -479,6 +486,25 @@
                         <input v-model="noteForm.important" type="checkbox">
                         重要
                     </label>
+                    <div class="confirm-toggles">
+                        <button
+                            type="button"
+                            class="toggle-btn"
+                            :class="{ on: noteForm.tbc }"
+                            @click="toggleNoteTbc"
+                        >
+                            要
+                        </button>
+                        <button
+                            v-if="noteForm.tbc"
+                            type="button"
+                            class="toggle-btn toggle-btn-done"
+                            :class="{ on: noteForm.done }"
+                            @click="noteForm.done = !noteForm.done"
+                        >
+                            済
+                        </button>
+                    </div>
                     <p v-if="noteDialogError" class="confirm-error">{{ noteDialogError }}</p>
                 </div>
                 <div class="confirm-actions">
@@ -677,6 +703,8 @@ let suppressStatusWatch = false
 const noteForm = reactive({
     note: '',
     important: false,
+    tbc: false,
+    done: false,
 })
 const editingNoteId = ref(null)
 
@@ -703,9 +731,25 @@ const authUserName = computed(() => String(page.props.auth?.user?.kanji_name ?? 
 const sharedNotes = computed(() =>
     noteItems.value.filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
 )
+const tbcNotesCount = computed(() =>
+    sharedNotes.value.filter((note) => {
+        const tbc = note?.tbc === true || note?.tbc === 1 || note?.tbc === '1'
+        const done = note?.done === true || note?.done === 1 || note?.done === '1'
+        return tbc && !done
+    }).length,
+)
 const selectedNote = computed(() =>
     sharedNotes.value.find(note => Number(note.id) === Number(selectedNoteId.value)) || null,
 )
+
+function isTruthyFlag(value) {
+    return value === true || value === 1 || value === '1'
+}
+
+function toggleNoteTbc() {
+    noteForm.tbc = !noteForm.tbc
+    if (!noteForm.tbc) noteForm.done = false
+}
 function isNoteOwner(note) {
     if (!note) return false
     const who = String(note.whoWrote ?? '').trim()
@@ -1058,7 +1102,7 @@ async function confirmPriceAdjust() {
             },
             body: JSON.stringify({
                 associatedID: props.record.orderID,
-                note: `[調整理由]${reason}`,
+                note: `[調整理由]　${reason}`,
                 important: true,
             }),
         })
@@ -1092,6 +1136,8 @@ function openNoteCreate() {
     editingNoteId.value = null
     noteForm.note = ''
     noteForm.important = false
+    noteForm.tbc = false
+    noteForm.done = false
     noteDialogError.value = ''
     showNoteDialog.value = true
 }
@@ -1107,6 +1153,8 @@ function openNoteEdit() {
     editingNoteId.value = note.id
     noteForm.note = note.note ?? ''
     noteForm.important = !!note.important
+    noteForm.tbc = isTruthyFlag(note.tbc)
+    noteForm.done = noteForm.tbc && isTruthyFlag(note.done)
     noteDialogError.value = ''
     showNoteDialog.value = true
 }
@@ -1131,13 +1179,17 @@ async function saveNote() {
         const url = isEdit
             ? `${page.props.appBaseUrl}/servicerecord/notes/${editingNoteId.value}`
             : `${page.props.appBaseUrl}/servicerecord/notes`
+        const tbc = noteForm.tbc ? true : null
+        const done = noteForm.tbc && noteForm.done ? true : null
         const body = isEdit
-            ? { note: text, important: !!noteForm.important }
+            ? { note: text, important: !!noteForm.important, tbc, done }
             : {
                 associatedID: props.record.orderID,
                 note: text,
                 important: !!noteForm.important,
                 personal: false,
+                tbc,
+                done,
             }
         const result = await apiFetch(url, {
             method: isEdit ? 'PUT' : 'POST',
@@ -1382,7 +1434,7 @@ async function save() {
     error.value = ''
     success.value = ''
     const savingStatus = Number(form.status)
-    if (Number.isFinite(savingStatus) && savingStatus >= 300) {
+    if (Number.isFinite(savingStatus) && savingStatus >= 300 && tbcNotesCount.value > 0) {
         if (!window.confirm('要確認事項があります')) return
     }
     if (form.plannedSentDate && form.plannedReturnedDate && form.plannedReturnedDate < form.plannedSentDate) {
@@ -1771,6 +1823,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .tab-panel { flex: 1 0 330px; min-height: 330px; display: flex; flex-direction: column; overflow: hidden; }
 .tab-heading { flex-wrap: wrap; gap: 6px; }
 .tab-buttons { display: flex; align-items: center; gap: 4px; }
+.notes-tbc-count {
+    margin-left: 100px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #dc2626;
+    white-space: nowrap;
+}
 .tab-btn {
     min-height: 26px;
     padding: 3px 10px;
@@ -1835,6 +1894,31 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     gap: 6px;
     color: #475569;
     font-size: 12px;
+}
+.confirm-toggles {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0 0;
+}
+.toggle-btn {
+    padding: 6px 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.toggle-btn.on {
+    background: #dc2626;
+    border-color: #b91c1c;
+    color: #fff;
+}
+.toggle-btn-done.on {
+    background: #166534;
+    border-color: #14532d;
+    color: #fff;
 }
 .note-delete-preview {
     max-height: 120px;

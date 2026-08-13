@@ -201,7 +201,7 @@ function displayNoteText(note) {
     const body = String(note?.note ?? '')
     if (!isLoanerSourceNote(note)) return body
     if (body.startsWith('[貸]')) return body
-    return `[貸]${body}`
+    return `[貸]　${body}`
 }
 
 function linkifyNote(value) {

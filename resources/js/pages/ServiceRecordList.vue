@@ -2405,6 +2405,14 @@ function resolveDetailFormAPrice(draft, parts = []) {
 function confirmPendingTbcIfStatus300Plus(status) {
     const n = Number(status)
     if (!Number.isFinite(n) || n < 300) return true
+    const hasPendingTbc = (activeNotes.value ?? []).some((note) => {
+        const personal = note?.personal === true || note?.personal === 1 || note?.personal === '1'
+        if (personal) return false
+        const tbc = note?.tbc === true || note?.tbc === 1 || note?.tbc === '1'
+        const done = note?.done === true || note?.done === 1 || note?.done === '1'
+        return tbc && !done
+    })
+    if (!hasPendingTbc) return true
     return window.confirm('要確認事項があります')
 }
 

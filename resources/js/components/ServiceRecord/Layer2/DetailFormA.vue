@@ -1238,7 +1238,7 @@ async function confirmPriceAdjust() {
     }
 
     const amount = Number(amountRaw)
-    const noteText = `[調整理由]${reason}`
+    const noteText = `[調整理由]　${reason}`
 
     priceAdjustSaving.value = true
     priceAdjustError.value = ''
