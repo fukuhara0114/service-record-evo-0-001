@@ -133,48 +133,39 @@ class MaintenanceContractController extends Controller
     }
 
     /**
-     * 新規案件作成画面用: productName先頭3文字 / SN / dealer先頭4文字 で有効契約を検索
+     * 新規案件作成画面用:
+     * productName先頭5文字（instrumentName 前方一致） / SN 完全一致 / dealer 部分一致 をすべて適用
      */
     public function search(Request $request)
     {
         $validated = $request->validate([
-            'productName' => 'nullable|string|max:255',
-            'SN' => 'nullable|string|max:255',
-            'dealer' => 'nullable|string|max:255',
+            'productName' => 'required|string|max:255',
+            'SN' => 'required|string|max:255',
+            'dealer' => 'required|string|max:255',
         ]);
 
-        $productName = trim((string) ($validated['productName'] ?? ''));
-        $sn = trim((string) ($validated['SN'] ?? ''));
-        $dealer = trim((string) ($validated['dealer'] ?? ''));
+        $productName = trim((string) $validated['productName']);
+        $sn = trim((string) $validated['SN']);
+        $dealer = trim((string) $validated['dealer']);
 
-        $productPrefix = mb_substr($productName, 0, 3);
-        $dealerPrefix = mb_substr($dealer, 0, 4);
+        $productPrefix = mb_substr($productName, 0, 5);
 
-        if ($productPrefix === '' && $sn === '' && $dealerPrefix === '') {
+        if ($productPrefix === '' || $sn === '' || $dealer === '') {
             return response()->json([
-                'message' => 'productName / SN / dealer のいずれかを入力してください。',
+                'message' => 'productName / SN / dealer をすべて入力してください。',
                 'contracts' => [],
             ], 422);
         }
 
         $today = Carbon::today()->toDateString();
 
-        $query = MaintenanceContractMaster::query()
+        $contracts = MaintenanceContractMaster::query()
             ->with('maintenanceContractType:id,contractType,description')
             ->whereNotNull('expireDate')
-            ->whereDate('expireDate', '>', $today);
-
-        if ($productPrefix !== '') {
-            $query->where('instrumentName', 'like', $this->likePrefix($productPrefix));
-        }
-        if ($sn !== '') {
-            $query->where('SN', 'like', $this->likeContains($sn));
-        }
-        if ($dealerPrefix !== '') {
-            $query->where('dealer', 'like', $this->likeContains($dealerPrefix));
-        }
-
-        $contracts = $query
+            ->whereDate('expireDate', '>', $today)
+            ->where('instrumentName', 'like', $this->likePrefix($productPrefix))
+            ->where('SN', $sn)
+            ->where('dealer', 'like', $this->likeContains($dealer))
             ->orderBy('expireDate')
             ->orderBy('id')
             ->limit(100)
@@ -188,7 +179,7 @@ class MaintenanceContractController extends Controller
             'filters' => [
                 'productNamePrefix' => $productPrefix,
                 'SN' => $sn,
-                'dealerPrefix' => $dealerPrefix,
+                'dealer' => $dealer,
                 'expireDateAfter' => $today,
             ],
         ]);

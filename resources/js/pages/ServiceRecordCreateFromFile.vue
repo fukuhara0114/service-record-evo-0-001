@@ -81,53 +81,56 @@
                 <Pane class="create-pane create-pane-form" :size="rightPaneSize" :min-size="35">
                     <section class="panel panel-form">
                 <div class="tab-bar" role="tablist">
-                    <button
-                        type="button"
-                        class="tab-btn"
-                        :class="{ active: activeTab === 'basic' }"
-                        role="tab"
-                        @click="activeTab = 'basic'"
-                    >
-                        基本情報
-                    </button>
-                    <button
-                        type="button"
-                        class="tab-btn"
-                        :class="{ active: activeTab === 'related' }"
-                        role="tab"
-                        @click="activeTab = 'related'"
-                    >
-                        関連する{{ isLoanerCase ? '証憑書類' : '未登録書類' }}({{ relatedFileCount }}枚)
-                    </button>
-                    <button
-                        type="button"
-                        class="tab-btn"
-                        :class="{ active: activeTab === 'existing' }"
-                        role="tab"
-                        @click="switchToExistingTab"
-                    >
-                        既存案件(サービス案件)検索
-                    </button>
-                    <button
-                        type="button"
-                        class="tab-btn"
-                        :class="{ active: activeTab === 'loaner' }"
-                        role="tab"
-                        @click="switchToLoanerTab"
-                    >
-                        loaner案件検索
-                        <span v-if="selectedLoaners.length">（{{ selectedLoaners.length }}）</span>
-                    </button>
-                    <button
-                        v-if="!isLoanerCase"
-                        type="button"
-                        class="tab-btn tab-btn-action"
-                        role="button"
-                        :disabled="maintenanceSearchLoading"
-                        @click="searchMaintenanceContracts"
-                    >
-                        {{ maintenanceSearchLoading ? '検索中...' : '保守検索' }}
-                    </button>
+                    <div class="tab-bar-tabs">
+                        <button
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: activeTab === 'basic' }"
+                            role="tab"
+                            @click="activeTab = 'basic'"
+                        >
+                            基本情報
+                        </button>
+                        <button
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: activeTab === 'related' }"
+                            role="tab"
+                            @click="activeTab = 'related'"
+                        >
+                            関連する{{ isLoanerCase ? '証憑書類' : '未登録書類' }}({{ relatedFileCount }}枚)
+                        </button>
+                        <button
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: activeTab === 'existing' }"
+                            role="tab"
+                            @click="switchToExistingTab"
+                        >
+                            既存案件(サービス案件)検索
+                        </button>
+                        <button
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: activeTab === 'loaner' }"
+                            role="tab"
+                            @click="switchToLoanerTab"
+                        >
+                            loaner案件検索
+                            <span v-if="selectedLoaners.length">（{{ selectedLoaners.length }}）</span>
+                        </button>
+                    </div>
+                    <div v-if="!isLoanerCase" class="tab-bar-center">
+                        <button
+                            type="button"
+                            class="tab-btn tab-btn-action"
+                            role="button"
+                            :disabled="maintenanceSearchLoading"
+                            @click="searchMaintenanceContracts"
+                        >
+                            {{ maintenanceSearchLoading ? '検索中...' : '保守検索' }}
+                        </button>
+                    </div>
                 </div>
 
                 <div v-show="activeTab === 'basic'" class="tab-panel" :class="{ 'tab-panel-loaner-basic': isLoanerCase }">
@@ -1511,12 +1514,44 @@ function switchToLoanerTab() {
 async function searchMaintenanceContracts() {
     if (isLoanerCase.value) return
 
-    const productName = String(form.productName || '').trim()
-    const sn = String(form.SN || '').trim()
-    const dealer = String(form.dealer || '').trim()
+    // 入力確定前（IME 変換中など）の値漏れを防ぐ
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+    }
+    await nextTick()
 
-    if (!productName && !sn && !dealer) {
-        maintenanceSearchError.value = 'productName / SN / dealer のいずれかを入力してから検索してください。'
+    // DOM 上の実値も同期（表示はあるが v-model 未反映のケース対策）
+    if (typeof document !== 'undefined') {
+        const root = document.querySelector('.panel-form .form-stack:not(.form-stack-loaner)')
+            || document.querySelector('.panel-form')
+        if (root) {
+            const productInput = root.querySelector('input.w-product-name')
+            const dealerInput = root.querySelector('input.w-dealer-name')
+            const snInput = root.querySelector('.info-card-main input[placeholder="SN"]')
+                || root.querySelector('input[placeholder="SN"]')
+            if (productInput && String(productInput.value || '').trim()) {
+                form.productName = String(productInput.value).trim()
+            }
+            if (dealerInput && String(dealerInput.value || '').trim()) {
+                form.dealer = String(dealerInput.value).trim()
+            }
+            if (snInput && String(snInput.value || '').trim()) {
+                form.SN = String(snInput.value).trim()
+            }
+        }
+    }
+
+    const productName = String(form.productName ?? '').trim()
+    const sn = String(form.SN ?? '').trim()
+    const dealer = String(form.dealer ?? '').trim()
+
+    const missing = []
+    if (!productName) missing.push('productName')
+    if (!sn) missing.push('SN')
+    if (!dealer) missing.push('dealer')
+
+    if (missing.length) {
+        maintenanceSearchError.value = `${missing.join(' / ')} を入力してから検索してください。`
         maintenanceSearchDone.value = true
         maintenanceContracts.value = []
         selectedMaintenanceContractId.value = null
@@ -1542,7 +1577,10 @@ async function searchMaintenanceContracts() {
 
         const { response, data } = result
         if (!response.ok) {
-            throw new Error(data?.message || `保守検索に失敗しました。（HTTP ${response.status}）`)
+            const validationMessage = data?.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data?.message || `保守検索に失敗しました。（HTTP ${response.status}）`)
         }
 
         maintenanceContracts.value = Array.isArray(data.contracts) ? data.contracts : []
@@ -2089,12 +2127,37 @@ async function save() {
 }
 
 .tab-bar {
+    position: relative;
     display: flex;
+    align-items: center;
     gap: 4px;
     flex-shrink: 0;
     border-bottom: 1px solid #cbd5e1;
     margin-bottom: 12px;
+    min-height: 42px;
+    overflow: visible;
+}
+
+.tab-bar-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-x: auto;
+}
+
+.tab-bar-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    pointer-events: none;
+}
+
+.tab-bar-center .tab-btn-action {
+    pointer-events: auto;
 }
 
 .tab-btn {
@@ -2121,14 +2184,15 @@ async function save() {
 }
 
 .tab-btn-action {
-    margin-left: auto;
+    margin-left: 0;
     border: 1px solid #2563eb;
     border-radius: 6px;
     border-bottom: 1px solid #2563eb;
     background: #eff6ff;
     color: #1d4ed8;
-    padding: 6px 12px;
-    align-self: center;
+    padding: 6px 14px;
+    line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .tab-btn-action:hover:not(:disabled) {

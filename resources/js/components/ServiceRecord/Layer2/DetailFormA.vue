@@ -103,7 +103,7 @@
                                             </select>
                                         </dd>
                                         <dt></dt>
-                                        <dd>
+                                        <dd class="dd-a2la-actions">
                                             <button
                                                 type="button"
                                                 class="a2la-toggle"
@@ -111,6 +111,14 @@
                                                 @click="toggleA2la"
                                             >
                                                 {{ isA2laOn ? 'A2LA' : 'A2LA' }}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="maintenance-search-btn"
+                                                :disabled="maintenanceSearchLoading"
+                                                @click="openMaintenanceSearchDialog"
+                                            >
+                                                保守検索
                                             </button>
                                         </dd>
                                     </dl>
@@ -704,6 +712,119 @@
             </div>
         </div>
 
+        <div v-if="showMaintenanceSearchDialog" class="confirm-overlay" @click.self="closeMaintenanceSearchDialog">
+            <div class="confirm-panel maintenance-search-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>保守契約検索</h3>
+                    <button type="button" class="close-btn" @click="closeMaintenanceSearchDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <div class="maintenance-search-fields">
+                        <label class="confirm-field">
+                            productName
+                            <input v-model="maintenanceSearchForm.productName" type="text" class="confirm-input">
+                        </label>
+                        <label class="confirm-field">
+                            SN
+                            <input v-model="maintenanceSearchForm.SN" type="text" class="confirm-input">
+                        </label>
+                        <label class="confirm-field">
+                            dealer
+                            <input v-model="maintenanceSearchForm.dealer" type="text" class="confirm-input">
+                        </label>
+                        <button
+                            type="button"
+                            class="action-btn action-btn-primary maintenance-research-btn"
+                            :disabled="maintenanceSearchLoading"
+                            @click="runMaintenanceSearch"
+                        >
+                            {{ maintenanceSearchLoading ? '検索中...' : '再検索' }}
+                        </button>
+                    </div>
+                    <p class="maintenance-search-hint">
+                        条件: productName先頭5文字 / SN完全一致 / dealer含む　／　有効契約（expireDate &gt; 今日）
+                    </p>
+                    <p v-if="maintenanceSearchError" class="confirm-error">{{ maintenanceSearchError }}</p>
+                    <div v-else-if="maintenanceSearchDone && maintenanceContracts.length" class="maintenance-table-wrap">
+                        <table class="maintenance-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 36px;"></th>
+                                    <th>dealer</th>
+                                    <th>契約種別</th>
+                                    <th>instrumentName</th>
+                                    <th>SN</th>
+                                    <th>開始</th>
+                                    <th>契約終了</th>
+                                    <th>RefNumber</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="row in maintenanceContracts"
+                                    :key="row.id"
+                                    :class="{ selected: isMaintenanceSelected(row.id) }"
+                                    @click="toggleMaintenanceSelection(row.id)"
+                                >
+                                    <td style="text-align: center;" @click.stop>
+                                        <input
+                                            type="checkbox"
+                                            :checked="isMaintenanceSelected(row.id)"
+                                            @change="toggleMaintenanceSelection(row.id)"
+                                        >
+                                    </td>
+                                    <td>{{ row.dealer || '—' }}</td>
+                                    <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
+                                    <td>{{ row.instrumentName || '—' }}</td>
+                                    <td>{{ row.SN || '—' }}</td>
+                                    <td>{{ row.startDate || '—' }}</td>
+                                    <td>{{ row.expireDate || '—' }}</td>
+                                    <td>{{ row.RefNumber || '—' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
+                        条件に一致する有効な保守契約はありません。条件を編集して再検索してください。
+                    </p>
+                </div>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="action-btn"
+                        :disabled="maintenanceNoteSaving || !selectedMaintenanceContractId"
+                        @click="openSelectedMaintenanceDetail"
+                    >
+                        詳細を開く
+                    </button>
+                    <button
+                        type="button"
+                        class="action-btn"
+                        :disabled="maintenanceNoteSaving"
+                        @click="clearMaintenanceSelection"
+                    >
+                        選択解除
+                    </button>
+                    <button
+                        type="button"
+                        class="action-btn"
+                        :disabled="maintenanceNoteSaving"
+                        @click="closeMaintenanceSearchDialog"
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="action-btn action-btn-primary"
+                        :disabled="maintenanceNoteSaving || !selectedMaintenanceContractId"
+                        @click="confirmMaintenanceSelection"
+                    >
+                        {{ maintenanceNoteSaving ? '追加中...' : 'OK' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <EmailDraftTypeDialog
             v-if="showEmailDraftDialog"
             :creating="emailDraftCreating"
@@ -737,7 +858,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -783,6 +904,7 @@ const selectedPartId = ref(null)
 const selectedFileId = ref(null)
 const fileSortSaving = ref(false)
 const showPriceAdjustDialog = ref(false)
+const showMaintenanceSearchDialog = ref(false)
 const showGalleryDialog = ref(false)
 const showEmailDraftDialog = ref(false)
 const showEmailDraftPreviewDialog = ref(false)
@@ -799,6 +921,17 @@ const capturedImagesOpen = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const priceAdjustSaving = ref(false)
 const priceAdjustError = ref('')
+const maintenanceSearchLoading = ref(false)
+const maintenanceSearchDone = ref(false)
+const maintenanceSearchError = ref('')
+const maintenanceNoteSaving = ref(false)
+const maintenanceContracts = ref([])
+const selectedMaintenanceContractId = ref(null)
+const maintenanceSearchForm = reactive({
+    productName: '',
+    SN: '',
+    dealer: '',
+})
 const priceAdjustForm = reactive({
     amount: '',
     reason: '',
@@ -1282,6 +1415,173 @@ watch(
 function toggleA2la() {
     if (!props.draftRecord) return
     props.draftRecord.a2la = isA2laOn.value ? 0 : 1
+}
+
+function currentMaintenanceSearchSource() {
+    return {
+        productName: String(props.draftRecord?.productName ?? props.record?.productName ?? '').trim(),
+        SN: String(props.draftRecord?.SN ?? props.record?.SN ?? '').trim(),
+        dealer: String(props.draftRecord?.dealer ?? props.record?.dealer ?? '').trim(),
+    }
+}
+
+function openMaintenanceSearchDialog() {
+    const source = currentMaintenanceSearchSource()
+    maintenanceSearchForm.productName = source.productName
+    maintenanceSearchForm.SN = source.SN
+    maintenanceSearchForm.dealer = source.dealer
+    maintenanceContracts.value = []
+    selectedMaintenanceContractId.value = null
+    maintenanceSearchError.value = ''
+    maintenanceSearchDone.value = false
+    showMaintenanceSearchDialog.value = true
+    nextTick(() => {
+        runMaintenanceSearch()
+    })
+}
+
+function closeMaintenanceSearchDialog() {
+    if (maintenanceSearchLoading.value || maintenanceNoteSaving.value) return
+    showMaintenanceSearchDialog.value = false
+    maintenanceSearchError.value = ''
+}
+
+async function runMaintenanceSearch() {
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+    }
+    await nextTick()
+
+    const productName = String(maintenanceSearchForm.productName ?? '').trim()
+    const sn = String(maintenanceSearchForm.SN ?? '').trim()
+    const dealer = String(maintenanceSearchForm.dealer ?? '').trim()
+
+    const missing = []
+    if (!productName) missing.push('productName')
+    if (!sn) missing.push('SN')
+    if (!dealer) missing.push('dealer')
+    if (missing.length) {
+        maintenanceSearchError.value = `${missing.join(' / ')} を入力してから検索してください。`
+        maintenanceSearchDone.value = true
+        maintenanceContracts.value = []
+        selectedMaintenanceContractId.value = null
+        return
+    }
+
+    maintenanceSearchLoading.value = true
+    maintenanceSearchError.value = ''
+    maintenanceSearchDone.value = false
+
+    try {
+        const params = new URLSearchParams({ productName, SN: sn, dealer })
+        const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/search?${params.toString()}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data?.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data?.message || `保守検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        maintenanceContracts.value = Array.isArray(data.contracts) ? data.contracts : []
+        selectedMaintenanceContractId.value = null
+        maintenanceSearchDone.value = true
+    } catch (e) {
+        maintenanceContracts.value = []
+        selectedMaintenanceContractId.value = null
+        maintenanceSearchDone.value = true
+        maintenanceSearchError.value = e.message || '保守検索に失敗しました。'
+    } finally {
+        maintenanceSearchLoading.value = false
+    }
+}
+
+function isMaintenanceSelected(id) {
+    return String(selectedMaintenanceContractId.value ?? '') === String(id ?? '')
+}
+
+function toggleMaintenanceSelection(id) {
+    if (isMaintenanceSelected(id)) {
+        selectedMaintenanceContractId.value = null
+        return
+    }
+    selectedMaintenanceContractId.value = id
+}
+
+function clearMaintenanceSelection() {
+    selectedMaintenanceContractId.value = null
+}
+
+function selectedMaintenanceContract() {
+    return maintenanceContracts.value.find((row) => isMaintenanceSelected(row.id)) || null
+}
+
+function openSelectedMaintenanceDetail() {
+    const contract = selectedMaintenanceContract()
+    if (!contract?.id) {
+        maintenanceSearchError.value = '保守契約を選択してください。'
+        return
+    }
+    const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${contract.id}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+async function confirmMaintenanceSelection() {
+    const contract = selectedMaintenanceContract()
+    if (!contract) {
+        maintenanceSearchError.value = '保守契約を選択してください。'
+        return
+    }
+    if (!props.record?.orderID) {
+        maintenanceSearchError.value = '案件が選択されていません。'
+        return
+    }
+
+    const ref = String(contract.RefNumber || '').trim() || '—'
+    const start = String(contract.startDate || '').trim() || '—'
+    const end = String(contract.expireDate || '').trim() || '—'
+    const noteText = `保守契約番号：${ref}、保守契約期間：${start}～${end}`
+
+    maintenanceNoteSaving.value = true
+    maintenanceSearchError.value = ''
+
+    try {
+        const result = await apiFetch(getNotesApiBase(), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                associatedID: props.record.orderID,
+                note: noteText,
+                important: false,
+            }),
+        })
+
+        if (!result) {
+            throw new Error('Notes の追加に失敗しました。')
+        }
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        showMaintenanceSearchDialog.value = false
+        emit('reload-attachments')
+    } catch (e) {
+        maintenanceSearchError.value = e.message || 'Notes の追加に失敗しました。'
+    } finally {
+        maintenanceNoteSaving.value = false
+    }
 }
 
 function openPriceAdjustDialog() {
@@ -2072,6 +2372,126 @@ function formatDate(value) {
     background: #2563eb;
     border-color: #2563eb;
     color: #fff;
+}
+
+.dd-a2la-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.maintenance-search-btn {
+    min-width: 88px;
+    padding: 6px 12px;
+    border: 1px solid #2563eb;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.maintenance-search-btn:hover:not(:disabled) {
+    background: #dbeafe;
+}
+
+.maintenance-search-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.confirm-panel.maintenance-search-panel {
+    width: min(98vw, 1800px);
+    max-width: 98vw;
+    min-width: min(98vw, 1100px);
+    max-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.confirm-panel.maintenance-search-panel .confirm-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+}
+
+.maintenance-search-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+}
+
+.maintenance-research-btn {
+    white-space: nowrap;
+    height: 34px;
+}
+
+.maintenance-search-hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: #64748b;
+    flex: 0 0 auto;
+}
+
+.maintenance-empty {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.maintenance-table-wrap {
+    flex: 0 0 auto;
+    overflow-x: hidden;
+    overflow-y: visible;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.maintenance-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.maintenance-table th,
+.maintenance-table td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 10px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.maintenance-table th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    z-index: 1;
+}
+
+.maintenance-table tbody tr {
+    cursor: pointer;
+}
+
+.maintenance-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.maintenance-table tbody tr.selected,
+.maintenance-table tbody tr.selected td {
+    background: #dbeafe;
 }
 
 .confirm-overlay {
