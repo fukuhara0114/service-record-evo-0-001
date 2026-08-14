@@ -505,6 +505,7 @@ class LoanerRecordController extends Controller
             'orderDate' => 'nullable|date',
             'poNum' => 'nullable|string|max:255',
             'shippingOut_requiredDate' => 'nullable|date',
+            'receivedDate' => 'nullable|date',
             'dealer' => 'nullable|string|max:255',
             'dealer_depart' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
@@ -598,6 +599,8 @@ class LoanerRecordController extends Controller
                 if (!$laborExists) {
                     return response()->json(['message' => '指定された labor は存在しません。'], 422);
                 }
+                // 受け入れ確認中 + labor 設定済み → receivedDate を本日（Asia/Tokyo）で保存
+                $validated['receivedDate'] = now('Asia/Tokyo')->toDateString();
             }
 
             if (LoanerStatusFlow::isShipPrepCompleteStatus($targetStatus)) {
@@ -752,6 +755,7 @@ class LoanerRecordController extends Controller
                 'orderDate',
                 'poNum',
                 'shippingOut_requiredDate',
+                'receivedDate',
             ]),
             'attached' => [
                 'id' => $attached->id,
@@ -1013,12 +1017,33 @@ class LoanerRecordController extends Controller
                 'dealer' => $attached->serviceRecord?->dealer,
                 'dealer_depart' => $attached->serviceRecord?->dealer_depart,
                 'contactPerson' => $attached->serviceRecord?->contactPerson,
+                'phone' => $attached->serviceRecord?->phone,
+                'email' => $attached->serviceRecord?->email,
+                'zipcode' => $attached->serviceRecord?->zipcode,
+                'address1' => $attached->serviceRecord?->address1,
+                'address2' => $attached->serviceRecord?->address2,
+                'deliveryDestination_company' => $attached->serviceRecord?->deliveryDestination_company,
+                'deliveryDestination_depart' => $attached->serviceRecord?->deliveryDestination_depart,
+                'deliveryDestination_contactPerson' => $attached->serviceRecord?->deliveryDestination_contactPerson,
+                'deliveryDestination_phone' => $attached->serviceRecord?->deliveryDestination_phone,
+                'deliveryDestination_email' => $attached->serviceRecord?->deliveryDestination_email,
+                'deliveryDestination_zipcode' => $attached->serviceRecord?->deliveryDestination_zipcode,
+                'deliveryDestination_address1' => $attached->serviceRecord?->deliveryDestination_address1,
+                'deliveryDestination_address2' => $attached->serviceRecord?->deliveryDestination_address2,
                 'parentID' => $attached->serviceRecord?->parentID,
                 'status' => $attached->serviceRecord?->status,
             ],
             'parentRecord' => $parent,
             'productLoanSchedule' => $productLoanSchedule,
+            'notes' => $this->serializeLoanerNotes(
+                AttachedNote::query()
+                    ->where('associatedID', $attached->associatedID)
+                    ->orderBy('whenWrote')
+                    ->orderBy('id')
+                    ->get()
+            ),
             'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
+            'dealersMaster' => Dealer::orderBy('dealerName')->get(),
             'dateFields' => [
                 'hasPlannedSent' => $hasPlannedSent,
                 'hasPlannedReturned' => $hasPlannedReturned,
@@ -1110,6 +1135,22 @@ class LoanerRecordController extends Controller
             'returnedDate' => 'nullable|date|after_or_equal:sentDate',
             'comment' => 'nullable|string|max:1000',
             'status' => 'nullable|integer',
+            'dealer' => 'nullable|string|max:255',
+            'dealer_depart' => 'nullable|string|max:255',
+            'contactPerson' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:255',
+            'email' => 'nullable|string|max:255',
+            'zipcode' => 'nullable|string|max:20',
+            'address1' => 'nullable|string|max:255',
+            'address2' => 'nullable|string|max:255',
+            'deliveryDestination_company' => 'nullable|string|max:255',
+            'deliveryDestination_depart' => 'nullable|string|max:255',
+            'deliveryDestination_contactPerson' => 'nullable|string|max:255',
+            'deliveryDestination_phone' => 'nullable|string|max:255',
+            'deliveryDestination_email' => 'nullable|string|max:255',
+            'deliveryDestination_zipcode' => 'nullable|string|max:20',
+            'deliveryDestination_address1' => 'nullable|string|max:255',
+            'deliveryDestination_address2' => 'nullable|string|max:255',
         ];
 
         if ($hasPlannedSent) {
@@ -1132,30 +1173,65 @@ class LoanerRecordController extends Controller
             }
         }
 
-        $payload = [
-            'sentDate' => $validated['sentDate'] ?? null,
-            'returnedDate' => $validated['returnedDate'] ?? null,
-        ];
+        $payload = [];
+        if (array_key_exists('sentDate', $validated)) {
+            $payload['sentDate'] = $validated['sentDate'] ?? null;
+        }
+        if (array_key_exists('returnedDate', $validated)) {
+            $payload['returnedDate'] = $validated['returnedDate'] ?? null;
+        }
 
-        if ($hasPlannedSent) {
+        if ($hasPlannedSent && array_key_exists('plannedSentDate', $validated)) {
             $payload['plannedSentDate'] = $validated['plannedSentDate'] ?? null;
         }
-        if ($hasPlannedReturned) {
+        if ($hasPlannedReturned && array_key_exists('plannedReturnedDate', $validated)) {
             $payload['plannedReturnedDate'] = $validated['plannedReturnedDate'] ?? null;
         }
         if (array_key_exists('comment', $validated) && in_array('comment', $columns, true)) {
             $payload['comment'] = $validated['comment'];
         }
 
-        DB::transaction(function () use ($attached, $payload, $record, $isLoaner, $validated, $request) {
-            $attached->fill($payload);
-            $attached->save();
+        $recordFields = [
+            'dealer',
+            'dealer_depart',
+            'contactPerson',
+            'phone',
+            'email',
+            'zipcode',
+            'address1',
+            'address2',
+            'deliveryDestination_company',
+            'deliveryDestination_depart',
+            'deliveryDestination_contactPerson',
+            'deliveryDestination_phone',
+            'deliveryDestination_email',
+            'deliveryDestination_zipcode',
+            'deliveryDestination_address1',
+            'deliveryDestination_address2',
+        ];
+        $recordPayload = collect($validated)->only($recordFields)->all();
 
-            if ($record && $isLoaner && array_key_exists('status', $validated)) {
-                $record->status = $validated['status'];
-                $record->lastEditPerson = $request->user()?->kanji_name;
-                $record->lastEditDate = now();
-                $record->save();
+        DB::transaction(function () use ($attached, $payload, $record, $isLoaner, $validated, $request, $recordPayload) {
+            if ($payload !== []) {
+                $attached->fill($payload);
+                $attached->save();
+            }
+
+            if ($record) {
+                $shouldSaveRecord = false;
+                if ($recordPayload !== []) {
+                    $record->fill($recordPayload);
+                    $shouldSaveRecord = true;
+                }
+                if ($isLoaner && array_key_exists('status', $validated)) {
+                    $record->status = $validated['status'];
+                    $shouldSaveRecord = true;
+                }
+                if ($shouldSaveRecord) {
+                    $record->lastEditPerson = $request->user()?->kanji_name;
+                    $record->lastEditDate = now();
+                    $record->save();
+                }
             }
         });
 
@@ -1173,6 +1249,24 @@ class LoanerRecordController extends Controller
                 'comment' => $attached->comment,
                 'status' => $record?->status,
             ],
+            'record' => $record?->only([
+                'dealer',
+                'dealer_depart',
+                'contactPerson',
+                'phone',
+                'email',
+                'zipcode',
+                'address1',
+                'address2',
+                'deliveryDestination_company',
+                'deliveryDestination_depart',
+                'deliveryDestination_contactPerson',
+                'deliveryDestination_phone',
+                'deliveryDestination_email',
+                'deliveryDestination_zipcode',
+                'deliveryDestination_address1',
+                'deliveryDestination_address2',
+            ]),
         ]);
     }
 

@@ -5,12 +5,13 @@ namespace App\Support;
 /**
  * 貸出案件（order_type=loaner）のメインステータスフロー定義。
  *
- * 在庫(0:確保済み) → 見積済み → 受注 → 起伝依頼(300) → 発送依頼(350) → 貸出中(400) → 返却 → 受け入れ確認中 → チェック
+ * 在庫(0:確保済み) → 見積済み → 受注 → 起伝依頼(300) → 発送依頼(350) → 貸出中(400) → 返却 → 受け入れ確認中 → 完了(400)
  * アクティブな loaner リストは status >= 0 かつ status < 400。
  * status が 400 に到達した時点で機材を在庫(currentStatus=0)に戻し、waiting_list を確認する。
  * 案件 status を再び 0 に戻してリストへ残す循環は行わない。
  * labor は「受け入れ確認中」のみ設定可能。
  * status=300 遷移時は出荷予定日ダイアログで shippingOut_requiredDate を設定する。
+ * 「受け入れ確認中」の次へは完了(400)。※貸出中も同値 400 のため nextStatusId で特別扱い。
  */
 class LoanerStatusFlow
 {
@@ -34,12 +35,17 @@ class LoanerStatusFlow
     public const RETURNED = 450;
 
     /** 受け入れ確認中（labor 設定可能） */
-    public const ACCEPTANCE = 500;
+    public const ACCEPTANCE = 396;
 
+    /** 完了（受け入れ確認中の次へ） */
+    public const COMPLETE = 400;
+
+    /** @deprecated 旧フロー末尾。新規遷移では COMPLETE を使う */
     public const CHECK = 650;
 
     /**
      * メインフロー順（末尾で在庫へは戻さない）。
+     * ACCEPTANCE の次は COMPLETE だが、LENDING と同値のため STEPS には含めず nextStatusId で返す。
      *
      * @var list<int>
      */
@@ -52,7 +58,6 @@ class LoanerStatusFlow
         self::LENDING,
         self::RETURNED,
         self::ACCEPTANCE,
-        self::CHECK,
     ];
 
     /** アクティブ loaner リストの上限（未満） */
@@ -113,6 +118,11 @@ class LoanerStatusFlow
             return self::SHIP_PREP_COMPLETE;
         }
 
+        // 受け入れ確認中 → 完了（LENDING と同値のため STEPS 走査では扱えない）
+        if ($current === self::ACCEPTANCE) {
+            return self::COMPLETE;
+        }
+
         $steps = self::STEPS;
         $index = array_search($current, $steps, true);
         if ($index === false) {
@@ -130,6 +140,7 @@ class LoanerStatusFlow
      * @return array{
      *     steps:list<int>,
      *     checkStatusId:int,
+     *     completeStatusId:int,
      *     stockStatusId:int,
      *     lendingStatusId:int,
      *     laborEditableStatusId:int,
@@ -146,6 +157,7 @@ class LoanerStatusFlow
         return [
             'steps' => self::STEPS,
             'checkStatusId' => self::CHECK,
+            'completeStatusId' => self::COMPLETE,
             'stockStatusId' => self::STOCK,
             'lendingStatusId' => self::LENDING,
             'laborEditableStatusId' => self::ACCEPTANCE,

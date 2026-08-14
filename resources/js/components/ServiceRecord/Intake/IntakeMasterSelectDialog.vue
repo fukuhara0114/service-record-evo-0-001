@@ -7,40 +7,41 @@
             </div>
 
             <div class="dialog-body">
-                <label class="search-field">
-                    検索
-                    <input
-                        ref="searchInput"
-                        v-model="searchQuery"
-                        type="text"
-                        class="search-input"
-                        :class="{ 'ime-latin': usesLatinSearch }"
-                        :lang="usesLatinSearch ? 'en' : 'ja'"
-                        :inputmode="usesLatinSearch ? 'latin' : 'text'"
-                        autocomplete="off"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        :placeholder="searchPlaceholder"
-                        @compositionstart="onCompositionStart"
-                        @compositionend="onCompositionEnd"
-                        @input="onSearchInput"
-                    >
-                </label>
+                <div class="search-toolbar">
+                    <label class="search-field">
+                        検索
+                        <input
+                            ref="searchInput"
+                            v-model="searchQuery"
+                            type="text"
+                            class="search-input"
+                            :class="{ 'ime-latin': usesLatinSearch }"
+                            :lang="usesLatinSearch ? 'en' : 'ja'"
+                            :inputmode="usesLatinSearch ? 'latin' : 'text'"
+                            autocomplete="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            :placeholder="searchPlaceholder"
+                            @compositionstart="onCompositionStart"
+                            @compositionend="onCompositionEnd"
+                            @input="onSearchInput"
+                        >
+                    </label>
+                    <div class="dialog-actions">
+                        <button type="button" class="btn-secondary" @click="$emit('close')">キャンセル</button>
+                        <button type="button" class="btn-primary" :disabled="!selectedItem" @click="confirm">選択</button>
+                    </div>
+                </div>
 
                 <p v-if="error" class="error-message">{{ error }}</p>
 
-                <div class="dialog-actions">
-                    <button type="button" class="btn-secondary" @click="$emit('close')">キャンセル</button>
-                    <button type="button" class="btn-primary" :disabled="!selectedItem" @click="confirm">選択</button>
-                </div>
-
-                <div v-if="kind === 'dealer' && selectedItem" class="preview-box">
+                <div v-if="kind === 'dealer'" class="preview-box">
                     <div class="preview-grid">
-                        <div><span>dealerName</span><strong>{{ selectedItem.dealerName || '—' }}</strong></div>
-                        <div><span>depart</span><strong>{{ selectedItem.depart || '—' }}</strong></div>
-                        <div><span>contactPerson</span><strong>{{ selectedItem.contactPerson || '—' }}</strong></div>
-                        <div><span>email</span><strong>{{ selectedItem.email || '—' }}</strong></div>
-                        <div><span>phone</span><strong>{{ selectedItem.phone || '—' }}</strong></div>
+                        <div><span>dealerName</span><strong>{{ selectedItem?.dealerName || '—' }}</strong></div>
+                        <div><span>depart</span><strong>{{ selectedItem?.depart || '—' }}</strong></div>
+                        <div><span>contactPerson</span><strong>{{ selectedItem?.contactPerson || '—' }}</strong></div>
+                        <div><span>email</span><strong>{{ selectedItem?.email || '—' }}</strong></div>
+                        <div><span>phone</span><strong>{{ selectedItem?.phone || '—' }}</strong></div>
                     </div>
                 </div>
 
@@ -223,15 +224,22 @@ const filteredItems = computed(() => {
         .split(/\s+/)
         .filter(Boolean)
 
-    if (tokens.length === 0) return baseItems
+    const filtered = tokens.length === 0
+        ? [...baseItems]
+        : baseItems.filter((item) => {
+            const text = config.value.searchFields(item)
+                .filter(value => value != null && value !== '')
+                .join(' ')
+                .toLowerCase()
+            return tokens.every(token => text.includes(token))
+        })
 
-    return baseItems.filter((item) => {
-        const text = config.value.searchFields(item)
-            .filter(value => value != null && value !== '')
-            .join(' ')
-            .toLowerCase()
-        return tokens.every(token => text.includes(token))
-    })
+    if (props.kind === 'loanerProduct') {
+        filtered.sort((a, b) => compareLoanerItemSort(a?.item, b?.item)
+            || String(a?.productName ?? '').localeCompare(String(b?.productName ?? ''), 'en', { numeric: true }))
+    }
+
+    return filtered
 })
 
 const selectedItem = computed(() =>
@@ -261,6 +269,21 @@ function toHalfWidthAlnum(value) {
     return String(value ?? '')
         .replace(/[！-～]/g, char => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
         .replace(/　/g, ' ')
+}
+
+/** 【簿外】を除き、英数字だけで比較するソートキー */
+function loanerItemSortKey(value) {
+    return String(value ?? '')
+        .replace(/【簿外】/g, '')
+        .replace(/[^0-9A-Za-z]+/g, '')
+        .toLowerCase()
+}
+
+function compareLoanerItemSort(a, b) {
+    return loanerItemSortKey(a).localeCompare(loanerItemSortKey(b), 'en', {
+        numeric: true,
+        sensitivity: 'base',
+    })
 }
 
 function onCompositionStart() {
@@ -355,8 +378,16 @@ function confirm() {
     overflow: hidden;
 }
 
+.search-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
 .search-field {
     display: block;
+    flex: 1 1 auto;
+    min-width: 0;
     font-weight: 700;
     font-size: 14px;
 }
@@ -378,7 +409,9 @@ function confirm() {
 
 .dialog-actions {
     display: flex;
+    flex: 0 0 auto;
     justify-content: flex-end;
+    align-items: center;
     gap: 8px;
 }
 
@@ -387,6 +420,8 @@ function confirm() {
     border-radius: 6px;
     background: #f8fafc;
     padding: 10px 12px;
+    min-height: 72px;
+    box-sizing: border-box;
 }
 
 .preview-grid {

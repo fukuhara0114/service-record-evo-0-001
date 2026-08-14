@@ -43,6 +43,7 @@
                             <strong>{{ record.productName || '—' }}</strong>
                             <span>orderID: {{ record.orderID }}</span>
                             <span v-if="purpose === 'loaner'">type: {{ record.order_type || '—' }}</span>
+                            <span v-if="purpose === 'loaner'">item: {{ record.item || '—' }}</span>
                             <span>S/N: {{ record.SN || '—' }}</span>
                             <span>Dealer: {{ record.dealer || '—' }}</span>
                             <span>Contact: {{ record.contactPerson || '—' }}</span>
@@ -247,10 +248,10 @@ const dialogTitle = computed(() => {
 
 const dialogHint = computed(() => {
     if (props.purpose === 'loaner') {
-        return '選択した loaner に対し、新規 service を作成して parentID を設定します（productName / SN / dealer / contactPerson 必須）'
+        return '検索: productName→item / dealer→dealer（部分一致）。選択した loaner に新規 service を作成して parentID を設定します'
     }
     if (props.purpose === 'file') {
-        return '選択した既存 service 案件へ、このファイルをアタッチします'
+        return '検索: productName / SN / dealer / contactPerson の各項目が対応カラムに含まれる案件（部分一致・AND）'
     }
     if (props.purpose === 'parent') {
         return 'order_type=service を productName / SN / dealer / contactPerson で検索'

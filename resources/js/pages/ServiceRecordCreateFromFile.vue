@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="create-page">
         <div class="page-header">
             <div>
@@ -100,14 +100,13 @@
                         関連する{{ isLoanerCase ? '証憑書類' : '未登録書類' }}({{ relatedFileCount }}枚)
                     </button>
                     <button
-                        v-if="hasSourceFile"
                         type="button"
                         class="tab-btn"
                         :class="{ active: activeTab === 'existing' }"
                         role="tab"
                         @click="switchToExistingTab"
                     >
-                        service案件検索
+                        既存案件(サービス案件)検索
                     </button>
                     <button
                         type="button"
@@ -123,179 +122,146 @@
 
                 <div v-show="activeTab === 'basic'" class="tab-panel" :class="{ 'tab-panel-loaner-basic': isLoanerCase }">
                     <div v-if="isLoanerCase" class="form-stack form-stack-loaner">
-                        <Splitpanes
-                            horizontal
-                            class="default-theme loaner-basic-split"
-                            @resized="onLoanerBasicSplitResized"
-                        >
-                            <Pane class="loaner-basic-pane loaner-basic-pane-top" :size="loanerTopPaneSize" :min-size="32">
-                                <section class="info-card info-card-loaner-top">
-                                    <div class="loaner-top-row">
-                                        <label class="field field-inline">
-                                            <span>機種</span>
-                                            <button
-                                                type="button"
-                                                class="field-button"
-                                                :class="{ placeholder: !form.productName }"
-                                                @click="openSelectDialog('loanerProduct')"
-                                            >
-                                                {{ form.productName || 'productName' }}
-                                            </button>
-                                        </label>
-                                        <label class="field field-inline field-sn">
-                                            <span>SN</span>
-                                            <input
-                                                v-model="form.SN"
-                                                type="text"
-                                                placeholder="SN"
-                                                :readonly="Boolean(selectedLoanerUnit?.SN)"
-                                            >
-                                        </label>
-                                        <label class="field field-inline field-date">
-                                            <span>開始日</span>
-                                            <input v-model="form.plannedSentDate" type="date">
-                                        </label>
-                                        <label class="field field-inline field-date">
-                                            <span>終了日</span>
-                                            <input v-model="form.plannedReturnedDate" type="date">
-                                        </label>
-                                        <p v-if="loanerAvailabilityChecking" class="availability-hint availability-inline">
-                                            在庫確認中...
-                                        </p>
-                                        <p
-                                            v-else-if="loanerAvailability?.order_type === 'waiting_list'"
-                                            class="availability-hint availability-inline wait"
-                                        >
-                                            在庫なし → waiting_list
-                                        </p>
-                                        <p
-                                            v-else-if="loanerAvailability?.order_type === 'loaner'"
-                                            class="availability-hint availability-inline ok"
-                                        >
-                                            在庫あり
-                                            <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
-                                        </p>
+                        <section class="info-card info-card-loaner-top">
+                            <div class="loaner-top-row">
+                                <label class="field field-inline">
+                                    <span>機種</span>
+                                    <button
+                                        type="button"
+                                        class="field-button"
+                                        :class="{ placeholder: !form.item && !form.productName }"
+                                        @click="openSelectDialog('loanerProduct')"
+                                    >
+                                        {{ form.item || form.productName || 'item' }}
+                                    </button>
+                                </label>
+                                <label class="field field-inline field-sn">
+                                    <span>SN</span>
+                                    <input
+                                        v-model="form.SN"
+                                        type="text"
+                                        placeholder="SN"
+                                        :readonly="Boolean(selectedLoanerUnit?.SN)"
+                                    >
+                                </label>
+                                <p v-if="loanerAvailabilityChecking" class="availability-hint availability-inline">
+                                    在庫確認中...
+                                </p>
+                                <p
+                                    v-else-if="loanerAvailability?.order_type === 'waiting_list'"
+                                    class="availability-hint availability-inline wait"
+                                >
+                                    在庫なし → waiting_list
+                                </p>
+                                <p
+                                    v-else-if="loanerAvailability?.order_type === 'loaner'"
+                                    class="availability-hint availability-inline ok"
+                                >
+                                    在庫有 {{ availableLoanerCount }}台
+                                    <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
+                                </p>
+                                <button
+                                    type="button"
+                                    class="btn btn-primary btn-stock-list"
+                                    :disabled="!form.productName"
+                                    @click="openLoanerStockDialog"
+                                >
+                                    在庫リスト
+                                </button>
+                            </div>
+                        </section>
+
+                        <div class="loaner-stakeholder-stack">
+                            <section class="info-card info-card-dealer stakeholder-card">
+                                <aside class="stakeholder-side">
+                                    <div class="stakeholder-label">dealer</div>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
+                                        switch delivery
+                                    </button>
+                                </aside>
+                                <div class="stakeholder-body">
+                                    <div class="form-row row-dealer-top">
                                         <button
                                             type="button"
-                                            class="btn btn-primary btn-stock-list"
-                                            :disabled="!form.productName"
-                                            @click="openLoanerStockDialog"
+                                            class="field-button field-button-pick"
+                                            @click="openSelectDialog('dealer')"
                                         >
-                                            在庫リスト
+                                            dealer選択
                                         </button>
+                                        <input
+                                            v-model="form.dealer"
+                                            type="text"
+                                            class="w-dealer-name"
+                                            placeholder="dealer"
+                                        >
                                     </div>
-                                </section>
-
-                                <section class="info-card info-card-loaner-calendar">
-                                    <div class="loaner-calendar-header">
-                                        <h3 class="loaner-list-title">貸出・予約カレンダー</h3>
-                                        <div class="loaner-calendar-legend">
-                                            <span class="legend-chip draft">今回の予定</span>
-                                            <span class="legend-chip status-20">貸出(未登録)</span>
-                                            <span class="legend-chip status-200">貸出(出荷準備以降)</span>
-                                            <span class="legend-chip waiting">waiting_list</span>
-                                        </div>
+                                    <div class="form-row row-full">
+                                        <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
                                     </div>
-                                    <p v-if="!form.productName" class="availability-hint">機種を選択するとカレンダーを表示します</p>
-                                    <template v-else>
-                                        <p v-if="loanerCalendarError" class="availability-hint wait">{{ loanerCalendarError }}</p>
-                                        <p v-if="loanerCalendarSuccess" class="availability-hint ok">{{ loanerCalendarSuccess }}</p>
-                                        <div class="loaner-calendar-shell">
-                                            <FullCalendar ref="loanerCalendarRef" :options="loanerCalendarOptions" />
-                                        </div>
-                                    </template>
-                                </section>
-                            </Pane>
-
-                            <Pane class="loaner-basic-pane loaner-basic-pane-bottom" :size="loanerBottomPaneSize" :min-size="18">
-                                <div class="loaner-stakeholder-stack">
-                                    <section class="info-card info-card-dealer stakeholder-card">
-                                        <aside class="stakeholder-side">
-                                            <div class="stakeholder-label">dealer</div>
-                                            <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
-                                                switch delivery
-                                            </button>
-                                        </aside>
-                                        <div class="stakeholder-body">
-                                            <div class="form-row row-full">
-                                                <button
-                                                    type="button"
-                                                    class="field-button"
-                                                    :class="{ placeholder: !form.dealer }"
-                                                    @click="openSelectDialog('dealer')"
-                                                >
-                                                    {{ form.dealer || 'dealer' }}
-                                                </button>
-                                            </div>
-                                            <div class="form-row row-full">
-                                                <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
-                                            </div>
-                                            <div class="form-row row-contact">
-                                                <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
-                                            </div>
-                                            <div class="form-row row-phone-email">
-                                                <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
-                                                <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
-                                            </div>
-                                            <div class="form-row row-zip">
-                                                <input
-                                                    v-model="form.zipcode"
-                                                    type="text"
-                                                    class="w-zip"
-                                                    inputmode="numeric"
-                                                    maxlength="8"
-                                                    placeholder="Zipcode"
-                                                    @input="onZipcodeInput('dealer')"
-                                                >
-                                            </div>
-                                            <div class="form-row row-address">
-                                                <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
-                                                <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
-                                            </div>
-                                        </div>
-                                    </section>
-
-                                    <section class="info-card info-card-delivery stakeholder-card">
-                                        <aside class="stakeholder-side">
-                                            <div class="stakeholder-label">delivery</div>
-                                            <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                                switch dealer
-                                            </button>
-                                        </aside>
-                                        <div class="stakeholder-body">
-                                            <div class="form-row row-full">
-                                                <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
-                                            </div>
-                                            <div class="form-row row-full">
-                                                <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
-                                            </div>
-                                            <div class="form-row row-contact">
-                                                <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
-                                            </div>
-                                            <div class="form-row row-phone-email">
-                                                <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
-                                                <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
-                                            </div>
-                                            <div class="form-row row-zip">
-                                                <input
-                                                    v-model="form.deliveryDestination_zipcode"
-                                                    type="text"
-                                                    class="w-zip"
-                                                    inputmode="numeric"
-                                                    maxlength="8"
-                                                    placeholder="Zipcode"
-                                                    @input="onZipcodeInput('delivery')"
-                                                >
-                                            </div>
-                                            <div class="form-row row-address">
-                                                <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
-                                                <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
-                                            </div>
-                                        </div>
-                                    </section>
+                                    <div class="form-row row-contact">
+                                        <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                    </div>
+                                    <div class="form-row row-phone-email">
+                                        <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
+                                        <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
+                                    </div>
+                                    <div class="form-row row-zip">
+                                        <input
+                                            v-model="form.zipcode"
+                                            type="text"
+                                            class="w-zip"
+                                            inputmode="numeric"
+                                            maxlength="8"
+                                            placeholder="Zipcode"
+                                            @input="onZipcodeInput('dealer')"
+                                        >
+                                    </div>
+                                    <div class="form-row row-address">
+                                        <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
+                                        <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
+                                    </div>
                                 </div>
-                            </Pane>
-                        </Splitpanes>
+                            </section>
+
+                            <section class="info-card info-card-delivery stakeholder-card">
+                                <aside class="stakeholder-side">
+                                    <div class="stakeholder-label">delivery</div>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                        switch dealer
+                                    </button>
+                                </aside>
+                                <div class="stakeholder-body">
+                                    <div class="form-row row-full">
+                                        <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                    </div>
+                                    <div class="form-row row-full">
+                                        <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
+                                    </div>
+                                    <div class="form-row row-contact">
+                                        <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                    </div>
+                                    <div class="form-row row-phone-email">
+                                        <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
+                                        <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
+                                    </div>
+                                    <div class="form-row row-zip">
+                                        <input
+                                            v-model="form.deliveryDestination_zipcode"
+                                            type="text"
+                                            class="w-zip"
+                                            inputmode="numeric"
+                                            maxlength="8"
+                                            placeholder="Zipcode"
+                                            @input="onZipcodeInput('delivery')"
+                                        >
+                                    </div>
+                                    <div class="form-row row-address">
+                                        <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
+                                        <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
                     </div>
 
                     <div v-else class="form-stack">
@@ -349,15 +315,20 @@
                                 </button>
                             </aside>
                             <div class="stakeholder-body">
-                                <div class="form-row row-full">
+                                <div class="form-row row-dealer-top">
                                     <button
                                         type="button"
-                                        class="field-button"
-                                        :class="{ placeholder: !form.dealer }"
+                                        class="field-button field-button-pick"
                                         @click="openSelectDialog('dealer')"
                                     >
-                                        {{ form.dealer || 'dealer' }}
+                                        dealer選択
                                     </button>
+                                    <input
+                                        v-model="form.dealer"
+                                        type="text"
+                                        class="w-dealer-name"
+                                        placeholder="dealer"
+                                    >
                                 </div>
                                 <div class="form-row row-full">
                                     <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
@@ -532,7 +503,9 @@
                 <div v-show="activeTab === 'loaner'" class="tab-panel tab-panel-existing">
                     <div class="loaner-flow-note">
                         <p>
-                            loaner 紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
+                            検索条件: サービス案件の <strong>productName</strong> が loaner の <strong>item</strong> に含まれる /
+                            サービスの <strong>dealer</strong> が loaner の <strong>dealer</strong> に含まれる。
+                            紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
                             得た orderID を選択した loaner の parentID に設定します。
                             最低限 <strong>productName / SN / dealer / contactPerson</strong> の入力が必要です。
                         </p>
@@ -566,7 +539,7 @@
                         inline
                         purpose="loaner"
                         :records="loanerSearchRecords"
-                        :query-summary="existingSearchSummary"
+                        :query-summary="loanerSearchSummary"
                         :searching="loanerSearchLoading"
                         :has-searched="loanerHasSearched"
                         @search="openLoanerRecordSearch"
@@ -634,7 +607,7 @@
                 </div>
                 <div class="confirm-body">
                     <p class="confirm-warning">在庫が無いので予約リストに追加しますか？</p>
-                    <p class="confirm-detail">機種: {{ form.productName || '—' }}</p>
+                    <p class="confirm-detail">機種: {{ form.item || form.productName || '—' }}</p>
                     <p v-if="loanerAvailability?.suggestedPeriod" class="confirm-detail">
                         予定期間:
                         {{ loanerAvailability.suggestedPeriod.plannedSentDate }}
@@ -659,7 +632,7 @@
                     <button type="button" class="close-btn" @click="closeLoanerStockDialog">×</button>
                 </div>
                 <div class="confirm-body stock-list-body">
-                    <p class="confirm-detail">機種: {{ form.productName || '—' }}</p>
+                    <p class="confirm-detail">機種: {{ form.item || form.productName || '—' }}</p>
                     <div v-if="hasLoanerStock" class="stock-list-hint-row">
                         <p class="confirm-detail ok-text">在庫ありの行をクリックして選択できます</p>
                         <div class="stock-status-legend">
@@ -732,24 +705,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
-import FullCalendar from '@fullcalendar/vue3'
-import dayGridPlugin from '@fullcalendar/daygrid'
-import timeGridPlugin from '@fullcalendar/timegrid'
-import interactionPlugin from '@fullcalendar/interaction'
 import { apiFetch } from '@/utils/apiFetch'
 import { startFileImport } from '@/utils/startFileImport'
 import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
-import {
-    handleMonthCellDoubleClickToDayView,
-    ROLLING_MONTH_VIEW,
-    fullCalendarDayCellClassNames,
-    rollingMonthViewConfig,
-} from '@/utils/fullCalendarCommon'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
-
-const DRAFT_LOANER_EVENT_ID = 'draft-new-loaner'
 
 const props = defineProps({
     sourceFile: {
@@ -826,27 +787,11 @@ const pendingLoanerRecord = ref(null)
 const loanerRequirementContext = ref(null) // 'select' | 'save'
 const leftPaneSize = ref(42)
 const rightPaneSize = ref(58)
-const loanerTopPaneSize = ref(62)
-const loanerBottomPaneSize = ref(38)
 
 function syncPaneSizes({ panes } = {}) {
     if (!Array.isArray(panes) || panes.length < 2) return
     leftPaneSize.value = panes[0].size
     rightPaneSize.value = panes[1].size
-    nextTick(() => {
-        loanerCalendarRef.value?.getApi?.()?.updateSize?.()
-    })
-}
-
-function onLoanerBasicSplitResized({ panes } = {}) {
-    if (Array.isArray(panes) && panes.length >= 2) {
-        loanerTopPaneSize.value = panes[0].size
-        loanerBottomPaneSize.value = panes[1].size
-    }
-    nextTick(() => {
-        loanerCalendarRef.value?.getApi?.()?.updateSize?.()
-        window.dispatchEvent(new Event('resize'))
-    })
 }
 
 function defaultPeriodStart() {
@@ -864,6 +809,7 @@ const form = reactive({
     status: '0',
     serviceID: '',
     productName: '',
+    item: '',
     entityID: '',
     SN: '',
     loanerID: '',
@@ -902,10 +848,6 @@ const loanerAvailabilityChecking = ref(false)
 const waitingListAccepted = ref(false)
 const showWaitingConfirm = ref(false)
 const showLoanerStockDialog = ref(false)
-const loanerCalendarRef = ref(null)
-const loanerCalendarError = ref('')
-const loanerCalendarSuccess = ref('')
-const loanerPeriodSaving = ref(false)
 
 const STAKEHOLDER_FIELDS = {
     dealer: ['dealer', 'dealer_depart', 'contactPerson', 'phone', 'email', 'zipcode', 'address1', 'address2'],
@@ -977,7 +919,19 @@ const loanerProductOptions = computed(() =>
             availableCount: item.availableCount,
             totalCount: item.totalCount,
             order_type: item.order_type,
-        })),
+        }))
+        .sort((a, b) => {
+            const ka = String(a.item ?? '')
+                .replace(/【簿外】/g, '')
+                .replace(/[^0-9A-Za-z]+/g, '')
+                .toLowerCase()
+            const kb = String(b.item ?? '')
+                .replace(/【簿外】/g, '')
+                .replace(/[^0-9A-Za-z]+/g, '')
+                .toLowerCase()
+            return ka.localeCompare(kb, 'en', { numeric: true, sensitivity: 'base' })
+                || String(a.productName ?? '').localeCompare(String(b.productName ?? ''), 'en', { numeric: true })
+        }),
 )
 const loanerUnitsForProduct = computed(() => {
     const productName = String(form.productName || '').trim()
@@ -994,6 +948,9 @@ const selectedLoanerUnit = computed(() => {
 })
 
 const hasLoanerStock = computed(() => loanerAvailability.value?.order_type === 'loaner')
+const availableLoanerCount = computed(() =>
+    loanerUnitsForProduct.value.filter(unit => isLoanerUnitAvailable(unit)).length,
+)
 
 function isExcludedLoanerItem(itemText) {
     const text = String(itemText ?? '')
@@ -1031,8 +988,9 @@ function selectLoanerUnit(unit) {
     if (!canSelectLoanerUnit(unit) || isExcludedLoanerItem(unit?.item)) return
     form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
     form.SN = unit.SN ?? ''
+    if (unit.item) form.item = unit.item
+    if (unit.productName) form.productName = unit.productName
     showLoanerStockDialog.value = false
-    reloadLoanerCalendar()
 }
 
 function openLoanerStockDialog() {
@@ -1100,6 +1058,13 @@ const existingSearchTerms = computed(() =>
         .filter(Boolean)
 )
 const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / '))
+
+const loanerSearchTerms = computed(() =>
+    [form.productName, form.dealer]
+        .map(value => String(value ?? '').trim())
+        .filter(Boolean)
+)
+const loanerSearchSummary = computed(() => loanerSearchTerms.value.join(' / '))
 
 const missingLoanerLinkFields = computed(() => {
     const missing = []
@@ -1205,6 +1170,7 @@ function onMasterSelected(result) {
 
     if (activeSelectKind.value === 'loanerProduct') {
         form.productName = result.productName ?? ''
+        form.item = result.item ?? ''
         form.serviceID = ''
         form.entityID = ''
         form.SN = ''
@@ -1228,6 +1194,7 @@ function onMasterSelected(result) {
 
 function clearLoanerProductSelection() {
     form.productName = ''
+    form.item = ''
     form.SN = ''
     form.loanerID = ''
     loanerAvailability.value = null
@@ -1283,8 +1250,6 @@ async function checkLoanerAvailability() {
             form.plannedReturnedDate = defaultPeriodEnd()
             autoSelectFirstAvailableUnit()
         }
-        await nextTick()
-        reloadLoanerCalendar()
     } catch (e) {
         loanerAvailability.value = null
         error.value = e.message || '在庫確認に失敗しました。'
@@ -1292,297 +1257,6 @@ async function checkLoanerAvailability() {
         loanerAvailabilityChecking.value = false
     }
 }
-
-function toYmd(value) {
-    if (!value) return null
-    if (typeof value === 'string') return value.slice(0, 10)
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-        const y = value.getFullYear()
-        const m = String(value.getMonth() + 1).padStart(2, '0')
-        const d = String(value.getDate()).padStart(2, '0')
-        return `${y}-${m}-${d}`
-    }
-    return null
-}
-
-function addDaysYmd(ymd, days) {
-    const base = toYmd(ymd)
-    if (!base) return null
-    const date = new Date(`${base}T12:00:00`)
-    date.setDate(date.getDate() + days)
-    return toYmd(date)
-}
-
-function exclusiveEndFromInclusive(ymd) {
-    return addDaysYmd(ymd, 1)
-}
-
-function resolvePlannedDatesFromEvent(event) {
-    const plannedSentDate = toYmd(event.startStr || event.start)
-    if (!plannedSentDate) return null
-
-    const exclusiveEnd = toYmd(event.endStr || event.end)
-    const plannedReturnedDate = exclusiveEnd
-        ? addDaysYmd(exclusiveEnd, -1)
-        : plannedSentDate
-
-    if (!plannedReturnedDate || plannedReturnedDate < plannedSentDate) return null
-    return { plannedSentDate, plannedReturnedDate }
-}
-
-function resolveLoanerEventColors(orderType, statusRaw) {
-    const status = statusRaw === null || statusRaw === undefined || statusRaw === ''
-        ? null
-        : Number(statusRaw)
-
-    if (orderType === 'draft') {
-        return { background: '#0f766e', border: '#0d9488', className: 'loaner-status-draft' }
-    }
-    if (orderType === 'loaner') {
-        if (status === 20) {
-            return { background: '#dc2626', border: '#b91c1c', className: 'loaner-status-20' }
-        }
-        if (status !== null && !Number.isNaN(status) && status >= 200) {
-            return { background: '#2563eb', border: '#1d4ed8', className: 'loaner-status-200' }
-        }
-        return { background: '#64748b', border: '#475569', className: 'loaner-status-other' }
-    }
-    if (orderType === 'waiting_list') {
-        return { background: '#d97706', border: '#b45309', className: 'loaner-status-waiting' }
-    }
-    return { background: '#94a3b8', border: '#64748b', className: 'loaner-status-legacy' }
-}
-
-function buildDraftLoanerEvent() {
-    if (!form.productName || !form.plannedSentDate) return null
-    const start = toYmd(form.plannedSentDate)
-    const endInclusive = toYmd(form.plannedReturnedDate) || start
-    if (!start || !endInclusive) return null
-
-    const colors = resolveLoanerEventColors('draft')
-    const titleParts = [
-        '今回の予定',
-        form.productName,
-        form.SN ? `SN:${form.SN}` : null,
-        form.loanerID ? `ID:${form.loanerID}` : null,
-    ].filter(Boolean)
-
-    return {
-        id: DRAFT_LOANER_EVENT_ID,
-        title: titleParts.join(' / '),
-        start,
-        end: exclusiveEndFromInclusive(endInclusive),
-        allDay: true,
-        editable: true,
-        startEditable: true,
-        durationEditable: true,
-        color: colors.background,
-        backgroundColor: colors.background,
-        borderColor: colors.border,
-        textColor: '#ffffff',
-        classNames: [colors.className],
-        extendedProps: {
-            order_type: 'draft',
-            status: null,
-            productName: form.productName,
-            SN: form.SN,
-            loanerID: form.loanerID || null,
-            plannedSentDate: start,
-            plannedReturnedDate: endInclusive,
-        },
-    }
-}
-
-function decorateLoanerCalendarEvents(events) {
-    return (events ?? [])
-        .filter((event) => {
-            const orderType = event?.extendedProps?.order_type
-            return orderType === 'loaner' || orderType === 'waiting_list'
-        })
-        .map((event) => {
-            const colors = resolveLoanerEventColors(
-                event?.extendedProps?.order_type,
-                event?.extendedProps?.status,
-            )
-            const status = event?.extendedProps?.status
-            const statusPrefix = status != null ? `[${status}] ` : ''
-            return {
-                ...event,
-                title: `${statusPrefix}${event.title || ''}`.trim(),
-                editable: true,
-                startEditable: true,
-                durationEditable: true,
-                color: colors.background,
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                textColor: '#ffffff',
-                classNames: [colors.className, ...(event.classNames ?? [])],
-                display: 'block',
-            }
-        })
-}
-
-async function fetchLoanerCalendarEvents(info, successCallback, failureCallback) {
-    if (!form.productName) {
-        successCallback([])
-        return
-    }
-
-    loanerCalendarError.value = ''
-    try {
-        const params = new URLSearchParams({
-            start: info.startStr.slice(0, 10),
-            end: info.endStr.slice(0, 10),
-            productName: form.productName,
-        })
-        const url = `${page.props.appBaseUrl}/servicerecord/loaner/calendar/events?${params.toString()}`
-        const result = await apiFetch(url)
-        if (!result) {
-            successCallback(buildDraftLoanerEvent() ? [buildDraftLoanerEvent()] : [])
-            return
-        }
-
-        const { response, data } = result
-        if (!response.ok) {
-            throw new Error(data.message || `カレンダー取得に失敗しました。（HTTP ${response.status}）`)
-        }
-
-        const events = decorateLoanerCalendarEvents(data.events ?? [])
-        const draft = buildDraftLoanerEvent()
-        if (draft) events.push(draft)
-        successCallback(events)
-    } catch (e) {
-        loanerCalendarError.value = e.message || 'カレンダー取得に失敗しました。'
-        failureCallback(e)
-    }
-}
-
-async function handleLoanerCalendarDropOrResize(changeInfo) {
-    const event = changeInfo.event
-    const dates = resolvePlannedDatesFromEvent(event)
-    if (!dates) {
-        changeInfo.revert()
-        loanerCalendarError.value = '移動後の期間が不正です。'
-        return
-    }
-
-    if (String(event.id) === DRAFT_LOANER_EVENT_ID) {
-        form.plannedSentDate = dates.plannedSentDate
-        form.plannedReturnedDate = dates.plannedReturnedDate
-        loanerCalendarError.value = ''
-        loanerCalendarSuccess.value = `今回の予定を ${dates.plannedSentDate} 〜 ${dates.plannedReturnedDate} に更新しました。`
-        return
-    }
-
-    loanerPeriodSaving.value = true
-    loanerCalendarError.value = ''
-    loanerCalendarSuccess.value = ''
-
-    try {
-        const url = `${page.props.appBaseUrl}/servicerecord/loaner/period/${event.id}`
-        const result = await apiFetch(url, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': getCsrfToken(),
-            },
-            body: JSON.stringify({
-                sentDate: event.extendedProps?.sentDate || null,
-                returnedDate: event.extendedProps?.returnedDate || null,
-                comment: event.extendedProps?.comment || null,
-                plannedSentDate: dates.plannedSentDate,
-                plannedReturnedDate: dates.plannedReturnedDate,
-            }),
-        })
-
-        if (!result) {
-            changeInfo.revert()
-            return
-        }
-
-        const { response, data } = result
-        if (!response.ok) {
-            const validationMessage = data.errors
-                ? Object.values(data.errors).flat().join(' ')
-                : null
-            throw new Error(
-                validationMessage || data.message || `期間の更新に失敗しました。（HTTP ${response.status}）`,
-            )
-        }
-
-        const nextSent = data.attached?.plannedSentDate || dates.plannedSentDate
-        const nextReturned = data.attached?.plannedReturnedDate || dates.plannedReturnedDate
-        event.setExtendedProp('plannedSentDate', nextSent)
-        event.setExtendedProp('plannedReturnedDate', nextReturned)
-        loanerCalendarSuccess.value = data.message || `期間を更新しました。（${nextSent} 〜 ${nextReturned}）`
-    } catch (e) {
-        changeInfo.revert()
-        loanerCalendarError.value = e.message || '期間の更新に失敗しました。'
-    } finally {
-        loanerPeriodSaving.value = false
-    }
-}
-
-function applyLoanerCalendarEventColors(info) {
-    const colors = resolveLoanerEventColors(
-        info.event.extendedProps?.order_type,
-        info.event.extendedProps?.status,
-    )
-    const el = info.el
-    if (!el) return
-    el.style.setProperty('background-color', colors.background, 'important')
-    el.style.setProperty('border-color', colors.border, 'important')
-    el.style.setProperty('color', '#ffffff', 'important')
-}
-
-const loanerCalendarOptions = {
-    plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-    initialView: ROLLING_MONTH_VIEW,
-    locale: 'ja',
-    firstDay: 0,
-    height: 420,
-    headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: `${ROLLING_MONTH_VIEW},timeGridWeek`,
-    },
-    buttonText: {
-        today: '今日',
-        week: '週',
-    },
-    views: {
-        [ROLLING_MONTH_VIEW]: {
-            ...rollingMonthViewConfig,
-        },
-    },
-    editable: true,
-    eventStartEditable: true,
-    eventDurationEditable: true,
-    eventResizableFromStart: true,
-    selectable: false,
-    dayMaxEvents: true,
-    eventDisplay: 'block',
-    dayCellClassNames: fullCalendarDayCellClassNames,
-    dateClick: handleMonthCellDoubleClickToDayView,
-    events: fetchLoanerCalendarEvents,
-    eventDrop: handleLoanerCalendarDropOrResize,
-    eventResize: handleLoanerCalendarDropOrResize,
-    eventDidMount: applyLoanerCalendarEventColors,
-}
-
-function reloadLoanerCalendar() {
-    loanerCalendarSuccess.value = ''
-    const api = loanerCalendarRef.value?.getApi?.()
-    api?.refetchEvents()
-}
-
-watch(
-    () => [form.plannedSentDate, form.plannedReturnedDate, form.productName, form.SN, form.loanerID],
-    () => {
-        if (!isLoanerCase.value || !form.productName) return
-        reloadLoanerCalendar()
-    },
-)
 
 function buildFileUrl(fileId) {
     return `${page.props.appBaseUrl}/servicerecord/files/${fileId}?t=${previewCacheBust.value}#view=FitV`
@@ -1703,8 +1377,8 @@ async function openExistingRecordSearch() {
 }
 
 async function openLoanerRecordSearch() {
-    if (existingSearchTerms.value.length === 0) {
-        error.value = 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
+    if (loanerSearchTerms.value.length === 0) {
+        error.value = 'productName / dealer のいずれかを入力してから検索してください。（productName→item / dealer→dealer）'
         activeTab.value = 'basic'
         return
     }
@@ -1715,9 +1389,7 @@ async function openLoanerRecordSearch() {
     try {
         const params = new URLSearchParams({ order_type: 'loaner' })
         if (form.productName) params.set('productName', form.productName)
-        if (form.SN) params.set('SN', form.SN)
         if (form.dealer) params.set('dealer', form.dealer)
-        if (form.contactPerson) params.set('contactPerson', form.contactPerson)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -2451,33 +2123,9 @@ async function save() {
     flex: 1;
     min-height: 0;
     height: 100%;
-    gap: 0;
+    gap: 10px;
     padding-bottom: 0;
-    overflow: hidden;
-}
-
-.loaner-basic-split {
-    flex: 1;
-    min-height: 0;
-    height: 100%;
-}
-
-.loaner-basic-pane {
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.loaner-basic-pane-top {
-    gap: 8px;
-    padding-bottom: 4px;
     overflow: auto;
-}
-
-.loaner-basic-pane-bottom {
-    overflow: auto;
-    padding-top: 4px;
 }
 
 .loaner-stakeholder-stack {
@@ -2485,6 +2133,7 @@ async function save() {
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+    flex: 1 1 auto;
 }
 
 .info-card {
@@ -2518,14 +2167,6 @@ async function save() {
     border-color: #000000;
     background: #cdcdcd;
     flex: 0 0 auto;
-}
-
-.info-card-loaner-calendar {
-    border-color: #000000;
-    background: #f8fafc;
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
 }
 
 .btn-stock-list {
@@ -2729,86 +2370,6 @@ async function save() {
     text-align: center;
 }
 
-.loaner-calendar-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex: 0 0 auto;
-}
-
-.loaner-calendar-header .loaner-list-title {
-    margin: 0;
-}
-
-.loaner-calendar-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.legend-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-}
-
-.legend-chip.draft {
-    background: #0f766e;
-}
-
-.legend-chip.status-20 {
-    background: #dc2626;
-}
-
-.legend-chip.status-200 {
-    background: #2563eb;
-}
-
-.legend-chip.waiting {
-    background: #d97706;
-}
-
-.loaner-calendar-shell {
-    flex: 0 0 auto;
-    height: 420px;
-    min-height: 420px;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    padding: 4px;
-    overflow: hidden;
-}
-
-.loaner-calendar-shell :deep(.fc) {
-    height: 420px;
-    font-size: 11px;
-}
-
-.loaner-calendar-shell :deep(.fc .fc-toolbar) {
-    margin-bottom: 4px !important;
-}
-
-.loaner-calendar-shell :deep(.fc .fc-toolbar-title) {
-    font-size: 14px;
-}
-
-.loaner-calendar-shell :deep(.fc .fc-button) {
-    padding: 2px 6px;
-    font-size: 11px;
-}
-
-.loaner-calendar-shell :deep(.fc .fc-event) {
-    cursor: grab;
-    font-size: 10px;
-}
-
 .availability-hint {
     margin: 8px 0 0;
     font-size: 12px;
@@ -2932,6 +2493,26 @@ async function save() {
 }
 
 .row-product-top .w-product-name {
+    width: 100%;
+}
+
+.row-dealer-top {
+    grid-template-columns: 80px minmax(0, 1fr);
+}
+
+.row-dealer-top .field-button-pick {
+    width: 80px;
+    max-width: 80px;
+    min-width: 80px;
+    padding-left: 4px;
+    padding-right: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.row-dealer-top .w-dealer-name {
     width: 100%;
 }
 

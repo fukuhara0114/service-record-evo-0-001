@@ -1,8 +1,10 @@
 <template>
     <div class="loaner-detail-page">
         <header class="page-header">
-            <strong class="page-order-id">OrderID : {{ record.orderID }}</strong>
-            <h1 class="page-title">貸出案件詳細</h1>
+            <div class="header-title-group">
+                <h1 class="page-title">貸出案件詳細</h1>
+                <strong class="page-order-id">OrderID : {{ record.orderID }}</strong>
+            </div>
             <div class="header-actions">
                 <span v-if="success" class="save-message success">{{ success }}</span>
                 <span v-if="error" class="save-message error">{{ error }}</span>
@@ -69,7 +71,7 @@
                                 <label>
                                     <span>製品名</span>
                                     <button type="button" class="master-value" @click="activeSelectKind = 'loanerUnit'">
-                                        {{ form.productName || '選択してください' }}
+                                        {{ displayItemLabel || '選択してください' }}
                                     </button>
                                 </label>
                                 <label><span>SN</span><input v-model="form.SN" type="text"></label>
@@ -369,18 +371,20 @@
                         <strong>{{ uploading ? `アップロード中 ${uploadProgress}` : 'ファイルをドロップ、またはクリックして選択' }}</strong>
                         <span>PDF・画像・メール・その他のファイル（1ファイル10MBまで）</span>
                     </div>
-                    <div v-if="fileItems.length" class="files-list">
+                    <div v-if="sortedFiles.length" class="files-list">
                         <AttachedFileItem
-                            v-for="file in fileItems"
+                            v-for="(file, index) in sortedFiles"
                             :key="file.id"
                             :file="file"
                             :order-id="record.orderID"
                             :file-base-url="`${page.props.appBaseUrl}/servicerecord/files`"
                             :selected="selectedFileId === file.id"
-                            :can-move-up="false"
-                            :can-move-down="false"
-                            :sorting="false"
+                            :can-move-up="index > 0"
+                            :can-move-down="index < sortedFiles.length - 1"
+                            :sorting="fileSortSaving"
                             @select="selectedFileId = file.id"
+                            @move="(direction) => moveFile(file.id, direction)"
+                            @sort-num-change="(sortNum) => updateFileSortNum(file.id, sortNum)"
                         />
                     </div>
                     <p v-else class="empty">関連ファイルはありません。</p>
@@ -632,13 +636,14 @@ const props = defineProps({
     statusFlow: {
         type: Object,
         default: () => ({
-            steps: [0, 100, 150, 300, 350, 400, 450, 500, 650],
+            steps: [0, 100, 150, 300, 350, 400, 450, 396],
             checkStatusId: 650,
+            completeStatusId: 400,
             stockStatusId: 0,
             lendingStatusId: 400,
             activeListStatusMax: 400,
-            laborEditableStatusId: 500,
-            acceptanceStatusId: 500,
+            laborEditableStatusId: 396,
+            acceptanceStatusId: 396,
             shipPrepCompleteStatusId: 300,
             shipPrepRemandStatusId: 201,
             shipRequestStatusId: 350,
@@ -670,6 +675,7 @@ const selectedFileId = ref(props.files[0]?.id ?? null)
 const selectedNoteId = ref(null)
 const uploading = ref(false)
 const deleting = ref(false)
+const fileSortSaving = ref(false)
 const fileError = ref('')
 const noteError = ref('')
 const uploadProgress = ref('')
@@ -680,7 +686,7 @@ const notePendingDelete = ref(null)
 const activeSelectKind = ref(null)
 const leftPaneSize = ref(49)
 const rightPaneSize = ref(51)
-const fileBusy = computed(() => uploading.value || deleting.value)
+const fileBusy = computed(() => uploading.value || deleting.value || fileSortSaving.value)
 const parentReturnCode = ref(props.parentReturnCode)
 const showPriceAdjustDialog = ref(false)
 const priceAdjustSaving = ref(false)
@@ -818,6 +824,26 @@ const selectedUnit = computed(() => {
         ?? props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID))
         ?? null
 })
+const displayItemLabel = computed(() => {
+    const fromUnit = String(selectedUnit.value?.item ?? '').trim()
+    if (fromUnit) return fromUnit
+    const fromMaster = String(props.loanerMaster?.item ?? '').trim()
+    if (fromMaster) return fromMaster
+    return ''
+})
+const sortedFiles = computed(() => {
+    const list = [...(fileItems.value ?? [])]
+    list.sort((a, b) => {
+        const aNull = a?.sortNum == null
+        const bNull = b?.sortNum == null
+        if (aNull && bNull) return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+        if (aNull) return 1
+        if (bNull) return -1
+        if (Number(a.sortNum) !== Number(b.sortNum)) return Number(a.sortNum) - Number(b.sortNum)
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    })
+    return list
+})
 const masterPrice = computed(() => {
     const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
     if (units.length) {
@@ -843,12 +869,20 @@ const displayPrice = computed(() => basePrice.value - discountAmount.value)
 
 const statuses = computed(() => props.statuses ?? [])
 const labors = computed(() => props.labors ?? [])
-const flowSteps = computed(() => (props.statusFlow?.steps ?? [0, 100, 150, 300, 350, 400, 450, 500, 650]).map(Number))
+const flowSteps = computed(() => (props.statusFlow?.steps ?? [0, 100, 150, 300, 350, 400, 450, 396]).map(Number))
 const stockStatusId = computed(() => Number(props.statusFlow?.stockStatusId ?? 0))
 const laborEditableStatusId = computed(() => Number(
     props.statusFlow?.laborEditableStatusId
     ?? props.statusFlow?.acceptanceStatusId
-    ?? 500,
+    ?? 396,
+))
+const acceptanceStatusId = computed(() => Number(
+    props.statusFlow?.acceptanceStatusId
+    ?? laborEditableStatusId.value
+    ?? 396,
+))
+const completeStatusId = computed(() => Number(
+    props.statusFlow?.completeStatusId ?? 400,
 ))
 const shipPrepCompleteStatusId = computed(() => Number(
     props.statusFlow?.shipPrepCompleteStatusId ?? SHIP_PREP_STATUS_ID,
@@ -891,6 +925,9 @@ const nextStatusOption = computed(() => {
     // 差戻(201) はメインフロー外。次へで起伝依頼(300)へ復帰
     if (current === shipPrepRemandStatusId.value) {
         nextId = shipPrepCompleteStatusId.value
+    } else if (current === acceptanceStatusId.value) {
+        // 受け入れ確認中 → 完了(400)
+        nextId = completeStatusId.value
     } else {
         const steps = flowSteps.value
         const index = steps.indexOf(current)
@@ -1286,6 +1323,74 @@ function filesApiBase() {
     return `${page.props.appBaseUrl}/servicerecord/files`
 }
 
+async function persistFileSortNum(fileId, sortNum) {
+    const result = await apiFetch(`${filesApiBase()}/${fileId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ sortNum }),
+    })
+    if (!result) throw new Error('順序の更新に失敗しました。')
+    const { response, data } = result
+    if (!response.ok) {
+        throw new Error(validationError(data, `順序の更新に失敗しました。（HTTP ${response.status}）`))
+    }
+    return data.file ?? { id: fileId, sortNum }
+}
+
+async function updateFileSortNum(fileId, sortNum) {
+    if (fileSortSaving.value) return
+    fileSortSaving.value = true
+    fileError.value = ''
+    try {
+        const updated = await persistFileSortNum(fileId, sortNum)
+        fileItems.value = fileItems.value.map(file =>
+            Number(file.id) === Number(fileId)
+                ? { ...file, ...updated, sortNum: updated?.sortNum ?? sortNum }
+                : file,
+        )
+    } catch (e) {
+        fileError.value = e.message || '順序の更新に失敗しました。'
+    } finally {
+        fileSortSaving.value = false
+    }
+}
+
+async function moveFile(fileId, direction) {
+    if (fileSortSaving.value) return
+    const list = [...sortedFiles.value]
+    const index = list.findIndex(file => Number(file.id) === Number(fileId))
+    if (index < 0) return
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= list.length) return
+
+    ;[list[index], list[swapIndex]] = [list[swapIndex], list[index]]
+    const updates = list.map((file, idx) => ({
+        id: file.id,
+        sortNum: (idx + 1) * 10,
+    }))
+
+    fileSortSaving.value = true
+    fileError.value = ''
+    try {
+        const results = await Promise.all(
+            updates.map(item => persistFileSortNum(item.id, item.sortNum)),
+        )
+        const byId = new Map(results.map(file => [String(file.id), file]))
+        fileItems.value = fileItems.value.map((file) => {
+            const updated = byId.get(String(file.id))
+            return updated ? { ...file, ...updated } : file
+        })
+    } catch (e) {
+        fileError.value = e.message || '表示順の変更に失敗しました。'
+    } finally {
+        fileSortSaving.value = false
+    }
+}
+
 function openFilePicker() {
     if (fileBusy.value) return
     fileError.value = ''
@@ -1461,6 +1566,15 @@ async function save() {
     payload.status = numericNullable(form.status)
     if (isLaborEditable.value) {
         payload.laborID = numericNullable(form.laborID)
+        // 受け入れ確認中 + labor 設定済み → receivedDate を本日で保存
+        if (payload.laborID != null && payload.laborID !== '') {
+            payload.receivedDate = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).format(new Date())
+        }
     } else {
         delete payload.laborID
     }
@@ -1765,24 +1879,29 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .page-header {
     min-height: 36px;
     flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 4px 8px;
     border: 1px solid #94a3b8;
     background: #dbeafe;
 }
-.page-order-id { font-size: 14px; justify-self: start; }
+.header-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    justify-content: flex-start;
+}
+.page-order-id { font-size: 14px; }
 .page-title {
     margin: 0;
-    justify-self: center;
     font-size: 15px;
     font-weight: 700;
     color: #0f172a;
     white-space: nowrap;
 }
-.page-header .header-actions { justify-self: end; }
 .header-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .save-message { max-width: min(42vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .save-message.success { color: #166534; }
@@ -2359,12 +2478,17 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     .loaner-detail-page { padding: 3px; }
     .main-pane { padding: 0 2px; }
     .page-header {
-        grid-template-columns: 1fr;
-        justify-items: start;
+        flex-wrap: wrap;
+        align-items: flex-start;
     }
-    .page-title { justify-self: start; }
-    .page-header .header-actions { justify-self: stretch; }
-    .header-actions { gap: 3px; }
+    .header-title-group {
+        flex-wrap: wrap;
+    }
+    .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 3px;
+    }
     .btn { padding-inline: 8px; }
     .save-message { display: none; }
     .people-row { grid-template-columns: 1fr; }

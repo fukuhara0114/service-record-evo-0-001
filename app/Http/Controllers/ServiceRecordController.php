@@ -18,6 +18,7 @@ use App\Models\CapturedImage;
 use App\Models\LoanerMaster;
 use App\Services\EmlReplyDraftService;
 use App\Services\MasterPriceVersionResolver;
+use App\Support\LoanerStatusFlow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -146,29 +147,29 @@ class ServiceRecordController extends Controller
         } elseif ($mode === 'shippingPrep') {
             $query->whereIn('status', [300, 385]);
         } elseif ($mode === 'engineer') {
-            $query->where(function ($statusQuery) {
-                $statusQuery
-                    ->where(function ($normalQuery) {
-                        $normalQuery
-                            ->where(function ($typeQuery) {
-                                $typeQuery->where('order_type', 'service')
-                                    ->orWhereNull('order_type')
-                                    ->orWhere('order_type', '');
-                            })
-                            ->whereBetween('status', [90, 170]);
-                    })
-                    ->orWhere(function ($loanerQuery) {
-                        // 旧IDの90/100（営業貸出中/貸出中）に対応する新ID。
-                        $loanerQuery->where('order_type', 'loaner')
-                            ->whereIn('status', [400, 700]);
-                    });
-                });
-
+            // service: status=受注(90) かつ自分の labor
+            // loaner: status=受け入れ確認中(396) かつ自分の labor
             $laborID = auth()->user()?->laborID;
             if ($laborID === null || $laborID === '') {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->where('laborID', $laborID);
+                $query->where('laborID', $laborID)
+                    ->where(function ($statusQuery) {
+                        $statusQuery
+                            ->where(function ($serviceQuery) {
+                                $serviceQuery
+                                    ->where(function ($typeQuery) {
+                                        $typeQuery->where('order_type', 'service')
+                                            ->orWhereNull('order_type')
+                                            ->orWhere('order_type', '');
+                                    })
+                                    ->where('status', 90);
+                            })
+                            ->orWhere(function ($loanerQuery) {
+                                $loanerQuery->where('order_type', 'loaner')
+                                    ->where('status', LoanerStatusFlow::ACCEPTANCE);
+                            });
+                    });
             }
         } else {
             $query->where(function ($statusQuery) {
@@ -212,6 +213,10 @@ class ServiceRecordController extends Controller
                 $record->unsetRelation('statusMasterLoaner');
             }
         });
+
+        if ($mode === 'engineer') {
+            $this->attachLoanerItemsToRecords($records);
+        }
 
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
         $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
@@ -285,6 +290,78 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    /**
+     * Engineer 一覧用: loaner 案件に LoanerMaster.item を付与する。
+     *
+     * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
+     */
+    private function attachLoanerItemsToRecords($records): void
+    {
+        $loanerIds = $records
+            ->filter(fn (ServiceRecord $record) => $record->order_type === 'loaner')
+            ->pluck('loanerID')
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $itemByLoanerId = [];
+        if ($loanerIds !== []) {
+            $masters = app(MasterPriceVersionResolver::class)->latestByKey(
+                LoanerMaster::query()
+                    ->whereIn('loanerID', $loanerIds)
+                    ->select(['id', 'loanerID', 'item', 'productName', 'validDateMin', 'validDateMax']),
+                'loanerID',
+            );
+            foreach ($masters as $master) {
+                $itemByLoanerId[(string) $master->loanerID] = $master->item;
+            }
+        }
+
+        // loanerID が無い/不一致の場合のフォールバック: 同 productName の item
+        $productNames = $records
+            ->filter(fn (ServiceRecord $record) => $record->order_type === 'loaner')
+            ->filter(function (ServiceRecord $record) use ($itemByLoanerId) {
+                $key = (string) ($record->loanerID ?? '');
+                return ($itemByLoanerId[$key] ?? null) === null || ($itemByLoanerId[$key] ?? '') === '';
+            })
+            ->pluck('productName')
+            ->filter(fn ($name) => $name !== null && $name !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $itemByProductName = [];
+        if ($productNames !== []) {
+            $productMasters = app(MasterPriceVersionResolver::class)->latestByKey(
+                LoanerMaster::query()
+                    ->whereIn('productName', $productNames)
+                    ->whereNotNull('item')
+                    ->where('item', '!=', '')
+                    ->select(['id', 'loanerID', 'item', 'productName', 'validDateMin', 'validDateMax']),
+                'productName',
+            );
+            foreach ($productMasters as $master) {
+                $itemByProductName[(string) $master->productName] = $master->item;
+            }
+        }
+
+        $records->each(function (ServiceRecord $record) use ($itemByLoanerId, $itemByProductName) {
+            if ($record->order_type !== 'loaner') {
+                $record->setAttribute('item', null);
+
+                return;
+            }
+            $key = (string) ($record->loanerID ?? '');
+            $item = $itemByLoanerId[$key] ?? null;
+            if ($item === null || $item === '') {
+                $productKey = (string) ($record->productName ?? '');
+                $item = $itemByProductName[$productKey] ?? null;
+            }
+            $record->setAttribute('item', $item);
+        });
+    }
+
     private function engineerCanAccessOrder($orderID): bool
     {
         $laborID = auth()->user()?->laborID;
@@ -295,6 +372,22 @@ class ServiceRecordController extends Controller
         return ServiceRecord::query()
             ->where('orderID', $orderID)
             ->where('laborID', $laborID)
+            ->where(function ($statusQuery) {
+                $statusQuery
+                    ->where(function ($serviceQuery) {
+                        $serviceQuery
+                            ->where(function ($typeQuery) {
+                                $typeQuery->where('order_type', 'service')
+                                    ->orWhereNull('order_type')
+                                    ->orWhere('order_type', '');
+                            })
+                            ->where('status', 90);
+                    })
+                    ->orWhere(function ($loanerQuery) {
+                        $loanerQuery->where('order_type', 'loaner')
+                            ->where('status', LoanerStatusFlow::ACCEPTANCE);
+                    });
+            })
             ->exists();
     }
 
@@ -461,24 +554,29 @@ class ServiceRecordController extends Controller
 
     public function searchExisting(Request $request)
     {
-        $tokens = collect([
-            $request->input('productName'),
-            $request->input('SN'),
-            $request->input('dealer'),
-            $request->input('contactPerson'),
-        ])
-            ->map(fn ($value) => trim((string) $value))
-            ->filter()
-            ->values();
-
-        if ($tokens->isEmpty()) {
-            return response()->json([
-                'records' => [],
-            ]);
-        }
+        $productName = trim((string) $request->input('productName', ''));
+        $sn = trim((string) $request->input('SN', ''));
+        $dealer = trim((string) $request->input('dealer', ''));
+        $contactPerson = trim((string) $request->input('contactPerson', ''));
 
         $forLoanerParent = $request->input('for') === 'loaner_parent';
         $orderTypeFilter = $request->input('order_type'); // service | loaner
+
+        if ($orderTypeFilter === 'loaner') {
+            // loaner検索: productName→item / dealer→dealer
+            if ($productName === '' && $dealer === '') {
+                return response()->json(['records' => []]);
+            }
+        } elseif ($forLoanerParent) {
+            $tokens = collect([$productName, $sn, $dealer, $contactPerson])
+                ->filter()
+                ->values();
+            if ($tokens->isEmpty()) {
+                return response()->json(['records' => []]);
+            }
+        } elseif ($productName === '' && $sn === '' && $dealer === '' && $contactPerson === '') {
+            return response()->json(['records' => []]);
+        }
 
         $with = ['returnCodeMaster', 'laborMaster', 'statusMaster'];
         if ($orderTypeFilter === 'loaner' || $orderTypeFilter === 'waiting_list') {
@@ -525,11 +623,30 @@ class ServiceRecordController extends Controller
             });
         }
 
-        $records = $query
-            ->where(function ($outerQuery) use ($tokens) {
+        if ($orderTypeFilter === 'loaner') {
+            // サービス案件の productName が loaner の item に含まれる
+            // サービス案件の dealer が loaner の dealer に含まれる
+            if ($productName !== '') {
+                $itemLike = $this->likeContains($productName);
+                $query->whereExists(function ($sub) use ($itemLike) {
+                    $sub->select(DB::raw(1))
+                        ->from('loanermaster')
+                        ->whereColumn('loanermaster.loanerID', 'servicerecord.loanerID')
+                        ->where('loanermaster.item', 'like', $itemLike);
+                });
+            }
+            if ($dealer !== '') {
+                $query->where('dealer', 'like', $this->likeContains($dealer));
+            }
+        } elseif ($forLoanerParent) {
+            // 親案件検索（フリートークン）: 各語がいずれかの列に含まれる
+            $tokens = collect([$productName, $sn, $dealer, $contactPerson])
+                ->filter()
+                ->values();
+            $query->where(function ($outerQuery) use ($tokens) {
                 foreach ($tokens as $token) {
-                    $outerQuery->where(function ($tokenQuery) use ($token) {
-                        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $token) . '%';
+                    $like = $this->likeContains((string) $token);
+                    $outerQuery->where(function ($tokenQuery) use ($like) {
                         $tokenQuery
                             ->where('productName', 'like', $like)
                             ->orWhere('SN', 'like', $like)
@@ -538,7 +655,24 @@ class ServiceRecordController extends Controller
                             ->orWhere('orderID', 'like', $like);
                     });
                 }
-            })
+            });
+        } else {
+            // サービス案件検索: 各入力は対応カラムへの部分一致（AND）
+            if ($productName !== '') {
+                $query->where('productName', 'like', $this->likeContains($productName));
+            }
+            if ($sn !== '') {
+                $query->where('SN', 'like', $this->likeContains($sn));
+            }
+            if ($dealer !== '') {
+                $query->where('dealer', 'like', $this->likeContains($dealer));
+            }
+            if ($contactPerson !== '') {
+                $query->where('contactPerson', 'like', $this->likeContains($contactPerson));
+            }
+        }
+
+        $records = $query
             ->orderBy('receivedDate', 'desc')
             ->limit(100)
             ->get();
@@ -554,9 +688,18 @@ class ServiceRecordController extends Controller
             }
         });
 
+        if ($orderTypeFilter === 'loaner') {
+            $this->attachLoanerItemsToRecords($records);
+        }
+
         return response()->json([
             'records' => $records,
         ]);
+    }
+
+    private function likeContains(string $value): string
+    {
+        return '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value) . '%';
     }
 
     public function linkToExisting(Request $request)

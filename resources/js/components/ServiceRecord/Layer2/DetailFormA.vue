@@ -102,7 +102,7 @@
                                                 </option>
                                             </select>
                                         </dd>
-                                        <dt>A2LA</dt>
+                                        <dt></dt>
                                         <dd>
                                             <button
                                                 type="button"
@@ -110,7 +110,7 @@
                                                 :class="{ active: isA2laOn }"
                                                 @click="toggleA2la"
                                             >
-                                                {{ isA2laOn ? 'ON' : 'OFF' }}
+                                                {{ isA2laOn ? 'A2LA' : 'A2LA' }}
                                             </button>
                                         </dd>
                                     </dl>

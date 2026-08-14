@@ -3,6 +3,9 @@
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
             <div class="header-left">
+                <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
+                <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
+                <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
                 <div v-if="!isRestrictedListMode" class="order-type-filters">
                     <button
                         type="button"
@@ -68,7 +71,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === 'all' }"
+                        :class="{ active: effectiveArrivalFilter === 'all' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = 'all'"
                     >
                         All
@@ -76,7 +80,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === 'hide_future' }"
+                        :class="{ active: effectiveArrivalFilter === 'hide_future' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = 'hide_future'"
                     >
                         Hide Future
@@ -84,7 +89,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === 'today' }"
+                        :class="{ active: effectiveArrivalFilter === 'today' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = 'today'"
                     >
                         Today
@@ -92,7 +98,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === '1day' }"
+                        :class="{ active: effectiveArrivalFilter === '1day' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = '1day'"
                     >
                         1Day
@@ -100,7 +107,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === '2day' }"
+                        :class="{ active: effectiveArrivalFilter === '2day' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = '2day'"
                     >
                         2Day
@@ -108,7 +116,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === '3day' }"
+                        :class="{ active: effectiveArrivalFilter === '3day' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = '3day'"
                     >
                         3Day
@@ -116,7 +125,8 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: arrivalFilter === '1wk' }"
+                        :class="{ active: effectiveArrivalFilter === '1wk' }"
+                        :disabled="!isArrivalFilterEnabled"
                         @click="arrivalFilter = '1wk'"
                     >
                         1Wk
@@ -193,9 +203,6 @@
                     </template>
                 </div>
                 <div class="home-link-area">
-                    <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
-                    <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
-                    <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
                     <a v-if="!isRestrictedListMode" :href="shippingCalendarUrl" class="calendar-link">出荷カレンダー</a>
                     <CloseToHomeButton :href="homeUrl" />
                 </div>
@@ -441,7 +448,24 @@
             </div>
             <table id="myLargeTable">
                 <thead>
-                    <tr v-if="orderTypeFilter === 'abroad'">
+                    <tr v-if="mode === 'engineer'">
+                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <th>受領日</th>
+                        <th>order_type</th>
+                        <th>ステータス</th>
+                        <th>RMA#</th>
+                        <th>製品名</th>
+                        <th>item</th>
+                        <th>S/N</th>
+                        <th>作業内容</th>
+                        <th>担当者</th>
+                        <th>販売店</th>
+                        <th>部署</th>
+                        <th>担当者</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                    </tr>
+                    <tr v-else-if="orderTypeFilter === 'abroad'">
                         <th style="width: 80px; text-align: center;">OrderID</th>
                         <th style="width: 44px; text-align: center;">
                             <input
@@ -561,7 +585,24 @@
                         @click="selectedOrderId = r.orderID"
                         @dblclick="openSecondLayer(r)"
                     >
-                        <template v-if="orderTypeFilter === 'abroad'">
+                        <template v-if="mode === 'engineer'">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td>{{ r.receivedDate }}</td>
+                            <td>{{ engineerOrderTypeLabel(r) }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.item || '' }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.email }}</td>
+                            <td>{{ r.phone }}</td>
+                        </template>
+                        <template v-else-if="orderTypeFilter === 'abroad'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td style="text-align: center;" @click.stop @dblclick.stop>
                                 <input
@@ -1104,6 +1145,10 @@ function syncArrivalQuery(value) {
 }
 
 const arrivalFilter = ref(loadArrivalFilter())
+const isArrivalFilterEnabled = computed(() => orderTypeFilter.value === 'service')
+const effectiveArrivalFilter = computed(() =>
+    isArrivalFilterEnabled.value ? arrivalFilter.value : 'all',
+)
 
 // /home → Admin のクエリ指定、または詳細復帰時の URL を session に同期
 persistOrderTypeFilter(orderTypeFilter.value)
@@ -1401,14 +1446,21 @@ const filteredRecords = computed(() => {
     if (props.mode === 'engineer') {
         records = records.filter((r) => {
             const orderType = r?.order_type ?? 'service'
-            return orderType === 'service' || orderType === 'loaner'
+            const status = Number(r?.status)
+            if (orderType === 'service' || orderType === '' || orderType == null) {
+                return status === 90
+            }
+            if (orderType === 'loaner') {
+                return status === 396
+            }
+            return false
         })
     } else if (!isBoardMode.value) {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
     }
 
     if (!isRestrictedListMode.value) {
-        records = records.filter((r) => matchesArrivalFilter(r, arrivalFilter.value))
+        records = records.filter((r) => matchesArrivalFilter(r, effectiveArrivalFilter.value))
     }
 
     if (searchQuery.value) {
@@ -1429,8 +1481,11 @@ const filteredRecords = computed(() => {
                     formatListDate(r.shippedDate),
                     r.shippedDate,
                     statusLabel(r),
+                    engineerOrderTypeLabel(r),
+                    r.order_type,
                     r.RMA,
                     r.productName,
+                    r.item,
                     r.SN,
                     r.returnCode,
                     r.return_code_master?.description,
@@ -1948,6 +2003,10 @@ function statusLabel(record) {
         return record.status_master_loaner?.status || ''
     }
     return record.status_master?.status || ''
+}
+
+function engineerOrderTypeLabel(record) {
+    return record?.order_type === 'loaner' ? '貸出機チェック' : 'サービス案件'
 }
 
 function formatListDate(value) {
@@ -2639,6 +2698,15 @@ async function saveRecord() {
     color: #fff;
 }
 
+.order-type-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.order-type-btn.active:disabled {
+    opacity: 0.85;
+}
+
 .search-area {
     display: flex;
     justify-content: flex-start;
@@ -2762,6 +2830,8 @@ async function saveRecord() {
     color: #fff;
     font-size: 12px;
     font-weight: 700;
+    white-space: nowrap;
+    flex: 0 0 auto;
 }
 
 .logistics-view-controls {
