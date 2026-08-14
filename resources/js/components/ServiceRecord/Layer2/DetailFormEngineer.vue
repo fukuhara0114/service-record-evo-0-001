@@ -443,13 +443,20 @@ async function updateRecordStatus(status) {
 
 async function onComplete() {
     if (statusActionSaving.value) return
-    if (!window.confirm('この案件を完了（status=190）にしますか？')) return
+
+    const orderType = props.record?.order_type ?? props.draftRecord?.order_type ?? 'service'
+    const isLoaner = orderType === 'loaner'
+    const nextStatus = isLoaner ? 399 : 400
+    const statusHint = isLoaner
+        ? '完了前、予約確認（status=399）'
+        : '完了（status=400）'
+    if (!window.confirm(`この案件を${statusHint}にしますか？`)) return
 
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
-        await updateRecordStatus(190)
-        emit('workflow-done', { action: 'complete', status: 190 })
+        await updateRecordStatus(nextStatus)
+        emit('workflow-done', { action: 'complete', status: nextStatus })
     } catch (e) {
         actionMessage.value = e.message || '完了処理に失敗しました。'
     } finally {

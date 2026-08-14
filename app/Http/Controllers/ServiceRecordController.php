@@ -249,11 +249,12 @@ class ServiceRecordController extends Controller
             });
         }
 
-        if ($mode === 'shippingPrep') {
+        if ($mode === 'shippingPrep' || $mode === 'logistics') {
+            // 出荷予定日の降順 → dealer あいうえお順（一覧表示の既定ソート）
             $records = $query
                 ->orderByDesc('shippingOut_requiredDate')
-                ->orderBy('status', 'asc')
-                ->orderBy('receivedDate', 'asc')
+                ->orderBy('dealer', 'asc')
+                ->orderBy('orderID', 'asc')
                 ->get();
         } else {
             $records = $query->orderBy('receivedDate', 'asc')->get();
@@ -272,6 +273,49 @@ class ServiceRecordController extends Controller
 
         // loaner / waiting_list 一覧の item 列表示用
         $this->attachLoanerItemsToRecords($records);
+
+        $tabBadgeCounts = [
+            'loanerReturned' => 0,
+            'waitingPromotionReady' => 0,
+            'serviceRemand' => 0,
+        ];
+        if ($mode === 'admin') {
+            $returnedStatusId = \App\Models\StatusLoaner::query()
+                ->where('status', '返却')
+                ->value('processID_new');
+
+            $tabBadgeCounts['loanerReturned'] = $returnedStatusId !== null
+                ? ServiceRecord::query()
+                    ->where('order_type', 'loaner')
+                    ->where('status', $returnedStatusId)
+                    ->count()
+                : 0;
+
+            $waitingQuery = ServiceRecord::query()->where('order_type', 'waiting_list');
+            if (Schema::hasColumn('servicerecord', 'promotion_ready_at')) {
+                $waitingQuery->whereNotNull('promotion_ready_at');
+            } else {
+                $waitingQuery->whereRaw('1 = 0');
+            }
+            $tabBadgeCounts['waitingPromotionReady'] = $waitingQuery->count();
+
+            if (Schema::hasColumn('servicerecord', 'remand')) {
+                $tabBadgeCounts['serviceRemand'] = ServiceRecord::query()
+                    ->where(function ($typeQuery) {
+                        $typeQuery->whereNull('order_type')
+                            ->orWhere('order_type', '')
+                            ->orWhere('order_type', 'service');
+                    })
+                    ->where('status', '>=', 0)
+                    ->where('status', '<', 399)
+                    ->where(function ($remandQuery) {
+                        $remandQuery->where('remand', 1)
+                            ->orWhere('remand', '1')
+                            ->orWhere('remand', true);
+                    })
+                    ->count();
+            }
+        }
 
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
         $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
@@ -342,6 +386,7 @@ class ServiceRecordController extends Controller
             'incidentsMaster' => $incidentsMaster,
             'mode' => $mode,
             'attachmentData' => $attachmentData,
+            'tabBadgeCounts' => $tabBadgeCounts,
         ]);
     }
 

@@ -5,47 +5,61 @@ namespace App\Support;
 /**
  * 貸出案件（order_type=loaner）のメインステータスフロー定義。
  *
- * 在庫(0:確保済み) → 見積済み → 受注 → 起伝依頼(300) → 発送依頼(350) → 貸出中(400) → 返却 → 受け入れ確認中 → 完了(400)
- * アクティブな loaner リストは status >= 0 かつ status < 400。
- * status が 400 に到達した時点で機材を在庫(currentStatus=0)に戻し、waiting_list を確認する。
- * 案件 status を再び 0 に戻してリストへ残す循環は行わない。
- * labor は「受け入れ確認中」のみ設定可能。
+ * 「次へ」:
+ *   確保済み(0) / 案件未登録(20)
+ *     → 見積済み(100)
+ *     → 受注(150) / 貸出機出荷準備(200) / 貸出機出荷準備＿差戻(201)
+ *     → 貸出機出荷準備完了＿起伝依頼(300)
+ *     →（300以上393未満は次へ disable。返却(393)は手動など）
+ *     → 返却(393) → 受け入れ確認中(396)（次へ disable）
+ *     →（完了前、予約確認(399)は手動など）→ 完了(400)
+ *
+ * 「次へ」disable: status が 300以上393未満、または 396。
+ * labor は status=返却(393) のときのみ編集可。
  * status=300 遷移時は出荷予定日ダイアログで shippingOut_requiredDate を設定する。
- * 「受け入れ確認中」の次へは完了(400)。※貸出中も同値 400 のため nextStatusId で特別扱い。
+ * アクティブな loaner リストは status >= 0 かつ status < 400。
  */
 class LoanerStatusFlow
 {
-    public const STOCK = 0; // 確保済み（新規登録時の初期 status）
+    public const STOCK = 0; // 確保済み
 
-    public const QUOTE_DONE = 100;
+    public const UNREGISTERED = 20; // 案件未登録
 
-    public const ORDERED = 150;
+    public const QUOTE_DONE = 100; // 見積済み
 
-    /** 貸出機出荷準備＿差戻（起伝差戻。次へで 300 へ復帰） */
+    public const ORDERED = 150; // 受注
+
+    public const SHIP_PREP = 200; // 貸出機出荷準備
+
+    /** 貸出機出荷準備＿差戻（次へで 300 へ） */
     public const SHIP_PREP_REMAND = 201;
 
     /** 貸出機出荷準備完了＿起伝依頼（出荷予定日設定） */
     public const SHIP_PREP_COMPLETE = 300;
 
+    /** @deprecated 旧フロー。次へでは使わない */
     public const SHIP_REQUEST = 350;
 
-    /** 貸出中（アクティブリストから外れ、機材を在庫復帰） */
-    public const LENDING = 400;
+    /** 返却（labor 設定可能） */
+    public const RETURNED = 393;
 
-    public const RETURNED = 450;
-
-    /** 受け入れ確認中（labor 設定可能） */
+    /** 受け入れ確認中（次へ disable） */
     public const ACCEPTANCE = 396;
 
-    /** 完了（受け入れ確認中の次へ） */
+    /** 完了前、予約確認 */
+    public const PRE_COMPLETE = 399;
+
+    /** 完了 */
     public const COMPLETE = 400;
 
-    /** @deprecated 旧フロー末尾。新規遷移では COMPLETE を使う */
+    /** @deprecated 旧「貸出中」。完了と同値だった名残 */
+    public const LENDING = 400;
+
+    /** @deprecated 旧フロー末尾 */
     public const CHECK = 650;
 
     /**
-     * メインフロー順（末尾で在庫へは戻さない）。
-     * ACCEPTANCE の次は COMPLETE だが、LENDING と同値のため STEPS には含めず nextStatusId で返す。
+     * メインフロー上の代表ステップ（表示・互換用）。
      *
      * @var list<int>
      */
@@ -54,23 +68,28 @@ class LoanerStatusFlow
         self::QUOTE_DONE,
         self::ORDERED,
         self::SHIP_PREP_COMPLETE,
-        self::SHIP_REQUEST,
-        self::LENDING,
         self::RETURNED,
         self::ACCEPTANCE,
+        self::PRE_COMPLETE,
+        self::COMPLETE,
     ];
 
     /** アクティブ loaner リストの上限（未満） */
-    public const ACTIVE_LIST_STATUS_MAX = self::LENDING;
+    public const ACTIVE_LIST_STATUS_MAX = self::COMPLETE;
 
     public static function isAcceptanceStatus(mixed $statusId): bool
     {
         return (int) $statusId === self::ACCEPTANCE;
     }
 
+    public static function isReturnedStatus(mixed $statusId): bool
+    {
+        return (int) $statusId === self::RETURNED;
+    }
+
     public static function isLaborEditableStatus(mixed $statusId): bool
     {
-        return self::isAcceptanceStatus($statusId);
+        return self::isReturnedStatus($statusId);
     }
 
     public static function isShipPrepCompleteStatus(mixed $statusId): bool
@@ -101,7 +120,19 @@ class LoanerStatusFlow
     }
 
     /**
-     * アクティブリスト外（貸出中以降）へ初めて到達したか。
+     * 「次へ」ボタンを disable する status か。
+     * 300以上393未満、または 396。
+     */
+    public static function isNextButtonDisabled(mixed $statusId): bool
+    {
+        $status = (int) $statusId;
+
+        return ($status >= self::SHIP_PREP_COMPLETE && $status < self::RETURNED)
+            || $status === self::ACCEPTANCE;
+    }
+
+    /**
+     * アクティブリスト外（完了 400）へ初めて到達したか。
      */
     public static function crossedToInactiveList(mixed $previousStatusId, mixed $nextStatusId): bool
     {
@@ -113,27 +144,14 @@ class LoanerStatusFlow
     {
         $current = (int) $currentStatusId;
 
-        // 差戻(201) はサイドステータス。次へで起伝依頼(300)へ戻す
-        if ($current === self::SHIP_PREP_REMAND) {
-            return self::SHIP_PREP_COMPLETE;
-        }
-
-        // 受け入れ確認中 → 完了（LENDING と同値のため STEPS 走査では扱えない）
-        if ($current === self::ACCEPTANCE) {
-            return self::COMPLETE;
-        }
-
-        $steps = self::STEPS;
-        $index = array_search($current, $steps, true);
-        if ($index === false) {
-            return null;
-        }
-
-        if ($index >= count($steps) - 1) {
-            return null;
-        }
-
-        return $steps[$index + 1];
+        return match ($current) {
+            self::STOCK, self::UNREGISTERED => self::QUOTE_DONE,
+            self::QUOTE_DONE => self::ORDERED,
+            self::ORDERED, self::SHIP_PREP, self::SHIP_PREP_REMAND => self::SHIP_PREP_COMPLETE,
+            self::RETURNED => self::ACCEPTANCE,
+            self::PRE_COMPLETE => self::COMPLETE,
+            default => null,
+        };
     }
 
     /**
@@ -142,14 +160,18 @@ class LoanerStatusFlow
      *     checkStatusId:int,
      *     completeStatusId:int,
      *     stockStatusId:int,
+     *     unregisteredStatusId:int,
      *     lendingStatusId:int,
      *     laborEditableStatusId:int,
+     *     returnedStatusId:int,
      *     acceptanceStatusId:int,
+     *     preCompleteStatusId:int,
+     *     shipPrepStatusId:int,
      *     shipPrepCompleteStatusId:int,
      *     shipPrepRemandStatusId:int,
      *     shipRequestStatusId:int,
      *     activeListStatusMax:int,
-     *     adminNextBlockedStatusIds:list<int>
+     *     nextDisabledExactStatusIds:list<int>
      * }
      */
     public static function meta(): array
@@ -159,15 +181,18 @@ class LoanerStatusFlow
             'checkStatusId' => self::CHECK,
             'completeStatusId' => self::COMPLETE,
             'stockStatusId' => self::STOCK,
+            'unregisteredStatusId' => self::UNREGISTERED,
             'lendingStatusId' => self::LENDING,
-            'laborEditableStatusId' => self::ACCEPTANCE,
+            'laborEditableStatusId' => self::RETURNED,
+            'returnedStatusId' => self::RETURNED,
             'acceptanceStatusId' => self::ACCEPTANCE,
+            'preCompleteStatusId' => self::PRE_COMPLETE,
+            'shipPrepStatusId' => self::SHIP_PREP,
             'shipPrepCompleteStatusId' => self::SHIP_PREP_COMPLETE,
             'shipPrepRemandStatusId' => self::SHIP_PREP_REMAND,
             'shipRequestStatusId' => self::SHIP_REQUEST,
             'activeListStatusMax' => self::ACTIVE_LIST_STATUS_MAX,
-            // admin の「次へ」: 350 への遷移不可、かつ 350 にいるときも進めない（手動 dropdown は可）
-            'adminNextBlockedStatusIds' => [self::SHIP_REQUEST],
+            'nextDisabledExactStatusIds' => [self::ACCEPTANCE],
         ];
     }
 }

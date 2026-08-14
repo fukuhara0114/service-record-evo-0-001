@@ -558,6 +558,11 @@ class LoanerRecordController extends Controller
             $rawStatus = $request->input('status');
             $validated['status'] = ($rawStatus === '' || $rawStatus === null) ? null : (int) $rawStatus;
         }
+        // laborID=0（未定）も同様に生値を明示反映
+        if ($request->exists('laborID')) {
+            $rawLabor = $request->input('laborID');
+            $validated['laborID'] = ($rawLabor === '' || $rawLabor === null) ? null : (int) $rawLabor;
+        }
 
         if (
             isset($validated['parentID'])
@@ -576,31 +581,43 @@ class LoanerRecordController extends Controller
         }
 
         if ($record->order_type === 'loaner') {
+            $previousStatus = (int) $record->status;
             $targetStatus = array_key_exists('status', $validated) && $validated['status'] !== null
                 ? (int) $validated['status']
-                : (int) $record->status;
+                : $previousStatus;
 
-            // labor は受け入れ確認中のみ変更可。それ以外で送られた laborID は無視する
-            if (
-                array_key_exists('laborID', $validated)
-                && !LoanerStatusFlow::isLaborEditableStatus($targetStatus)
-            ) {
-                unset($validated['laborID']);
-            }
+            // laborID はリクエストにあれば常に保存する（返却以外でも値を落とさない）
+            // 返却(393) および 返却→受け入れ確認中 では labor 必須
+            $requiresLabor = LoanerStatusFlow::isLaborEditableStatus($targetStatus)
+                || (
+                    LoanerStatusFlow::isReturnedStatus($previousStatus)
+                    && (int) $targetStatus === LoanerStatusFlow::ACCEPTANCE
+                );
 
-            if (LoanerStatusFlow::isLaborEditableStatus($targetStatus)) {
-                $laborId = $validated['laborID'] ?? $record->laborID;
-                if ($laborId === null || $laborId === '') {
+            if ($requiresLabor) {
+                $laborId = array_key_exists('laborID', $validated)
+                    ? $validated['laborID']
+                    : $record->laborID;
+                if ($laborId === null || $laborId === '' || (int) $laborId === 0) {
                     return response()->json([
-                        'message' => '受け入れ確認担当の labor を選択してください。',
+                        'message' => '返却担当の labor を選択してください。',
                     ], 422);
                 }
                 $laborExists = Labor::query()->where('laborID', $laborId)->exists();
                 if (!$laborExists) {
                     return response()->json(['message' => '指定された labor は存在しません。'], 422);
                 }
-                // 受け入れ確認中 + labor 設定済み → receivedDate を本日（Asia/Tokyo）で保存
+                $validated['laborID'] = (int) $laborId;
                 $validated['receivedDate'] = now('Asia/Tokyo')->toDateString();
+            } elseif (array_key_exists('laborID', $validated) && $validated['laborID'] !== null && $validated['laborID'] !== '') {
+                $laborId = (int) $validated['laborID'];
+                if ($laborId !== 0) {
+                    $laborExists = Labor::query()->where('laborID', $laborId)->exists();
+                    if (!$laborExists) {
+                        return response()->json(['message' => '指定された labor は存在しません。'], 422);
+                    }
+                }
+                $validated['laborID'] = $laborId;
             }
 
             if (LoanerStatusFlow::isShipPrepCompleteStatus($targetStatus)) {
@@ -660,7 +677,15 @@ class LoanerRecordController extends Controller
                 : $record->orderDate;
             $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId, $orderDate);
 
+            // laborID は fill 後に明示セット（欠落・上書き漏れ防止）
+            if (array_key_exists('laborID', $validated)) {
+                $recordPayload['laborID'] = $validated['laborID'];
+            }
+
             $record->fill($recordPayload);
+            if (array_key_exists('laborID', $validated)) {
+                $record->laborID = $validated['laborID'];
+            }
             $record->lastEditPerson = $request->user()?->kanji_name;
             $record->lastEditDate = now();
             $record->save();

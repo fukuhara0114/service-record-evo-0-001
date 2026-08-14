@@ -8,7 +8,7 @@
             <div class="header-actions">
                 <span v-if="success" class="save-message success">{{ success }}</span>
                 <span v-if="error" class="save-message error">{{ error }}</span>
-                <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
+                <button type="button" class="btn btn-primary" :disabled="saving" @click="save()">
                     {{ saving ? '保存中...' : '保存' }}
                 </button>
                 <button type="button" class="btn btn-secondary" :disabled="saving" @click="closePage">閉じる</button>
@@ -168,7 +168,7 @@
                                     :value="laborDisplayLabel"
                                     type="text"
                                     readonly
-                                    title="受け入れ確認中のみ設定できます"
+                                    title="返却(393)のときのみ設定できます"
                                 >
                             </label>
                         </div>
@@ -562,7 +562,7 @@
                 <h3 id="promotion-modal-title">繰り上がり候補</h3>
                 <p class="promotion-lead">
                     <template v-if="promotionFromLending">
-                        貸出中（status 400）へ進み、機材を在庫に戻しました。予約の繰り上げはありますか？（同機種: {{ record.productName }}）
+                        完了（status 400）へ進み、機材を在庫に戻しました。予約の繰り上げはありますか？（同機種: {{ record.productName }}）
                     </template>
                     <template v-else>
                         機材が在庫に戻ったため、同機種（{{ record.productName }}）の waiting_list に繰り上がり候補があります。
@@ -650,18 +650,22 @@ const props = defineProps({
     statusFlow: {
         type: Object,
         default: () => ({
-            steps: [0, 100, 150, 300, 350, 400, 450, 396],
+            steps: [0, 100, 150, 300, 393, 396, 399, 400],
             checkStatusId: 650,
             completeStatusId: 400,
             stockStatusId: 0,
+            unregisteredStatusId: 20,
             lendingStatusId: 400,
             activeListStatusMax: 400,
-            laborEditableStatusId: 396,
+            laborEditableStatusId: 393,
+            returnedStatusId: 393,
             acceptanceStatusId: 396,
+            preCompleteStatusId: 399,
+            shipPrepStatusId: 200,
             shipPrepCompleteStatusId: 300,
             shipPrepRemandStatusId: 201,
             shipRequestStatusId: 350,
-            adminNextBlockedStatusIds: [350],
+            nextDisabledExactStatusIds: [396],
         }),
     },
     labors: { type: Array, default: () => [] },
@@ -883,17 +887,24 @@ const displayPrice = computed(() => basePrice.value - discountAmount.value)
 
 const statuses = computed(() => props.statuses ?? [])
 const labors = computed(() => props.labors ?? [])
-const flowSteps = computed(() => (props.statusFlow?.steps ?? [0, 100, 150, 300, 350, 400, 450, 396]).map(Number))
 const stockStatusId = computed(() => Number(props.statusFlow?.stockStatusId ?? 0))
+const unregisteredStatusId = computed(() => Number(props.statusFlow?.unregisteredStatusId ?? 20))
+const quoteDoneStatusId = computed(() => 100)
+const orderedStatusId = computed(() => 150)
+const shipPrepStatusId = computed(() => Number(props.statusFlow?.shipPrepStatusId ?? 200))
 const laborEditableStatusId = computed(() => Number(
     props.statusFlow?.laborEditableStatusId
-    ?? props.statusFlow?.acceptanceStatusId
-    ?? 396,
+    ?? props.statusFlow?.returnedStatusId
+    ?? 393,
+))
+const returnedStatusId = computed(() => Number(
+    props.statusFlow?.returnedStatusId ?? laborEditableStatusId.value ?? 393,
 ))
 const acceptanceStatusId = computed(() => Number(
-    props.statusFlow?.acceptanceStatusId
-    ?? laborEditableStatusId.value
-    ?? 396,
+    props.statusFlow?.acceptanceStatusId ?? 396,
+))
+const preCompleteStatusId = computed(() => Number(
+    props.statusFlow?.preCompleteStatusId ?? 399,
 ))
 const completeStatusId = computed(() => Number(
     props.statusFlow?.completeStatusId ?? 400,
@@ -904,12 +915,6 @@ const shipPrepCompleteStatusId = computed(() => Number(
 const shipPrepRemandStatusId = computed(() => Number(
     props.statusFlow?.shipPrepRemandStatusId ?? 201,
 ))
-const adminNextBlockedStatusIds = computed(() => {
-    const raw = props.statusFlow?.adminNextBlockedStatusIds
-    if (Array.isArray(raw) && raw.length) return raw.map(Number)
-    const shipRequestId = Number(props.statusFlow?.shipRequestStatusId ?? 350)
-    return [shipRequestId]
-})
 
 const currentStatusLabel = computed(() => {
     const id = form.status === '' ? null : Number(form.status)
@@ -928,29 +933,65 @@ const laborDisplayLabel = computed(() => {
     return row ? `${row.laborName} (${row.laborID})` : String(form.laborID)
 })
 
+const isEngineerContext = computed(() => {
+    if (typeof window === 'undefined') return false
+    try {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('from') === 'engineer') return true
+        const returnUrl = safeReturnUrl()
+        if (returnUrl && /\/servicerecord\/engineer(?:\/|$|\?)/.test(returnUrl)) return true
+    } catch {
+        // ignore
+    }
+    return false
+})
+
+function isNextButtonDisabledStatus(status) {
+    const current = Number(status)
+    if (!Number.isFinite(current)) return true
+    // 300以上393未満は disable
+    if (current >= shipPrepCompleteStatusId.value && current < returnedStatusId.value) return true
+    // 受け入れ確認中(396): admin は disable、Engineer は enable
+    if (current === acceptanceStatusId.value && !isEngineerContext.value) return true
+    return false
+}
+
+function resolveNextStatusId(current) {
+    if (current === stockStatusId.value || current === unregisteredStatusId.value) {
+        return quoteDoneStatusId.value
+    }
+    if (current === quoteDoneStatusId.value) {
+        return orderedStatusId.value
+    }
+    if (
+        current === orderedStatusId.value
+        || current === shipPrepStatusId.value
+        || current === shipPrepRemandStatusId.value
+    ) {
+        return shipPrepCompleteStatusId.value
+    }
+    if (current === returnedStatusId.value) {
+        return acceptanceStatusId.value
+    }
+    // Engineer: 受け入れ確認中(396) → 完了前、予約確認(399)
+    if (current === acceptanceStatusId.value && isEngineerContext.value) {
+        return preCompleteStatusId.value
+    }
+    if (current === preCompleteStatusId.value) {
+        return completeStatusId.value
+    }
+    return null
+}
+
 const nextStatusOption = computed(() => {
     if (props.record.order_type !== 'loaner') return null
     const current = form.status === '' ? null : Number(form.status)
     if (current == null || Number.isNaN(current)) return null
-    // admin: 350（出荷依頼）にいるときは「次へ」不可
-    if (adminNextBlockedStatusIds.value.includes(current)) return null
+    if (isNextButtonDisabledStatus(current)) return null
 
-    let nextId = null
-    // 差戻(201) はメインフロー外。次へで起伝依頼(300)へ復帰
-    if (current === shipPrepRemandStatusId.value) {
-        nextId = shipPrepCompleteStatusId.value
-    } else if (current === acceptanceStatusId.value) {
-        // 受け入れ確認中 → 完了(400)
-        nextId = completeStatusId.value
-    } else {
-        const steps = flowSteps.value
-        const index = steps.indexOf(current)
-        if (index < 0 || index >= steps.length - 1) return null
-        nextId = steps[index + 1]
-    }
+    const nextId = resolveNextStatusId(current)
+    if (nextId == null) return null
 
-    // admin: 350（出荷依頼）などへの「次へ」遷移は不可
-    if (adminNextBlockedStatusIds.value.includes(Number(nextId))) return null
     const row = statuses.value.find(item => Number(item.processID_new) === nextId)
     return {
         id: nextId,
@@ -966,10 +1007,22 @@ function maybePrefillLaborForAcceptance() {
     }
 }
 
-function advanceStatus() {
-    if (!nextStatusOption.value) return
+async function advanceStatus() {
+    if (!nextStatusOption.value || saving.value) return
     const previousStatus = form.status
+    const fromStatus = Number(previousStatus)
     const nextId = Number(nextStatusOption.value.id)
+    // status 変更前に labor を退避（次へ後に select が消えて値が欠けるのを防ぐ）
+    const laborSnapshot = form.laborID == null ? '' : String(form.laborID)
+
+    // 返却(393) から進めるときは labor 必須
+    if (fromStatus === laborEditableStatusId.value) {
+        if (!laborSnapshot || laborSnapshot === '0') {
+            error.value = '返却担当の labor を選択してください。'
+            return
+        }
+    }
+
     if (nextId === shipPrepCompleteStatusId.value) {
         suppressStatusWatch = true
         form.status = String(nextId)
@@ -979,8 +1032,22 @@ function advanceStatus() {
         openShippingDateDialog(previousStatus ?? '')
         return
     }
-    form.status = String(nextId)
-    maybePrefillLaborForAcceptance()
+
+    // status は保存成功後に更新。labor は snapshot を明示送信
+    const saved = await save({
+        statusOverride: nextId,
+        laborOverride: fromStatus === laborEditableStatusId.value ? laborSnapshot : undefined,
+    })
+    if (saved) {
+        form.laborID = laborSnapshot
+        // Engineer: 次へで 399（完了前、予約確認）になったら詳細を閉じる
+        if (isEngineerContext.value && nextId === preCompleteStatusId.value) {
+            closePage()
+        }
+    } else if (String(form.status) !== String(previousStatus)) {
+        // 失敗時に status が変わっていれば戻す
+        form.status = String(previousStatus ?? '')
+    }
 }
 
 function openShippingDateDialog(previousStatus = null) {
@@ -1001,7 +1068,7 @@ function onShippingDialogClose() {
     statusBeforeShippingDialog.value = null
 }
 
-function onShippingConfirm({ shippingOut_requiredDate }) {
+async function onShippingConfirm({ shippingOut_requiredDate }) {
     form.shippingOut_requiredDate = shippingOut_requiredDate || ''
     suppressStatusWatch = true
     form.status = String(shipPrepCompleteStatusId.value)
@@ -1010,7 +1077,7 @@ function onShippingConfirm({ shippingOut_requiredDate }) {
     })
     statusBeforeShippingDialog.value = null
     showShippingDialog.value = false
-    success.value = '発送予定日を設定しました。保存してください。'
+    await save()
 }
 
 watch(() => form.status, (status, previousStatus) => {
@@ -1549,39 +1616,56 @@ async function deleteFile() {
     }
 }
 
-async function save() {
+async function save(options = {}) {
+    // @click="save" だと MouseEvent が渡るため、素のオブジェクト以外は無視する
+    const opts = (options && typeof options === 'object' && !('isTrusted' in options))
+        ? options
+        : {}
+
     error.value = ''
     success.value = ''
-    const savingStatus = Number(form.status)
+    const statusOverride = opts.statusOverride
+    const laborOverride = opts.laborOverride
+    const savingStatus = statusOverride != null && statusOverride !== ''
+        ? Number(statusOverride)
+        : Number(form.status)
+    const laborToSave = laborOverride != null && laborOverride !== undefined
+        ? String(laborOverride)
+        : (form.laborID == null ? '' : String(form.laborID))
+    const savingAtReturned = savingStatus === laborEditableStatusId.value
+        || Number(opts.preserveLaborFromStatus) === laborEditableStatusId.value
+        || Number(form.status) === laborEditableStatusId.value
+
     if (Number.isFinite(savingStatus) && savingStatus >= 300 && tbcNotesCount.value > 0) {
-        if (!window.confirm('要確認事項があります')) return
+        if (!window.confirm('要確認事項があります')) return false
     }
     if (form.plannedSentDate && form.plannedReturnedDate && form.plannedReturnedDate < form.plannedSentDate) {
         error.value = '予定終了日は予定開始日以降にしてください。'
-        return
+        return false
     }
     if (form.sentDate && form.returnedDate && form.returnedDate < form.sentDate) {
         error.value = '実終了日は実開始日以降にしてください。'
-        return
+        return false
     }
-    if (isLaborEditable.value && (!form.laborID || form.laborID === '')) {
-        error.value = '受け入れ確認担当の labor を選択してください。'
-        return
+    if (savingAtReturned && (!laborToSave || laborToSave === '0')) {
+        error.value = '返却担当の labor を選択してください。'
+        return false
     }
-    if (Number(form.status) === shipPrepCompleteStatusId.value && !form.shippingOut_requiredDate) {
+    if (savingStatus === shipPrepCompleteStatusId.value && !form.shippingOut_requiredDate) {
         error.value = 'status が「貸出機出荷準備完了＿起伝依頼」のときは発送予定日を設定してください。'
         openShippingDateDialog()
-        return
+        return false
     }
 
     const payload = { ...form }
     payload.parentID = numericNullable(form.parentID)
     payload.loanerID = numericNullable(form.loanerID)
-    payload.status = numericNullable(form.status)
-    if (isLaborEditable.value) {
-        payload.laborID = numericNullable(form.laborID)
-        // 受け入れ確認中 + labor 設定済み → receivedDate を本日で保存
-        if (payload.laborID != null && payload.laborID !== '') {
+    payload.status = Number.isFinite(savingStatus) ? savingStatus : numericNullable(form.status)
+
+    // laborID は常に明示送信（未選択時のみ省略）。返却時は必須。
+    if (laborToSave !== '') {
+        payload.laborID = Number(laborToSave)
+        if (savingAtReturned && Number.isFinite(payload.laborID) && payload.laborID !== 0) {
             payload.receivedDate = new Intl.DateTimeFormat('en-CA', {
                 timeZone: 'Asia/Tokyo',
                 year: 'numeric',
@@ -1592,11 +1676,16 @@ async function save() {
     } else {
         delete payload.laborID
     }
+
     payload.discount_service = numericNullable(form.discount_service) ?? 0
     payload.price = basePrice.value
     Object.keys(payload).forEach((key) => {
         if (typeof payload[key] === 'string') payload[key] = nullable(payload[key])
     })
+    // laborID を再確定（forEach 後も数値で送る）
+    if (laborToSave !== '') {
+        payload.laborID = Number(laborToSave)
+    }
     if (!props.dateFields.hasPlannedSent) delete payload.plannedSentDate
     if (!props.dateFields.hasPlannedReturned) delete payload.plannedReturnedDate
 
@@ -1610,14 +1699,24 @@ async function save() {
                 body: JSON.stringify(payload),
             },
         )
-        if (!result) return
+        if (!result) return false
         const { response, data } = result
         if (!response.ok) throw new Error(validationError(data, `保存に失敗しました。（HTTP ${response.status}）`))
         syncCurrentDates(data.attached, data.record)
         if (data.record?.status != null && data.record.status !== '') {
             form.status = String(data.record.status)
+        } else if (statusOverride != null && statusOverride !== '') {
+            form.status = String(statusOverride)
         }
-        if (data.record && Object.prototype.hasOwnProperty.call(data.record, 'laborID')) {
+        if (laborToSave !== '') {
+            // 送信した labor を優先（レスポンス欠落や 0 上書きを防ぐ）
+            const savedLabor = data.record?.laborID
+            if (savedLabor != null && savedLabor !== '' && Number(savedLabor) !== 0) {
+                form.laborID = String(savedLabor)
+            } else {
+                form.laborID = laborToSave
+            }
+        } else if (data.record && Object.prototype.hasOwnProperty.call(data.record, 'laborID')) {
             form.laborID = data.record.laborID == null || data.record.laborID === ''
                 ? ''
                 : String(data.record.laborID)
@@ -1633,8 +1732,10 @@ async function save() {
             promotionFromCheck.value = promotionFromLending.value
             promotionModalOpen.value = true
         }
+        return true
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
+        return false
     } finally {
         saving.value = false
     }
@@ -1642,6 +1743,10 @@ async function save() {
 
 function closePromotionModal() {
     promotionModalOpen.value = false
+    // 次へで完了(400)にした後、予約ダイアログを閉じたら詳細も閉じる
+    if (Number(form.status) === completeStatusId.value) {
+        closePage()
+    }
 }
 
 function openPromotionCandidate(candidate) {

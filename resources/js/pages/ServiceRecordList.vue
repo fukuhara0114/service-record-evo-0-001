@@ -14,6 +14,11 @@
                         @click="orderTypeFilter = 'service'"
                     >
                         service
+                        <span
+                            v-if="serviceRemandBadgeCount > 0"
+                            class="order-type-badge"
+                            :title="`差戻: ${serviceRemandBadgeCount}件`"
+                        >{{ serviceRemandBadgeCount }}</span>
                     </button>
                     <button
                         type="button"
@@ -46,6 +51,11 @@
                         @click="orderTypeFilter = 'loaner'"
                     >
                         loaner
+                        <span
+                            v-if="loanerReturnedBadgeCount > 0"
+                            class="order-type-badge"
+                            :title="`返却: ${loanerReturnedBadgeCount}件`"
+                        >{{ loanerReturnedBadgeCount }}</span>
                     </button>
                     <button
                         type="button"
@@ -54,6 +64,11 @@
                         @click="orderTypeFilter = 'waiting_list'"
                     >
                         waiting
+                        <span
+                            v-if="waitingPromotionReadyBadgeCount > 0"
+                            class="order-type-badge"
+                            :title="`繰上可: ${waitingPromotionReadyBadgeCount}件`"
+                        >{{ waitingPromotionReadyBadgeCount }}</span>
                     </button>
                     <button
                         type="button"
@@ -426,7 +441,7 @@
                     <button
                         type="button"
                         class="abroad-excel-btn abroad-sync-sm-btn"
-                        :disabled="abroadSelectedCount === 0 || abroadSyncSmBusy"
+                        :disabled="abroadSyncSmBusy"
                         @click="syncSmSelected"
                     >
                         Sync SM{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
@@ -511,10 +526,10 @@
                     <tr v-else-if="orderTypeFilter === 'loaner'">
                         <th style="width: 80px; text-align: center;">orderID</th>
                         <th style="width: 80px; text-align: center;">parentID</th>
+                        <th>status</th>
                         <th>productName</th>
                         <th>item</th>
                         <th>SN</th>
-                        <th>status</th>
                         <th>dealer</th>
                         <th>dealer_depart</th>
                         <th>contactPerson</th>
@@ -654,10 +669,17 @@
                         <template v-else-if="orderTypeFilter === 'loaner'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td style="text-align: center;">{{ r.parentID }}</td>
+                            <td>
+                                <span
+                                    v-if="loanerStatusBadgeClass(r)"
+                                    class="loaner-status-badge"
+                                    :class="loanerStatusBadgeClass(r)"
+                                >{{ statusLabel(r) }}</span>
+                                <template v-else>{{ statusLabel(r) }}</template>
+                            </td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.item || '' }}</td>
                             <td>{{ r.SN }}</td>
-                            <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.dealer }}</td>
                             <td>{{ r.dealer_depart }}</td>
                             <td>{{ r.contactPerson }}</td>
@@ -705,7 +727,14 @@
                             <td>{{ r.phone }}</td>
                         </template>
                         <template v-else>
-                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center; font-weight: bold;">
+                                <span
+                                    v-if="isRemandRecord(r)"
+                                    class="remand-order-badge"
+                                    title="差戻"
+                                >{{ r.orderID }}</span>
+                                <template v-else>{{ r.orderID }}</template>
+                            </td>
                             <td>{{ r.receivedDate }}</td>
                             <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
@@ -992,6 +1021,10 @@ const props = defineProps({
     returnCodes: Array,
     labors: Array,
     mode: String,
+    tabBadgeCounts: {
+        type: Object,
+        default: () => ({ loanerReturned: 0, waitingPromotionReady: 0, serviceRemand: 0 }),
+    },
 })
 
 const page = usePage()
@@ -1003,6 +1036,16 @@ const isRestrictedListMode = computed(() =>
 const boardStatusFilter = computed(() => (
     props.mode === 'shippingPrep' ? '300,385' : '300,350'
 ))
+
+const loanerReturnedBadgeCount = computed(() =>
+    Number(props.tabBadgeCounts?.loanerReturned ?? 0) || 0,
+)
+const waitingPromotionReadyBadgeCount = computed(() =>
+    Number(props.tabBadgeCounts?.waitingPromotionReady ?? 0) || 0,
+)
+const serviceRemandBadgeCount = computed(() =>
+    Number(props.tabBadgeCounts?.serviceRemand ?? 0) || 0,
+)
 
 const currentUserKanji = computed(() => {
     const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
@@ -1326,16 +1369,140 @@ async function onEntityIdBlur(record, event) {
     }
 }
 
-async function syncSmSelected() {
-    if (abroadSelectedIds.value.size === 0 || abroadSyncSmBusy.value) return
-    abroadSyncSmBusy.value = true
-    abroadExcelMessage.value = ''
-    try {
-        // Sync SM API 未接続: UI と選択件数のみ反映
-        abroadExcelMessage.value = `Sync SM: ${abroadSelectedIds.value.size} 件を選択中（同期処理は未接続）`
-    } finally {
-        abroadSyncSmBusy.value = false
+function exportIncidentParamJson(theUserNameKanji) {
+    console.log('commonScript::exportIncidentParamJson was called')
+
+    const rows = filteredRecords.value
+    if (!rows.length) {
+        alert('データテーブルが表示されていません。')
+        return
     }
+
+    const jsonData = []
+    for (const r of rows) {
+        if (!isAbroadSelected(r.orderID)) continue
+
+        const orderID = String(r.orderID ?? '').trim()
+        const incident = String(r.incident ?? '').trim()
+        const entityID = String(r.entityID ?? '').trim()
+        const sn = String(r.SN ?? '').trim()
+        const symptoms = String(r.symptoms ?? '').trim()
+        const poNum = String(r.poNum ?? r.RMA ?? '').trim()
+        const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
+        const returnCode = String(r.return_code_master?.description ?? '').trim()
+
+        if (!entityID || !symptoms || !symptomNum || !returnCode || !incident) {
+            alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
+            return
+        }
+
+        if (entityID.includes(',') || entityID.includes('，') || entityID.includes('、')) {
+            alert('entityIDがカンマ区切りで複数含まれている案件があります,何れかを選択して下さい')
+            return
+        }
+
+        jsonData.push({
+            orderID,
+            incident,
+            entityID,
+            SN: sn,
+            symptomNum,
+            returnCode,
+            symptoms,
+            poNum,
+        })
+    }
+
+    if (jsonData.length === 0) {
+        alert('「Sel」列にチェックが入っている行がありません。出力したいデータの「Sel」にチェックを入れてください。')
+        return
+    }
+
+    const finalOutput = {
+        sm_mode: 'rma_wo',
+        who_exported: theUserNameKanji,
+        param: jsonData,
+    }
+
+    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
+    window.location.href = `smsync://action?json=${encodedJson}`
+}
+
+function exportUpdatePoParamJson(theUserNameKanji) {
+    console.log('commonScript::exportUpdatePoParamJson was called')
+
+    const rows = filteredRecords.value
+    if (!rows.length) {
+        alert('データテーブルが表示されていません。')
+        return
+    }
+
+    const jsonData = []
+    for (const r of rows) {
+        if (!isAbroadSelected(r.orderID)) continue
+
+        const orderID = String(r.orderID ?? '').trim()
+        const entityID = String(r.entityID ?? '').trim()
+        const sn = String(r.SN ?? '').trim()
+        const RMA = String(r.RMA ?? '').trim()
+        const WO = String(r.sm_workorder ?? '').trim()
+        const symptoms = String(r.symptoms ?? '').trim()
+        const poNum = String(r.poNum ?? '').trim()
+        const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
+        const returnCode = String(r.return_code_master?.description ?? '').trim()
+
+        if (!entityID || !symptoms || !symptomNum || !returnCode || !RMA || !WO || !poNum) {
+            alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
+            console.log('symptoms : ' + symptoms)
+            console.log('symptomNum : ' + symptomNum)
+            console.log('RMA : ' + RMA)
+            console.log('WO : ' + WO)
+            console.log('returnCode : ' + returnCode)
+            console.log('poNum : ' + poNum)
+            return
+        }
+
+        if (entityID.includes(',') || entityID.includes('，') || entityID.includes('、')) {
+            alert('entityIDがカンマ区切りで複数含まれている案件があります,何れかを選択して下さい')
+            return
+        }
+
+        jsonData.push({
+            orderID,
+            entityID,
+            SN: sn,
+            RMA,
+            WO,
+            symptomNum,
+            returnCode,
+            symptoms,
+            poNum,
+        })
+    }
+
+    if (jsonData.length === 0) {
+        alert('「Sel」列にチェックが入っている行がありません。出力したいデータの「Sel」にチェックを入れてください。')
+        return
+    }
+
+    const finalOutput = {
+        sm_mode: 'update_po',
+        who_exported: theUserNameKanji,
+        param: jsonData,
+    }
+
+    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
+    window.location.href = `smsync://action?json=${encodedJson}`
+}
+
+function syncSmSelected() {
+    if (abroadSyncSmBusy.value) return
+    const userName = currentUserKanji.value
+    if (orderTypeFilter.value === 'update_sm') {
+        exportUpdatePoParamJson(userName)
+        return
+    }
+    exportIncidentParamJson(userName)
 }
 
 async function refreshSmListData() {
@@ -1408,8 +1575,8 @@ function saveBoardViewPrefs(mode, viewMode, calendarOnLeft) {
 
 const savedBoardView = isBoardMode.value ? loadBoardViewPrefs(props.mode) : null
 const logisticsViewMode = ref(
-    savedBoardView?.viewMode ?? (isBoardMode.value ? 'calendar' : 'both'),
-) // list | both | calendar
+    savedBoardView?.viewMode ?? (isBoardMode.value ? 'list' : 'both'),
+) // list | both | calendar — Logistics / 出荷準備のデフォルトは一覧のみ
 const logisticsCalendarOnLeft = ref(savedBoardView?.calendarOnLeft ?? false)
 const logisticsCalendarRef = ref(null)
 const logisticsAutoRefreshTimer = ref(null)
@@ -1511,14 +1678,35 @@ function matchesArrivalFilter(record, filter) {
     return true
 }
 
-function sortByShippingOutRequiredDateDesc(records) {
+/** 出荷予定日の降順 → dealer のあいうえお順 */
+function sortByShippingOutDescThenDealer(records) {
     return [...records].sort((a, b) => {
         const da = formatListDate(a?.shippingOut_requiredDate) || ''
         const db = formatListDate(b?.shippingOut_requiredDate) || ''
-        if (da === db) return 0
-        if (!da) return 1
-        if (!db) return -1
-        return db.localeCompare(da)
+        if (da !== db) {
+            if (!da) return 1
+            if (!db) return -1
+            const byDate = db.localeCompare(da)
+            if (byDate !== 0) return byDate
+        }
+        const dealerA = String(a?.dealer ?? '')
+        const dealerB = String(b?.dealer ?? '')
+        return dealerA.localeCompare(dealerB, 'ja')
+    })
+}
+
+function sortByStatusAscThenOrderId(records) {
+    return [...records].sort((a, b) => {
+        const statusA = Number(a?.status)
+        const statusB = Number(b?.status)
+        const sa = Number.isFinite(statusA) ? statusA : Number.POSITIVE_INFINITY
+        const sb = Number.isFinite(statusB) ? statusB : Number.POSITIVE_INFINITY
+        if (sa !== sb) return sa - sb
+        const idA = Number(a?.orderID)
+        const idB = Number(b?.orderID)
+        const oa = Number.isFinite(idA) ? idA : 0
+        const ob = Number.isFinite(idB) ? idB : 0
+        return oa - ob
     })
 }
 
@@ -1599,12 +1787,15 @@ const filteredRecords = computed(() => {
         }
     }
 
-    const sortByShippingDesc =
-        props.mode === 'shippingPrep'
+    const sortByShippingAndDealer =
+        props.mode === 'logistics'
+        || props.mode === 'shippingPrep'
         || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
 
-    if (sortByShippingDesc) {
-        records = sortByShippingOutRequiredDateDesc(records)
+    if (sortByShippingAndDealer) {
+        records = sortByShippingOutDescThenDealer(records)
+    } else if (!isBoardMode.value && orderTypeFilter.value === 'loaner') {
+        records = sortByStatusAscThenOrderId(records)
     }
 
     return records
@@ -2087,6 +2278,16 @@ function statusLabel(record) {
     return record.status_master?.status || ''
 }
 
+/** loaner 一覧で強調表示する status（返却 / 受け入れ確認中 / 完了前、予約確認） */
+function loanerStatusBadgeClass(record) {
+    if (record?.order_type !== 'loaner') return ''
+    const status = Number(record?.status)
+    if (status === 393) return 'loaner-status-badge--returned'
+    if (status === 396) return 'loaner-status-badge--acceptance'
+    if (status === 399) return 'loaner-status-badge--pre-complete'
+    return ''
+}
+
 function engineerOrderTypeLabel(record) {
     return record?.order_type === 'loaner' ? '貸出機チェック' : 'サービス案件'
 }
@@ -2103,6 +2304,11 @@ function formatListDate(value) {
 
 function isPromotionReady(record) {
     return record?.promotion_ready_at != null && record.promotion_ready_at !== ''
+}
+
+function isRemandRecord(record) {
+    const value = record?.remand
+    return value === 1 || value === '1' || value === true
 }
 
 function promotionRowTitle(record) {
@@ -2256,12 +2462,24 @@ async function openSecondLayer(record) {
         return
     }
 
-    // loaner / waiting_list フィルター選択中は貸出案件詳細ページへ遷移
-    if (orderTypeFilter.value === 'loaner' || orderTypeFilter.value === 'waiting_list') {
+    // 貸出詳細へ行くのは、実データの order_type が loaner/waiting_list のときだけ。
+    // Engineer では orderTypeFilter が session に残っていても service は通常詳細を開く。
+    const isLoanerLike =
+        record.order_type === 'loaner'
+        || record.order_type === 'waiting_list'
+    const openAsLoanerDetail = isLoanerLike && (
+        orderTypeFilter.value === 'loaner'
+        || orderTypeFilter.value === 'waiting_list'
+        || props.mode === 'engineer'
+    )
+    if (openAsLoanerDetail) {
         let returnUrl = typeof window !== 'undefined' ? window.location.href : ''
         try {
             const url = new URL(returnUrl || window.location.href)
-            url.searchParams.set('orderType', orderTypeFilter.value)
+            url.searchParams.set(
+                'orderType',
+                record.order_type === 'waiting_list' ? 'waiting_list' : 'loaner',
+            )
             if (ARRIVAL_FILTERS.includes(arrivalFilter.value) && arrivalFilter.value !== 'hide_future') {
                 url.searchParams.set('arrival', arrivalFilter.value)
             } else {
@@ -2271,7 +2489,10 @@ async function openSecondLayer(record) {
         } catch {
             // keep original returnUrl
         }
-        const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
+        const qs = new URLSearchParams()
+        if (returnUrl) qs.set('returnUrl', returnUrl)
+        if (props.mode === 'engineer') qs.set('from', 'engineer')
+        const params = qs.toString() ? `?${qs.toString()}` : ''
         window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${record.orderID}${params}`
         return
     }
@@ -2490,7 +2711,7 @@ function reloadListRecords(options = {}) {
 
     return new Promise((resolve) => {
         router.reload({
-            only: ['initialRecords'],
+            only: ['initialRecords', 'tabBadgeCounts'],
             preserveState,
             preserveScroll: true,
             onFinish: () => resolve(),
@@ -2648,6 +2869,7 @@ async function saveRecord() {
                 mapics47: draftRecord.value.mapics47,
                 preData: draftRecord.value.preData,
                 postData: draftRecord.value.postData,
+                remand: draftRecord.value.remand === 1 || draftRecord.value.remand === '1' || draftRecord.value.remand === true ? 1 : 0,
             }),
         })
 
@@ -2774,6 +2996,8 @@ async function saveRecord() {
     gap: 6px;
     flex-wrap: nowrap;
     justify-content: flex-start;
+    overflow: visible;
+    padding-top: 4px;
 }
 
 .arrival-date-filters {
@@ -2784,6 +3008,7 @@ async function saveRecord() {
 }
 
 .order-type-btn {
+    position: relative;
     padding: 6px 12px;
     border: 1px solid #64748b;
     border-radius: 4px;
@@ -2808,6 +3033,28 @@ async function saveRecord() {
 
 .order-type-btn.active:disabled {
     opacity: 0.85;
+}
+
+.order-type-badge {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px #fff;
+    pointer-events: none;
+}
+
+.order-type-btn.active .order-type-badge {
+    box-shadow: 0 0 0 2px #2563eb;
 }
 
 .search-area {
@@ -3474,6 +3721,43 @@ async function saveRecord() {
     font-weight: 700;
     letter-spacing: 0.02em;
     white-space: nowrap;
+}
+
+.remand-order-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.loaner-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.loaner-status-badge--returned {
+    background: #dc2626;
+    color: #fff;
+}
+
+.loaner-status-badge--acceptance {
+    background: #facc15;
+    color: #111827;
+}
+
+.loaner-status-badge--pre-complete {
+    background: #7dd3fc;
+    color: #0c4a6e;
 }
 
 .active-row td {

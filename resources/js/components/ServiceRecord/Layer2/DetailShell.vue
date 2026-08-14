@@ -3,54 +3,88 @@
     <div class="detail-overlay">
         <div class="detail-panel">
             <div class="detail-header">
-                <div class="layout-tabs">
-                    <template v-if="mode === 'engineer'">
-                        <span class="engineer-title">Engineer 詳細</span>
-                    </template>
-                    <template v-else-if="mode === 'logistics' || layout === 'logistics'">
-                        <span class="closing-title">Logistics 詳細</span>
-                    </template>
-                    <template v-else-if="layout === 'closing'">
-                        <span class="closing-title">Closing 詳細</span>
-                    </template>
-                    <template v-else-if="layout === 'invoice'">
-                        <span class="closing-title">Invoice 詳細</span>
-                    </template>
-                    <template v-else>
+                <template v-if="isAdminServiceDetail">
+                    <div class="header-left">
+                        <span class="service-detail-badge">Service詳細</span>
+                        <div class="header-summary">
+                            <span class="header-summary-item">OrderID: {{ record?.orderID }}</span>
+                            <span class="header-summary-item">{{ headerDealer }}</span>
+                            <span class="header-summary-item">{{ headerProductName }}</span>
+                            <span class="header-summary-item">SN: {{ headerSn }}</span>
+                            <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
+                        </div>
+                    </div>
+                    <div class="header-center-actions">
+                        <p v-if="saveError" class="save-error">{{ saveError }}</p>
                         <button
-                            v-for="tab in ['A', 'B', 'C']"
-                            :key="tab"
+                            type="button"
+                            class="save-btn"
+                            :disabled="savingRecord"
+                            @click="$emit('save')"
+                        >
+                            {{ savingRecord ? '保存中...' : '保存' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="remand-btn"
+                            :class="isRemandOn ? 'remand-on' : 'remand-off'"
+                            :title="isRemandOn ? '差戻 ON（クリックで OFF）' : '差戻 OFF（クリックで ON）'"
+                            @click="toggleRemand"
+                        >
+                            差戻
+                        </button>
+                    </div>
+                    <div class="detail-meta">
+                        <button
                             type="button"
                             class="tab-btn"
-                            :class="{ active: layout === tab }"
-                            @click="$emit('switch-layout', tab)"
+                            :class="{ active: layout === 'A' }"
+                            @click="$emit('switch-layout', 'A')"
                         >
-                            詳細 {{ tab }}
+                            詳細 A
                         </button>
-                    </template>
-                </div>
-                <div class="engineer-header-meta">
-                    <span class="header-summary-item">{{ headerDealer }}</span>
-                    <span class="header-summary-item">{{ headerProductName }}</span>
-                    <span class="header-summary-item"> SN: {{ headerSn }}</span>
-                    <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
-                </div>
-                <div class="detail-meta">
-                    <span>OrderID: {{ record?.orderID }}</span>
-                    <p v-if="saveError" class="save-error">{{ saveError }}</p>
-                    <button
-                        v-if="mode !== 'engineer' && mode !== 'logistics' && layout !== 'closing' && layout !== 'invoice' && layout !== 'logistics'"
-                        type="button"
-                        class="save-btn"
-                        :disabled="savingRecord"
-                        @click="$emit('save')"
-                    >
-                        {{ savingRecord ? '保存中...' : '保存' }}
-                    </button>
-                    <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">
-                        <span aria-hidden="true">×</span>
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            class="tab-btn"
+                            :class="{ active: layout === 'B' }"
+                            @click="$emit('switch-layout', 'B')"
+                        >
+                            詳細 B
+                        </button>
+                        <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
+                </template>
+                <template v-else>
+                    <div class="layout-tabs">
+                        <template v-if="mode === 'engineer'">
+                            <span class="engineer-title">Engineer 詳細</span>
+                        </template>
+                        <template v-else-if="mode === 'logistics' || layout === 'logistics'">
+                            <span class="closing-title">Logistics 詳細</span>
+                        </template>
+                        <template v-else-if="layout === 'closing'">
+                            <span class="closing-title">Closing 詳細</span>
+                        </template>
+                        <template v-else-if="layout === 'invoice'">
+                            <span class="closing-title">Invoice 詳細</span>
+                        </template>
+                    </div>
+                    <div class="header-summary">
+                        <span class="header-summary-item">{{ headerDealer }}</span>
+                        <span class="header-summary-item">{{ headerProductName }}</span>
+                        <span class="header-summary-item"> SN: {{ headerSn }}</span>
+                        <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
+                    </div>
+                    <div class="detail-meta">
+                        <span>OrderID: {{ record?.orderID }}</span>
+                        <p v-if="saveError" class="save-error">{{ saveError }}</p>
+                        <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
+                </template>
             </div>
 
             <div
@@ -242,6 +276,14 @@ defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', '
 
 const page = usePage()
 
+const isAdminServiceDetail = computed(() => (
+    props.mode !== 'engineer'
+    && props.mode !== 'logistics'
+    && props.layout !== 'closing'
+    && props.layout !== 'invoice'
+    && props.layout !== 'logistics'
+))
+
 function headerText(field) {
     const draft = props.draftRecord?.[field]
     if (draft !== undefined && draft !== null && draft !== '') return String(draft)
@@ -268,6 +310,16 @@ const headerReturnCodeLabel = computed(() => {
     const found = (page.props.returnCodes ?? []).find(item => String(item.id) === String(id))
     return found?.description || (id != null && id !== '' ? String(id) : '—')
 })
+
+const isRemandOn = computed(() => {
+    const value = props.draftRecord?.remand ?? props.record?.remand
+    return value === 1 || value === '1' || value === true
+})
+
+function toggleRemand() {
+    if (!props.draftRecord) return
+    props.draftRecord.remand = isRemandOn.value ? 0 : 1
+}
 </script>
 
 <style scoped>
@@ -300,11 +352,44 @@ const headerReturnCodeLabel = computed(() => {
     border-bottom: 2px solid #3b82f6;
 }
 
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.header-center-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.header-center-actions .remand-btn {
+    margin-left: 90px;
+}
+
 .layout-tabs {
     display: flex;
     gap: 8px;
     align-items: center;
     flex: 0 0 auto;
+}
+
+.service-detail-badge {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #16a34a;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .engineer-title {
@@ -314,7 +399,7 @@ const headerReturnCodeLabel = computed(() => {
     white-space: nowrap;
 }
 
-.engineer-header-meta {
+.header-summary {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
@@ -357,10 +442,12 @@ const headerReturnCodeLabel = computed(() => {
 
 .detail-meta {
     display: flex;
-    flex: 0 0 auto;
+    flex: 1 1 0;
     align-items: center;
-    gap: 16px;
+    justify-content: flex-end;
+    gap: 10px;
     white-space: nowrap;
+    min-width: 0;
 }
 
 .save-error {
@@ -369,18 +456,37 @@ const headerReturnCodeLabel = computed(() => {
     font-size: 12px;
 }
 
-.save-btn {
-    padding: 6px 12px;
-    background: #2563eb;
+.save-btn,
+.remand-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 112px;
+    padding: 6px 24px;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: 700;
+    text-align: center;
+}
+
+.save-btn {
+    background: #2563eb;
 }
 
 .save-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.remand-btn.remand-on {
+    background: #dc2626;
+}
+
+.remand-btn.remand-off {
+    background: #64748b;
 }
 
 .close-btn {
