@@ -132,11 +132,80 @@ class MaintenanceContractController extends Controller
         ]);
     }
 
+    /**
+     * 新規案件作成画面用: productName先頭3文字 / SN / dealer先頭4文字 で有効契約を検索
+     */
+    public function search(Request $request)
+    {
+        $validated = $request->validate([
+            'productName' => 'nullable|string|max:255',
+            'SN' => 'nullable|string|max:255',
+            'dealer' => 'nullable|string|max:255',
+        ]);
+
+        $productName = trim((string) ($validated['productName'] ?? ''));
+        $sn = trim((string) ($validated['SN'] ?? ''));
+        $dealer = trim((string) ($validated['dealer'] ?? ''));
+
+        $productPrefix = mb_substr($productName, 0, 3);
+        $dealerPrefix = mb_substr($dealer, 0, 4);
+
+        if ($productPrefix === '' && $sn === '' && $dealerPrefix === '') {
+            return response()->json([
+                'message' => 'productName / SN / dealer のいずれかを入力してください。',
+                'contracts' => [],
+            ], 422);
+        }
+
+        $today = Carbon::today()->toDateString();
+
+        $query = MaintenanceContractMaster::query()
+            ->with('maintenanceContractType:id,contractType,description')
+            ->whereNotNull('expireDate')
+            ->whereDate('expireDate', '>', $today);
+
+        if ($productPrefix !== '') {
+            $query->where('instrumentName', 'like', $this->likePrefix($productPrefix));
+        }
+        if ($sn !== '') {
+            $query->where('SN', 'like', $this->likeContains($sn));
+        }
+        if ($dealerPrefix !== '') {
+            $query->where('dealer', 'like', $this->likeContains($dealerPrefix));
+        }
+
+        $contracts = $query
+            ->orderBy('expireDate')
+            ->orderBy('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (MaintenanceContractMaster $row) => $this->serializeListRow($row))
+            ->values();
+
+        return response()->json([
+            'contracts' => $contracts,
+            'count' => $contracts->count(),
+            'filters' => [
+                'productNamePrefix' => $productPrefix,
+                'SN' => $sn,
+                'dealerPrefix' => $dealerPrefix,
+                'expireDateAfter' => $today,
+            ],
+        ]);
+    }
+
     private function likeContains(string $value): string
     {
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
 
         return '%' . $escaped . '%';
+    }
+
+    private function likePrefix(string $value): string
+    {
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+
+        return $escaped . '%';
     }
 
     private function serializeListRow(MaintenanceContractMaster $row): array

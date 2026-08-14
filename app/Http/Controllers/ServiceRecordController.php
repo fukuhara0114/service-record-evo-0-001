@@ -17,6 +17,7 @@ use App\Models\UnregisteredEmailNote;
 use App\Models\CapturedImage;
 use App\Models\LoanerMaster;
 use App\Models\Labor;
+use App\Models\MaintenanceContractMaster;
 use App\Models\ReturnCode;
 use App\Models\Status;
 use App\Services\EmlReplyDraftService;
@@ -2728,6 +2729,7 @@ class ServiceRecordController extends Controller
             'loanerOrderIds' => 'nullable|array',
             'loanerOrderIds.*' => 'integer',
             'order_type' => 'nullable|string|in:service,loaner',
+            'maintenanceContractId' => 'nullable|integer',
         ]);
 
         $orderType = ($validated['order_type'] ?? 'service') === 'loaner' ? 'loaner' : 'service';
@@ -2898,6 +2900,29 @@ class ServiceRecordController extends Controller
                         'lastEditPerson' => $user?->kanji_name,
                         'lastEditDate' => now(),
                     ]);
+            }
+
+            $maintenanceContractId = $validated['maintenanceContractId'] ?? null;
+            if ($maintenanceContractId !== null && $maintenanceContractId !== '') {
+                $contract = MaintenanceContractMaster::query()->find((int) $maintenanceContractId);
+                if ($contract) {
+                    $ref = trim((string) ($contract->RefNumber ?? ''));
+                    $start = optional($contract->startDate)->format('Y-m-d') ?: '—';
+                    $end = optional($contract->expireDate)->format('Y-m-d') ?: '—';
+                    $noteText = '保守契約番号：' . ($ref !== '' ? $ref : '—')
+                        . '、保守契約期間：' . $start . '～' . $end;
+
+                    AttachedNote::create([
+                        'associatedID' => $record->orderID,
+                        'note' => $noteText,
+                        'whoWrote' => $user?->kanji_name ?: 'unknown',
+                        'whenWrote' => now(),
+                        'important' => false,
+                        'personal' => false,
+                        'tbc' => null,
+                        'done' => null,
+                    ]);
+                }
             }
 
             return $record;

@@ -118,6 +118,16 @@
                         loaner案件検索
                         <span v-if="selectedLoaners.length">（{{ selectedLoaners.length }}）</span>
                     </button>
+                    <button
+                        v-if="!isLoanerCase"
+                        type="button"
+                        class="tab-btn tab-btn-action"
+                        role="button"
+                        :disabled="maintenanceSearchLoading"
+                        @click="searchMaintenanceContracts"
+                    >
+                        {{ maintenanceSearchLoading ? '検索中...' : '保守検索' }}
+                    </button>
                 </div>
 
                 <div v-show="activeTab === 'basic'" class="tab-panel" :class="{ 'tab-panel-loaner-basic': isLoanerCase }">
@@ -440,6 +450,72 @@
                                     <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
                                 </div>
                             </div>
+                        </section>
+
+                        <section
+                            v-if="maintenanceSearchDone || maintenanceContracts.length"
+                            class="info-card info-card-maintenance"
+                        >
+                            <div class="maintenance-header">
+                                <h3>保守契約検索結果</h3>
+                                <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                    {{ maintenanceContracts.length }}件
+                                </span>
+                                <button
+                                    v-if="selectedMaintenanceContractId"
+                                    type="button"
+                                    class="btn btn-secondary maintenance-clear-btn"
+                                    @click="clearMaintenanceSelection"
+                                >
+                                    選択解除
+                                </button>
+                            </div>
+                            <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
+                            <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
+                                <table class="maintenance-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 36px;"></th>
+                                            <th>dealer</th>
+                                            <th>契約種別</th>
+                                            <th>instrumentName</th>
+                                            <th>SN</th>
+                                            <th>開始</th>
+                                            <th>契約終了</th>
+                                            <th>RefNumber</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="row in maintenanceContracts"
+                                            :key="row.id"
+                                            :class="{ selected: isMaintenanceSelected(row.id) }"
+                                            @click="toggleMaintenanceSelection(row.id)"
+                                        >
+                                            <td style="text-align: center;" @click.stop>
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="isMaintenanceSelected(row.id)"
+                                                    @change="toggleMaintenanceSelection(row.id)"
+                                                >
+                                            </td>
+                                            <td>{{ row.dealer || '—' }}</td>
+                                            <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
+                                            <td>{{ row.instrumentName || '—' }}</td>
+                                            <td>{{ row.SN || '—' }}</td>
+                                            <td>{{ row.startDate || '—' }}</td>
+                                            <td>{{ row.expireDate || '—' }}</td>
+                                            <td>{{ row.RefNumber || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
+                                条件に一致する有効な保守契約はありません。
+                            </p>
+                            <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
+                                選択中の保守契約は保存時に Note として案件へ紐づけられます。
+                            </p>
                         </section>
                     </div>
                 </div>
@@ -848,6 +924,11 @@ const loanerAvailabilityChecking = ref(false)
 const waitingListAccepted = ref(false)
 const showWaitingConfirm = ref(false)
 const showLoanerStockDialog = ref(false)
+const maintenanceContracts = ref([])
+const selectedMaintenanceContractId = ref(null)
+const maintenanceSearchLoading = ref(false)
+const maintenanceSearchDone = ref(false)
+const maintenanceSearchError = ref('')
 
 const STAKEHOLDER_FIELDS = {
     dealer: ['dealer', 'dealer_depart', 'contactPerson', 'phone', 'email', 'zipcode', 'address1', 'address2'],
@@ -1427,6 +1508,72 @@ function switchToLoanerTab() {
     }
 }
 
+async function searchMaintenanceContracts() {
+    if (isLoanerCase.value) return
+
+    const productName = String(form.productName || '').trim()
+    const sn = String(form.SN || '').trim()
+    const dealer = String(form.dealer || '').trim()
+
+    if (!productName && !sn && !dealer) {
+        maintenanceSearchError.value = 'productName / SN / dealer のいずれかを入力してから検索してください。'
+        maintenanceSearchDone.value = true
+        maintenanceContracts.value = []
+        selectedMaintenanceContractId.value = null
+        activeTab.value = 'basic'
+        return
+    }
+
+    maintenanceSearchLoading.value = true
+    maintenanceSearchError.value = ''
+    maintenanceSearchDone.value = false
+    error.value = ''
+    activeTab.value = 'basic'
+
+    try {
+        const params = new URLSearchParams({
+            productName,
+            SN: sn,
+            dealer,
+        })
+        const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/search?${params.toString()}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data?.message || `保守検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        maintenanceContracts.value = Array.isArray(data.contracts) ? data.contracts : []
+        selectedMaintenanceContractId.value = null
+        maintenanceSearchDone.value = true
+    } catch (e) {
+        maintenanceContracts.value = []
+        selectedMaintenanceContractId.value = null
+        maintenanceSearchDone.value = true
+        maintenanceSearchError.value = e.message || '保守検索に失敗しました。'
+    } finally {
+        maintenanceSearchLoading.value = false
+    }
+}
+
+function isMaintenanceSelected(id) {
+    return String(selectedMaintenanceContractId.value ?? '') === String(id ?? '')
+}
+
+function toggleMaintenanceSelection(id) {
+    if (isMaintenanceSelected(id)) {
+        selectedMaintenanceContractId.value = null
+        return
+    }
+    selectedMaintenanceContractId.value = id
+}
+
+function clearMaintenanceSelection() {
+    selectedMaintenanceContractId.value = null
+}
+
 function addSelectedLoaner(record) {
     if (!record?.orderID) return
     if (record.parentID) {
@@ -1794,6 +1941,9 @@ async function save() {
                 deliveryDestination_address2: form.deliveryDestination_address2 || null,
                 loanerOrderIds: selectedLoaners.value.map(item => Number(item.orderID)),
                 order_type: resolvedOrderType.value,
+                maintenanceContractId: selectedMaintenanceContractId.value
+                    ? Number(selectedMaintenanceContractId.value)
+                    : null,
             }),
         })
 
@@ -1968,6 +2118,118 @@ async function save() {
 .tab-btn.active {
     color: #1d4ed8;
     border-bottom-color: #2563eb;
+}
+
+.tab-btn-action {
+    margin-left: auto;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    border-bottom: 1px solid #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 6px 12px;
+    align-self: center;
+}
+
+.tab-btn-action:hover:not(:disabled) {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.tab-btn-action:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.info-card-maintenance {
+    margin-top: 8px;
+}
+
+.maintenance-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.maintenance-header h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.maintenance-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.maintenance-clear-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.maintenance-error,
+.maintenance-empty {
+    margin: 0;
+    font-size: 13px;
+    color: #b91c1c;
+}
+
+.maintenance-empty {
+    color: #64748b;
+}
+
+.maintenance-selected-hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+
+.maintenance-table-wrap {
+    overflow: auto;
+    max-height: 240px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.maintenance-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.maintenance-table th,
+.maintenance-table td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 8px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.maintenance-table th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    z-index: 1;
+}
+
+.maintenance-table tbody tr {
+    cursor: pointer;
+}
+
+.maintenance-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.maintenance-table tbody tr.selected,
+.maintenance-table tbody tr.selected td {
+    background: #dbeafe;
 }
 
 .tab-panel {

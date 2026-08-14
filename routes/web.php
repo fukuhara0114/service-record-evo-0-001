@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
     Route::get('/servicerecord/maintenance-contracts', [MaintenanceContractController::class, 'index'])->name('servicerecord.maintenance-contracts');
+    Route::get('/servicerecord/maintenance-contracts/search', [MaintenanceContractController::class, 'search'])->name('servicerecord.maintenance-contracts.search');
     Route::get('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'edit'])->name('servicerecord.maintenance-contracts.edit');
     Route::put('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'update'])->name('servicerecord.maintenance-contracts.update');
     Route::get('/servicerecord/shipping-calendar', [ServiceRecordController::class, 'shippingCalendar'])->name('servicerecord.shipping-calendar');
