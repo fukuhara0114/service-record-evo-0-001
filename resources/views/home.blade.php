@@ -137,6 +137,7 @@
         <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">Invoice</a>
         <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
         <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">Loaner</a>
+        <a href="{{ url('/servicerecord/maintenance-contracts') }}" class="btn">Contract</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
         @if ($showMasterPriceRevision)
             <a href="{{ url('/servicerecord/master-price-revision') }}" class="btn">価格改定</a>

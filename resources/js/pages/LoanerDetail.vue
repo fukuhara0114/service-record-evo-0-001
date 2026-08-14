@@ -80,7 +80,21 @@
                                     <span>管理番号</span>
                                     <input :value="selectedUnit?.manageNum || loanerMaster?.manageNum || ''" type="text" readonly>
                                 </label>
-                                <label><span>parentID</span><input v-model="form.parentID" type="number"></label>
+                                <label class="parent-id-field">
+                                    <span>parentID</span>
+                                    <div class="parent-id-controls">
+                                        <input v-model="form.parentID" type="number">
+                                        <button
+                                            type="button"
+                                            class="btn btn-secondary parent-id-open-btn"
+                                            :disabled="!String(form.parentID || '').trim()"
+                                            title="親の service 案件詳細を新規タブで開く"
+                                            @click="openParentServiceDetail"
+                                        >
+                                            開く
+                                        </button>
+                                    </div>
+                                </label>
                             </div>
 
                             <div class="loaner-commerce-col">
@@ -1794,9 +1808,18 @@ function onPanesResized({ panes } = {}) {
 
 function safeReturnUrl() {
     const raw = new URLSearchParams(window.location.search).get('returnUrl')
-    if (!raw) return null
+    if (raw) {
+        try {
+            const url = new URL(raw, window.location.origin)
+            if (url.origin === window.location.origin) return url.href
+        } catch {
+            // fall through
+        }
+    }
     try {
-        const url = new URL(raw, window.location.origin)
+        const stored = sessionStorage.getItem('sr_list_return_url')
+        if (!stored) return null
+        const url = new URL(stored, window.location.origin)
         return url.origin === window.location.origin ? url.href : null
     } catch {
         return null
@@ -1818,6 +1841,26 @@ function buildListReturnUrl(orderType) {
     }
 }
 
+function openParentServiceDetail() {
+    const parentId = String(form.parentID ?? '').trim()
+    if (!parentId) return
+
+    try {
+        const url = new URL(`${page.props.appBaseUrl}/servicerecord/administrator`, window.location.origin)
+        url.searchParams.set('orderType', 'service')
+        url.searchParams.set('arrival', 'all')
+        url.searchParams.set('openOrderID', parentId)
+        window.open(url.href, '_blank', 'noopener,noreferrer')
+    } catch {
+        const base = String(page.props.appBaseUrl || '').replace(/\/?$/, '')
+        window.open(
+            `${base}/servicerecord/administrator?orderType=service&arrival=all&openOrderID=${encodeURIComponent(parentId)}`,
+            '_blank',
+            'noopener,noreferrer',
+        )
+    }
+}
+
 function closePage() {
     if (window.opener && !window.opener.closed) {
         window.close()
@@ -1829,12 +1872,20 @@ function closePage() {
     if (returnUrl) {
         try {
             const url = new URL(returnUrl)
-            // 一覧へ戻す場合は loaner / waiting_list フィルターを明示
+            // administrator / engineer 一覧へ戻す場合は loaner / waiting_list フィルターを明示
             if (/\/servicerecord\/(administrator|engineer)\/?$/.test(url.pathname) || url.pathname.includes('/servicerecord/administrator')) {
                 url.searchParams.set('orderType', orderType)
                 window.location.href = url.href
                 return
             }
+            // servicerecord_q など呼び出し元へそのまま戻る
+            try {
+                sessionStorage.removeItem('sr_list_return_url')
+            } catch {
+                // ignore
+            }
+            window.location.href = url.href
+            return
         } catch {
             // fall through
         }
@@ -2112,6 +2163,27 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     background: #fff;
     color: #1e293b;
     font-size: 11px;
+}
+.loaner-identity-col .parent-id-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+.loaner-identity-col .parent-id-controls input {
+    flex: 1 1 auto;
+}
+.loaner-identity-col .parent-id-open-btn {
+    flex: 0 0 auto;
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.loaner-identity-col .parent-id-open-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 .loaner-identity-col input[readonly] {
     background: #f8fafc;

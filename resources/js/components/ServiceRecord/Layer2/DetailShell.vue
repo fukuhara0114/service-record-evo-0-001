@@ -284,7 +284,7 @@ const headerReturnCodeLabel = computed(() => {
 .detail-panel {
     width: 100%;
     height: 100%;
-    background: #f8fafc;
+    background: #888888;
     display: flex;
     flex-direction: column;
 }

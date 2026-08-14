@@ -84,27 +84,150 @@
         font-size:12px;
     }
 
-    /* ① 検索窓エリア：最上部に絶対固定 */
+    body {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* ① 検索窓エリア：最上部固定（フィルター群は中央） */
     .fixed-header-zone {
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
+        position: relative !important;
+        flex: 0 0 auto !important;
         width: 100% !important;
-        height: 60px !important;
         background-color: #ffffff !important;
         border-bottom: 2px solid #3b82f6 !important;
         z-index: 99999 !important;
-        padding: 14px 20px !important;
+        padding: 10px 56px 10px 20px !important;
         box-sizing: border-box !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-end !important;
+        justify-content: center !important;
+        gap: 12px !important;
+    }
+
+    .header-filters-center {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 12px;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .query-search-row {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+        align-items: flex-end;
+        margin-bottom: 0;
+        flex: 0 0 auto;
+        min-width: 0;
+    }
+
+    .query-field {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        width: 200px;
+        max-width: 200px;
+        min-width: 200px;
+        flex: 0 0 200px;
+        box-sizing: border-box;
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+    }
+
+    .query-field-year {
+        width: 120px;
+        max-width: 120px;
+        min-width: 120px;
+        flex: 0 0 120px;
+    }
+
+    .query-field input,
+    .query-field select {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid #94a3b8;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .query-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-bottom: 1px;
+        flex: 0 0 auto;
+    }
+
+    .query-btn {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #fff;
+        background: #2563eb;
+    }
+
+    .query-btn-secondary {
+        background: #64748b;
+    }
+
+    .quick-filter-inline {
+        display: flex !important;
+        align-items: flex-end !important;
+        gap: 8px;
+        flex: 0 0 auto;
+        min-width: 220px;
+        padding-bottom: 1px;
+    }
+
+    .quick-filter-inline input {
+        flex: 0 0 280px;
+        width: 280px;
+        min-width: 160px;
+        max-width: 320px;
+        padding: 6px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .result-count {
+        flex: 0 0 auto;
+        align-self: flex-end;
+        padding-bottom: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #334155;
+        white-space: nowrap;
+    }
+
+    .header-home {
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        margin-left: 0;
     }
 
     /* ② テーブルエリア：内側スクロール */
     .scrollable-table-zone {
-        position: absolute !important;
-        top: 60px !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
+        position: relative !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
         overflow: auto !important;
         padding-left: 20px !important;
         padding-right: 20px !important;
@@ -167,40 +290,73 @@
 </style>
 </head>
 <body>
+@php
+    $filters = $filters ?? ['dealer' => '', 'productName' => '', 'SN' => '', 'endUser' => '', 'year' => null];
+    $yearOptions = $yearOptions ?? [];
+    $selectedYear = $filters['year'] ?? null;
+@endphp
 
-    <!-- ① 自作検索窓 -->
-    <div class="fixed-header-zone" style="display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 14px 20px !important; box-sizing: border-box !important;">
-    
-    <!-- 💡 左側のスペースを埋めるためのダミー要素（これがあることで中央寄せが綺麗に決まります） -->
-    <div style="flex: 1;"></div>
+    <!-- ① 検索窓（query設定 + Quick Filter を中央配置） -->
+    <div class="fixed-header-zone">
+        <div class="header-filters-center">
+            <form method="get" action="{{ url('/servicerecord_q') }}" class="query-search-row">
+                <label class="query-field">
+                    <span>dealer</span>
+                    <input type="text" name="dealer" value="{{ $filters['dealer'] ?? '' }}" placeholder="dealer">
+                </label>
+                <label class="query-field">
+                    <span>productName</span>
+                    <input type="text" name="productName" value="{{ $filters['productName'] ?? '' }}" placeholder="productName">
+                </label>
+                <label class="query-field">
+                    <span>SN</span>
+                    <input type="text" name="SN" value="{{ $filters['SN'] ?? '' }}" placeholder="SN">
+                </label>
+                <label class="query-field">
+                    <span>endUser</span>
+                    <input type="text" name="endUser" value="{{ $filters['endUser'] ?? '' }}" placeholder="endUser">
+                </label>
+                <label class="query-field query-field-year">
+                    <span>受注年</span>
+                    <select name="year">
+                        <option value="" @selected($selectedYear === null)>過去1年</option>
+                        <option value="all" @selected($selectedYear === 'all')>全件</option>
+                        @foreach ($yearOptions as $year)
+                            <option value="{{ $year }}" @selected($selectedYear === (int) $year)>
+                                {{ $year }}
+                            </option>
+                        @endforeach
+                    </select>
+                </label>
+                <div class="query-actions">
+                    <button type="submit" class="query-btn">検索</button>
+                    <a href="{{ url('/servicerecord_q') }}" class="query-btn query-btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;">クリア</a>
+                </div>
+            </form>
 
-    <!-- 🚀 中央エリア：ラベルとインプットを横並びにして中央に配置 -->
-    <div style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 8px;">
-        <label for="customSearchInput" style="font-weight: bold; margin-right: 2px; font-size: 14px; white-space: nowrap;">Quick Filer:</label>
-        
-        <input type="text" id="customSearchInput" placeholder="キーワードを入力してください（スペース区切りで複数検索可能）..." 
-            style="width: 400px; padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+            <div class="quick-filter-inline">
+                <label for="customSearchInput" style="font-weight: bold; font-size: 14px; white-space: nowrap; padding-bottom: 6px;">Quick Filer:</label>
+                <input type="text" id="customSearchInput" placeholder="キーワードを入力してください（スペース区切りで複数検索可能）...">
+                <button type="button" onclick="clearSearchInput()"
+                        style="padding: 6px 16px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; white-space: nowrap;"
+                        onmouseover="this.style.backgroundColor='#4b5563'"
+                        onmouseout="this.style.backgroundColor='#6b7280'">
+                    Clear
+                </button>
+                <span id="resultCount" class="result-count" aria-live="polite"></span>
+            </div>
+        </div>
 
-        <!-- 💡 クリアボタンを追加（マウスを乗せると少し色が薄くなります） -->
-        <button type="button" onclick="clearSearchInput()" 
-                style="padding: 6px 16px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; white-space: nowrap; transition: background-color 0.2s;"
-                onmouseover="this.style.backgroundColor='#4b5563'" 
-                onmouseout="this.style.backgroundColor='#6b7280'">
-            Clear
-        </button>
+        <div class="header-home">
+            <a href="{{ url('/home') }}"
+               class="close-to-home-btn"
+               aria-label="閉じる"
+               title="閉じる"
+               style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #94a3b8;border-radius:6px;background:#fff;color:#0f172a;text-decoration:none;font-size:22px;font-weight:700;line-height:1;">
+                ×
+            </a>
+        </div>
     </div>
-
-    <!-- 🚀 右端エリア：Homeボタンを右寄せで配置 -->
-    <div style="flex: 1; display: flex; justify-content: flex-end;">
-        <a href="{{ url('/home') }}"
-           class="close-to-home-btn"
-           aria-label="閉じる"
-           title="閉じる"
-           style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #94a3b8;border-radius:6px;background:#fff;color:#0f172a;text-decoration:none;font-size:22px;font-weight:700;line-height:1;">
-            ×
-        </a>
-    </div>
-</div>
 
     <!-- ② スクロールするテーブルのエリア -->
     <div class="scrollable-table-zone">
@@ -209,6 +365,7 @@
                 <tr>
                     <th style="width:  80px;">ID</th>
                     <th style="width:  80px;">着荷日</th>
+                    <th style="width:  80px;">受注日</th>
                     <th style="width: 120px;">Status</th>
                     <th style="width:  80px;">RMA</th>
                     <th style="width: 150px;">製品名</th>
@@ -235,32 +392,38 @@
 
     <!-- 3. 高速検索と超軽量描画のJavaScript -->
     <script>
-    // Laravelから渡されたデータをJavaScriptの配列（JSON）として取得
-    // const allRecords = @json($records);
-
     const allRecords = {!! $records->toJson() !!};
-    console.log("【デバッグ】allRecordsの型:", typeof allRecords);
-    console.log("【デバッグ】届いたデータの中身:", allRecords);
+    const appBaseUrl = @json(url('/'));
+    const queryHitCount = Array.isArray(allRecords) ? allRecords.length : 0;
 
-    // 💡 デバッグ用：ブラウザのF12コンソールに、statusMasterが届いているかをログ出力して確認します
-    console.log("届いたデータの一番最初の1件:", allRecords[0]);
+    function updateResultCount(visibleCount) {
+        const el = document.getElementById('resultCount');
+        if (!el) return;
+        const visible = Number(visibleCount) || 0;
+        if (visible === queryHitCount) {
+            el.textContent = `ヒット: ${queryHitCount}件`;
+        } else {
+            el.textContent = `表示: ${visible}件 / ヒット: ${queryHitCount}件`;
+        }
+    }
 
-    // テーブルを描画する関数
     function renderTable(filteredData) {
         const tbody = document.getElementById('tableBody');
         let html = '';
-        
-        for (let i = 0; i < filteredData.length; i++) {
-            const r = filteredData[i];
-            
-            html += `<tr  class="table-row" 
-                        onclick="selectRow(this, '${r.orderID || ''}')" 
-                        ondblclick="goToDetailPage('${r.orderID || ''}')" 
+        const rows = Array.isArray(filteredData) ? filteredData : [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+
+            html += `<tr  class="table-row"
+                        onclick="selectRow(this, '${r.orderID || ''}')"
+                        ondblclick="goToDetailPage('${r.orderID || ''}', '${r.order_type || 'service'}')"
                         style="cursor: pointer;"
                     >
                 <td style="text-align: center;" >${r.orderID || ''}</td>
                 <td style="text-align: center;" >${r.receivedDate || ''}</td>
-                <td                             >${r.status_master?.status || ''}</td>
+                <td style="text-align: center;" >${r.orderDate || ''}</td>
+                <td                             >${statusLabel(r)}</td>
                 <td style="text-align: center;" >${r.RMA || ''}</td>
                 <td                             >${r.productName || ''}</td>
                 <td                             >${r.SN || ''}</td>
@@ -279,11 +442,16 @@
             </tr>`;
         }
         tbody.innerHTML = html;
+        updateResultCount(rows.length);
     }
-    // 初回読み込み時に全件表示を実行
     renderTable(allRecords);
 
-    // 複数キーワード対応フィルター処理
+    function statusLabel(r) {
+        if (r?.order_type === 'waiting_list') return '';
+        if (r?.order_type === 'loaner') return r.status_master_loaner?.status || '';
+        return r.status_master?.status || '';
+    }
+
     document.getElementById('customSearchInput').addEventListener('input', function() {
         const searchValue = this.value.toLowerCase().replace(/　/g, ' ');
         const keywords = searchValue.split(' ').filter(keyword => keyword.trim() !== '');
@@ -295,10 +463,10 @@
 
         const filtered = allRecords.filter(r => {
             const combinedText = [
-                r.receivedDate, r.productName, r.SN, r.endUser, 
-                r.endUser_depart, r.endUser_contactPerson, 
-                r.endUser_address1, r.endUser_address2, 
-                r.endUser_email, r.endUser_phone,r.dealer, r.dealer_depart
+                r.receivedDate, r.orderDate, r.productName, r.SN, r.endUser,
+                r.endUser_depart, r.endUser_contactPerson,
+                r.endUser_address1, r.endUser_address2,
+                r.endUser_email, r.endUser_phone, r.dealer, r.dealer_depart
             ].join(' ').toLowerCase();
 
             return keywords.every(keyword => combinedText.includes(keyword));
@@ -310,50 +478,49 @@
     function clearSearchInput() {
         const input = document.getElementById('customSearchInput');
         if (!input) return;
-
-        // 1. 入力欄の文字を完全に消去
         input.value = '';
-
-        // 2. 以前作成した全件データ（allRecords）を renderTable 関数に渡してテーブルを初期状態に戻す
         if (typeof allRecords !== 'undefined' && typeof renderTable === 'function') {
             renderTable(allRecords);
         }
-
-        // 3. 消した後にすぐ次の文字を打ち込めるよう、入力欄に自動でカーソルを合わせる（フォーカス）
         input.focus();
     }
 
     function selectRow(rowElement, orderId) {
-        // 1. すべての行から、一旦「選択中クラス（active-row）」を消去して色をリセット
         const allRows = document.querySelectorAll('.table-row');
         allRows.forEach(row => {
             row.classList.remove('active-row');
         });
-
-        // 2. クロックされた行だけに「選択中クラス」を付与して色を変える
         rowElement.classList.add('active-row');
-
-        // 3. 【目的クリア】クリックされた行の orderID を取得してコンソールに表示
         console.log("選択された行の orderID:", orderId);
-
-        // 💡 取得した orderID を使って次の処理（詳細ダイアログを開くなど）をしたい場合は、
-        // ここに次の関数を記述します
-        // openDetailModal(orderId);
     }
 
-    function goToDetailPage(orderId) {
-        console.log("ダブルクリックを検知しました。詳細ページへ移動します。orderID:", orderId);
+    function goToDetailPage(orderId, orderType) {
+        if (!orderId) return;
+        const base = String(appBaseUrl || '/').replace(/\/?$/, '/');
+        const callerUrl = window.location.href;
+        const returnUrl = encodeURIComponent(callerUrl);
+        const type = String(orderType || 'service');
 
-        // 詳細ページへのURLを組み立て（お使いのRoute環境に合わせてパターンAかBを選んでください）
-        
-        // 【パターンA】URLの後ろにIDを繋げるタイプの場合
-        const targetUrl = `${$rootPath}servicerecords/detail/${orderId}`;
-        
-        // 【パターンB】クエリパラメータ（?）でIDを渡すタイプの場合
-        // const targetUrl = `${$rootPath}servicerecords/detail?orderID=${orderId}`;
+        // 詳細クローズ時の復帰先（クエリ欠落対策）
+        try {
+            sessionStorage.setItem('sr_list_return_url', callerUrl);
+        } catch (e) {
+            // ignore
+        }
 
-        // 画面を遷移させる
-        window.location.href = targetUrl;
+        // admin と同様: loaner / waiting_list は貸出詳細、それ以外はサービス詳細（Admin一覧の詳細UI）
+        if (type === 'loaner' || type === 'waiting_list') {
+            window.location.href = `${base}servicerecord/loaner/detail/${orderId}?returnUrl=${returnUrl}`;
+            return;
+        }
+
+        const params = new URLSearchParams({
+            orderType: 'service',
+            arrival: 'hide_future',
+            openOrderID: String(orderId),
+            returnUrl: callerUrl,
+        });
+        window.location.href = `${base}servicerecord/administrator?${params.toString()}`;
     }
     </script>
 

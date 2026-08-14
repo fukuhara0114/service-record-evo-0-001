@@ -16,9 +16,13 @@ use App\Models\AttachedStockedPart;
 use App\Models\UnregisteredEmailNote;
 use App\Models\CapturedImage;
 use App\Models\LoanerMaster;
+use App\Models\Labor;
+use App\Models\ReturnCode;
+use App\Models\Status;
 use App\Services\EmlReplyDraftService;
 use App\Services\MasterPriceVersionResolver;
 use App\Support\LoanerStatusFlow;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -53,45 +57,96 @@ class ServiceRecordController extends Controller
 
     }
 
-    public function index_q()
+    public function index_q(Request $request)
     {
-        // 9000件のデータをリレーションと一緒に一括取得
-         $records = ServiceRecord::select([
-                    'orderID',
-                    'status',
-                    'RMA',
-                    'receivedDate', 
-                    'productName', 
-                    'SN', 
-                    'returnCode',
-                    'laborID',
-                    'dealer',
-                    'dealer_depart',
-                    'contactPerson',
-                    'email',
-                    'phone',
-                    'endUser', 
-                    'endUser_depart', 
-                    'endUser_contactPerson', 
-                    'endUser_address1', 
-                    'endUser_address2', 
-                    'endUser_email', 
-                    'endUser_phone',
-                ])
-                ->
-        with(['returnCodeMaster', 'laborMaster','statusMaster'])
-        ->orderBy('receivedDate', 'asc')
-        ->get();
+        $currentYear = (int) Carbon::now()->year;
+        $yearOptions = [];
+        for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
+            $yearOptions[] = $y;
+        }
 
-        $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']); 
-        $returnCodes = \App\Models\ReturnCode::all(); 
-        $labors = \App\Models\Labor::all();
-        
+        $filters = [
+            'dealer' => trim((string) $request->input('dealer', '')),
+            'productName' => trim((string) $request->input('productName', '')),
+            'SN' => trim((string) $request->input('SN', '')),
+            'endUser' => trim((string) $request->input('endUser', '')),
+            'year' => null,
+        ];
+
+        $yearRaw = trim((string) $request->input('year', ''));
+        if ($yearRaw === 'all') {
+            $filters['year'] = 'all';
+        } elseif ($yearRaw !== '' && ctype_digit($yearRaw)) {
+            $year = (int) $yearRaw;
+            $filters['year'] = in_array($year, $yearOptions, true) ? $year : null;
+        }
+
+        $query = ServiceRecord::query()
+            ->select([
+                'orderID',
+                'order_type',
+                'status',
+                'RMA',
+                'receivedDate',
+                'orderDate',
+                'productName',
+                'SN',
+                'returnCode',
+                'laborID',
+                'dealer',
+                'dealer_depart',
+                'contactPerson',
+                'email',
+                'phone',
+                'endUser',
+                'endUser_depart',
+                'endUser_contactPerson',
+                'endUser_address1',
+                'endUser_address2',
+                'endUser_email',
+                'endUser_phone',
+            ])
+            ->with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
+
+        if ($filters['year'] === 'all') {
+            // 受注年条件なし
+        } elseif (is_int($filters['year'])) {
+            $query->whereNotNull('orderDate')
+                ->whereYear('orderDate', $filters['year']);
+        } else {
+            $query->whereNotNull('orderDate')
+                ->whereDate('orderDate', '>=', Carbon::today()->subYear()->toDateString());
+        }
+
+        if ($filters['dealer'] !== '') {
+            $query->where('dealer', 'like', $this->likeContains($filters['dealer']));
+        }
+        if ($filters['productName'] !== '') {
+            $query->where('productName', 'like', $this->likeContains($filters['productName']));
+        }
+        if ($filters['SN'] !== '') {
+            $query->where('SN', 'like', $this->likeContains($filters['SN']));
+        }
+        if ($filters['endUser'] !== '') {
+            $query->where('endUser', 'like', $this->likeContains($filters['endUser']));
+        }
+
+        $records = $query
+            ->orderBy('orderDate', 'asc')
+            ->orderBy('orderID', 'asc')
+            ->get();
+
+        $statuses = Status::orderBy('processID_new')->get(['processID_new', 'status']);
+        $returnCodes = ReturnCode::all();
+        $labors = Labor::all();
+
         return view('servicerecords.servicerecord_q')
             ->with('records', $records)
             ->with('statuses', $statuses)
             ->with('returnCodes', $returnCodes)
             ->with('labors', $labors)
+            ->with('filters', $filters)
+            ->with('yearOptions', $yearOptions)
             ->with('mode', 'whole');
     }
 
@@ -214,9 +269,8 @@ class ServiceRecordController extends Controller
             }
         });
 
-        if ($mode === 'engineer') {
-            $this->attachLoanerItemsToRecords($records);
-        }
+        // loaner / waiting_list 一覧の item 列表示用
+        $this->attachLoanerItemsToRecords($records);
 
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
         $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
@@ -291,14 +345,16 @@ class ServiceRecordController extends Controller
     }
 
     /**
-     * Engineer 一覧用: loaner 案件に LoanerMaster.item を付与する。
+     * 一覧用: loaner / waiting_list 案件に LoanerMaster.item を付与する。
      *
      * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
      */
     private function attachLoanerItemsToRecords($records): void
     {
+        $isLoanerLike = static fn (ServiceRecord $record) => in_array($record->order_type, ['loaner', 'waiting_list'], true);
+
         $loanerIds = $records
-            ->filter(fn (ServiceRecord $record) => $record->order_type === 'loaner')
+            ->filter($isLoanerLike)
             ->pluck('loanerID')
             ->filter(fn ($id) => $id !== null && $id !== '')
             ->unique()
@@ -320,7 +376,7 @@ class ServiceRecordController extends Controller
 
         // loanerID が無い/不一致の場合のフォールバック: 同 productName の item
         $productNames = $records
-            ->filter(fn (ServiceRecord $record) => $record->order_type === 'loaner')
+            ->filter($isLoanerLike)
             ->filter(function (ServiceRecord $record) use ($itemByLoanerId) {
                 $key = (string) ($record->loanerID ?? '');
                 return ($itemByLoanerId[$key] ?? null) === null || ($itemByLoanerId[$key] ?? '') === '';
@@ -346,8 +402,8 @@ class ServiceRecordController extends Controller
             }
         }
 
-        $records->each(function (ServiceRecord $record) use ($itemByLoanerId, $itemByProductName) {
-            if ($record->order_type !== 'loaner') {
+        $records->each(function (ServiceRecord $record) use ($itemByLoanerId, $itemByProductName, $isLoanerLike) {
+            if (!$isLoanerLike($record)) {
                 $record->setAttribute('item', null);
 
                 return;
@@ -688,7 +744,7 @@ class ServiceRecordController extends Controller
             }
         });
 
-        if ($orderTypeFilter === 'loaner') {
+        if (in_array($orderTypeFilter, ['loaner', 'waiting_list'], true)) {
             $this->attachLoanerItemsToRecords($records);
         }
 

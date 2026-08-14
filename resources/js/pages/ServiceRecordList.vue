@@ -512,6 +512,7 @@
                         <th style="width: 80px; text-align: center;">orderID</th>
                         <th style="width: 80px; text-align: center;">parentID</th>
                         <th>productName</th>
+                        <th>item</th>
                         <th>SN</th>
                         <th>status</th>
                         <th>dealer</th>
@@ -525,6 +526,7 @@
                         <th style="width: 80px; text-align: center;">orderID</th>
                         <th style="width: 80px; text-align: center;">ParentID</th>
                         <th>ProductName</th>
+                        <th>item</th>
                         <th>SN</th>
                         <th>dealer</th>
                         <th>dealer_depart</th>
@@ -653,6 +655,7 @@
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td style="text-align: center;">{{ r.parentID }}</td>
                             <td>{{ r.productName }}</td>
+                            <td>{{ r.item || '' }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.dealer }}</td>
@@ -672,6 +675,7 @@
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td style="text-align: center;">{{ r.parentID }}</td>
                             <td>{{ r.productName }}</td>
+                            <td>{{ r.item || '' }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.dealer }}</td>
                             <td>{{ r.dealer_depart }}</td>
@@ -1028,6 +1032,32 @@ onMounted(() => {
     if (isBoardMode.value) {
         startLogisticsAutoRefresh()
     }
+
+    const openOrderID = params.get('openOrderID')?.trim()
+    if (openOrderID) {
+        try {
+            const url = new URL(window.location.href)
+            url.searchParams.delete('openOrderID')
+            window.history.replaceState({}, '', url.href)
+        } catch {
+            // ignore
+        }
+        nextTick(async () => {
+            try {
+                const existing = (props.initialRecords ?? []).find(
+                    (item) => String(item.orderID) === String(openOrderID),
+                )
+                if (existing) {
+                    await openSecondLayer(existing)
+                    return
+                }
+                const fullRecord = await fetchRecord(openOrderID)
+                await openSecondLayer(fullRecord)
+            } catch (e) {
+                detailOpenError.value = e.message || '案件詳細の取得に失敗しました。'
+            }
+        })
+    }
 })
 
 onUnmounted(() => {
@@ -1174,6 +1204,58 @@ const smListAutoRefreshing = ref(false)
 const SM_LIST_AUTO_REFRESH_MS = 60 * 1000
 /** 詳細オープン直後の誤 close（dblclick の残存 click / Inertia 競合）を無視する */
 const detailCloseGuardUntil = ref(0)
+const CALLER_RETURN_URL_KEY = 'sr_list_return_url'
+
+function sanitizeSameOriginUrl(raw) {
+    if (!raw) return null
+    try {
+        const url = new URL(raw, typeof window !== 'undefined' ? window.location.origin : undefined)
+        if (typeof window !== 'undefined' && url.origin !== window.location.origin) return null
+        return url.href
+    } catch {
+        return null
+    }
+}
+
+function resolveCallerReturnUrl() {
+    if (typeof window === 'undefined') return null
+    let fromQuery = null
+    let hasOpenOrderID = false
+    try {
+        const params = new URLSearchParams(window.location.search)
+        fromQuery = sanitizeSameOriginUrl(params.get('returnUrl'))
+        hasOpenOrderID = Boolean(params.get('openOrderID')?.trim())
+    } catch {
+        // ignore
+    }
+
+    if (fromQuery) {
+        try {
+            sessionStorage.setItem(CALLER_RETURN_URL_KEY, fromQuery)
+        } catch {
+            // ignore
+        }
+        return fromQuery
+    }
+
+    // openOrderID 付きで来た場合のみ sessionStorage を信頼（通常 Admin に古い復帰先を残さない）
+    if (hasOpenOrderID) {
+        try {
+            return sanitizeSameOriginUrl(sessionStorage.getItem(CALLER_RETURN_URL_KEY))
+        } catch {
+            return null
+        }
+    }
+
+    try {
+        sessionStorage.removeItem(CALLER_RETURN_URL_KEY)
+    } catch {
+        // ignore
+    }
+    return null
+}
+
+const callerReturnUrl = ref(resolveCallerReturnUrl())
 const SYMPTOMS_NUM_RECAL_DESCRIPTIONS = new Set(['再校正', '保守内再校正', '新台再校正'])
 const abroadExcelHeaders = [
     'Product Name',
@@ -2265,6 +2347,27 @@ async function closeDetail() {
     if (Date.now() < detailCloseGuardUntil.value) {
         return
     }
+
+    // 呼び出し元一覧（例: /servicerecord_q）へ戻る
+    const target =
+        callerReturnUrl.value
+        || resolveCallerReturnUrl()
+        || sanitizeSameOriginUrl(
+            typeof window !== 'undefined'
+                ? new URLSearchParams(window.location.search).get('returnUrl')
+                : null,
+        )
+    if (target) {
+        try {
+            sessionStorage.removeItem(CALLER_RETURN_URL_KEY)
+        } catch {
+            // ignore
+        }
+        callerReturnUrl.value = null
+        window.location.href = target
+        return
+    }
+
     resetDetailState()
     if (smListAutoUpdate.value && isSmListMode.value) {
         startSmListAutoRefresh()

@@ -136,9 +136,16 @@ class EmlReplyDraftService
             $productName = (string) ($record->productName ?: '—');
             $sn = (string) ($record->SN ?: '—');
             $replySubject = '【機材受領のご連絡】（製品:' . $productName . ' SN:' . $sn . '）';
+        } elseif ($templateType === self::TYPE_QUOTE) {
+            $productName = (string) ($record->productName ?: '—');
+            $sn = (string) ($record->SN ?: '—');
+            $quoteNum = trim((string) ($record->quoteNum ?: $record->sm_quote ?: ''));
+            if ($quoteNum === '') {
+                $quoteNum = '—';
+            }
+            $replySubject = '【御見積書の送付No.' . $quoteNum . '】（製品:' . $productName . '　SN:' . $sn . '）';
         } elseif ($replySubject === '') {
             $replySubject = match ($templateType) {
-                self::TYPE_QUOTE => 'お見積のご案内',
                 self::TYPE_WORK_CHANGE => '作業内容変更のご連絡',
                 default => 'ご連絡',
             };
@@ -310,15 +317,29 @@ TPL;
     private function quoteHtmlTemplate(): string
     {
         return <<<'TPL'
-<p style="margin:0 0 12px;">{dealer}<br>{contactPerson} 様</p>
-<p style="margin:0 0 12px;">お世話になっております。</p>
-<p style="margin:0 0 12px;">下記製品につきまして、お見積内容をご案内いたします。<br>（見積書がある場合は、Outlook 上で添付をご確認・追加してください）</p>
-<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 16px;">
-<tr><td style="padding:4px 12px 4px 0;color:#64748b;">製品名</td><td style="padding:4px 0;font-weight:700;">{productName}</td></tr>
-<tr><td style="padding:4px 12px 4px 0;color:#64748b;">S/N</td><td style="padding:4px 0;font-weight:700;">{SN}</td></tr>
-</table>
+<div class="copy-target-quote" style="color:#000; font-weight:bold;">
+{dealer} {contactPerson}　様<br><br>
+いつも大変お世話になっております。<br>
+エックスライトサービスセンター{sender}です。<br><br>
+お預かりしております 機材（製品:{productName}　SN:{SN}）の御見積書を添付いたしますのでご査収ください。<br>
+（こちらの機材は{displayDate}にX-riteにて受領しております）<br><br>
 <div id="gallery-images"></div>
-<p style="margin:0 0 12px;">ご確認のほど、よろしくお願いいたします。</p>
+尚、正式御発注後（ご注文書受領後）の着手になりますので御留意下さい。<br><br>
+ご確認よろしくお願いいたします。<br><br>
+●電子帳簿保存法改正に伴いご依頼・ご注文書等メールにてお願いしております。<br>
+&nbsp;&nbsp;（FAXでいただきましても、受注出来兼ねます事、ご了承ください。）<br>
+●ご注文書いただきました際にはご返信しておりますので、<br>
+ご送付後2営業日が過ぎましても弊社より返信がないもに関しましては<br>
+お手数ですが、お問い合わせいただけますようお願い申し上げます。<br>
+***********************************************************<br>
+エックスライト社 サービスセンター<br>
+〒135-0064　東京都江東区青海2-5-10<br>
+テレコムセンタービル　西棟6F<br>
+TEL:　03-6374-8730<br>
+Mail: japanserviceorder@xrite.com<br>
+**********************************************************<br>
+<div id="ms-outlook-signature"></div>
+</div>
 TPL;
     }
 
@@ -364,18 +385,30 @@ TPL;
     private function quoteTextTemplate(): string
     {
         return <<<'TPL'
-{dealer}
-{contactPerson} 様
+{dealer} {contactPerson}　様
 
-お世話になっております。
+いつも大変お世話になっております。
+エックスライトサービスセンター{sender}です。
 
-下記製品につきまして、お見積内容をご案内いたします。
-（見積書がある場合は、Outlook 上で添付をご確認・追加してください）
+お預かりしております 機材（製品:{productName}　SN:{SN}）の御見積書を添付いたしますのでご査収ください。
+（こちらの機材は{displayDate}にX-riteにて受領しております）
 
-製品名: {productName}
-S/N: {SN}
+尚、正式御発注後（ご注文書受領後）の着手になりますので御留意下さい。
 
-ご確認のほど、よろしくお願いいたします。
+ご確認よろしくお願いいたします。
+
+●電子帳簿保存法改正に伴いご依頼・ご注文書等メールにてお願いしております。
+  （FAXでいただきましても、受注出来兼ねます事、ご了承ください。）
+●ご注文書いただきました際にはご返信しておりますので、
+ご送付後2営業日が過ぎましても弊社より返信がないもに関しましては
+お手数ですが、お問い合わせいただけますようお願い申し上げます。
+***********************************************************
+エックスライト社 サービスセンター
+〒135-0064　東京都江東区青海2-5-10
+テレコムセンタービル　西棟6F
+TEL:　03-6374-8730
+Mail: japanserviceorder@xrite.com
+**********************************************************
 TPL;
     }
 

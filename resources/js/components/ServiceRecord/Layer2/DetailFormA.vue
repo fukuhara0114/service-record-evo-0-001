@@ -377,7 +377,12 @@
                                         <label class="input-field">
                                             <div style="display: flex; align-items: center; gap: 8px;">
                                                 <span>〒</span>
-                                                <input type="text" placeholder="〒" :value="draftRecord?.zipcode ?? record?.zipcode ?? ''" @input="updateDraftValue('zipcode', $event.target.value)">
+                                                <input
+                                                    type="text"
+                                                    placeholder="〒"
+                                                    :value="draftRecord?.zipcode ?? record?.zipcode ?? ''"
+                                                    @input="onZipcodeFieldInput('dealer', $event.target.value)"
+                                                >
                                             </div>
                                         </label>
                                         <label class="input-field">
@@ -415,7 +420,12 @@
                                         <label class="input-field">
                                             <div style="display: flex; align-items: center; gap: 8px;">
                                                 <span>〒</span>
-                                                <input type="text" placeholder="〒" :value="draftRecord?.endUser_zipcode ?? record?.endUser_zipcode ?? ''" @input="updateDraftValue('endUser_zipcode', $event.target.value)">
+                                                <input
+                                                    type="text"
+                                                    placeholder="〒"
+                                                    :value="draftRecord?.endUser_zipcode ?? record?.endUser_zipcode ?? ''"
+                                                    @input="onZipcodeFieldInput('endUser', $event.target.value)"
+                                                >
                                             </div>
                                         </label>
                                         <label class="input-field">
@@ -461,7 +471,12 @@
                                         <label class="input-field">
                                             <div style="display: flex; align-items: center; gap: 8px;">
                                                 <span>〒</span>
-                                                <input type="text" placeholder="〒" :value="draftRecord?.deliveryDestination_zipcode ?? record?.deliveryDestination_zipcode ?? ''" @input="updateDraftValue('deliveryDestination_zipcode', $event.target.value)">
+                                                <input
+                                                    type="text"
+                                                    placeholder="〒"
+                                                    :value="draftRecord?.deliveryDestination_zipcode ?? record?.deliveryDestination_zipcode ?? ''"
+                                                    @input="onZipcodeFieldInput('delivery', $event.target.value)"
+                                                >
                                             </div>
                                         </label>
                                         <label class="input-field">
@@ -1091,6 +1106,74 @@ function openIncidentSelect() {
 function updateDraftValue(field, value) {
     if (!props.draftRecord) return
     props.draftRecord[field] = value
+}
+
+const ZIPCODE_FIELD_MAP = {
+    dealer: {
+        zip: 'zipcode',
+        address1: 'address1',
+        address2: 'address2',
+    },
+    endUser: {
+        zip: 'endUser_zipcode',
+        address1: 'endUser_address1',
+        address2: 'endUser_address2',
+    },
+    delivery: {
+        zip: 'deliveryDestination_zipcode',
+        address1: 'deliveryDestination_address1',
+        address2: 'deliveryDestination_address2',
+    },
+}
+
+const zipLookupTimers = {
+    dealer: null,
+    endUser: null,
+    delivery: null,
+}
+
+async function fetchAddressByZipcode(zipcode) {
+    const digits = String(zipcode ?? '').replace(/\D/g, '')
+    if (digits.length !== 7) return null
+
+    const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${digits}`)
+    if (!response.ok) {
+        throw new Error('郵便番号の検索に失敗しました。')
+    }
+
+    const data = await response.json()
+    const result = data?.results?.[0]
+    if (!result) return null
+
+    return {
+        address1: result.address1 || '',
+        address2: `${result.address2 || ''}${result.address3 || ''}`,
+    }
+}
+
+function onZipcodeFieldInput(kind, value) {
+    const fields = ZIPCODE_FIELD_MAP[kind]
+    if (!fields) return
+
+    updateDraftValue(fields.zip, value)
+
+    if (zipLookupTimers[kind]) {
+        clearTimeout(zipLookupTimers[kind])
+    }
+
+    zipLookupTimers[kind] = setTimeout(async () => {
+        const digits = String(props.draftRecord?.[fields.zip] ?? value ?? '').replace(/\D/g, '')
+        if (digits.length !== 7) return
+
+        try {
+            const address = await fetchAddressByZipcode(digits)
+            if (!address) return
+            updateDraftValue(fields.address1, address.address1)
+            updateDraftValue(fields.address2, address.address2)
+        } catch {
+            // 自動検索失敗時は手入力を継続できるよう握りつぶす
+        }
+    }, 350)
 }
 
 function fieldValue(field) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\FileImportController;
 use App\Http\Controllers\IntakeOcrController;
 use App\Http\Controllers\LoanerCalendarController;
 use App\Http\Controllers\LoanerRecordController;
+use App\Http\Controllers\MaintenanceContractController;
 use App\Http\Controllers\MasterPriceRevisionController;
 use App\Http\Controllers\ServiceRecordController;
 use Illuminate\Support\Facades\Route;
@@ -84,6 +85,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
+    Route::get('/servicerecord/maintenance-contracts', [MaintenanceContractController::class, 'index'])->name('servicerecord.maintenance-contracts');
+    Route::get('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'edit'])->name('servicerecord.maintenance-contracts.edit');
+    Route::put('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'update'])->name('servicerecord.maintenance-contracts.update');
     Route::get('/servicerecord/shipping-calendar', [ServiceRecordController::class, 'shippingCalendar'])->name('servicerecord.shipping-calendar');
     Route::get('/servicerecord/shipping-calendar/events', [ServiceRecordController::class, 'shippingCalendarEvents'])->name('servicerecord.shipping-calendar.events');
     Route::get('/servicerecord/master-price-revision', [MasterPriceRevisionController::class, 'index'])->name('servicerecord.master-price-revision');
