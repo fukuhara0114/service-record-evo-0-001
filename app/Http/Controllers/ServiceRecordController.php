@@ -123,7 +123,11 @@ class ServiceRecordController extends Controller
             $query->where('dealer', 'like', $this->likeContains($filters['dealer']));
         }
         if ($filters['productName'] !== '') {
-            $query->where('productName', 'like', $this->likeContains($filters['productName']));
+            // 大文字小文字を区別しない（照合順序に依存しない）
+            $query->whereRaw(
+                'LOWER(productName) LIKE ?',
+                [$this->likeContains(mb_strtolower($filters['productName'], 'UTF-8'))]
+            );
         }
         if ($filters['SN'] !== '') {
             $query->where('SN', 'like', $this->likeContains($filters['SN']));

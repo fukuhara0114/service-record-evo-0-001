@@ -143,10 +143,41 @@ class LoanerRecordController extends Controller
         }
 
         $parentReturnCode = null;
+        $parentRecord = null;
         if ($record->parentID) {
-            $parentReturnCode = ServiceRecord::query()
+            $parent = ServiceRecord::query()
+                ->with(['statusMaster', 'statusMasterLoaner'])
                 ->where('orderID', $record->parentID)
-                ->value('returnCode');
+                ->first();
+
+            if ($parent) {
+                $parentReturnCode = $parent->returnCode;
+                if ($parent->order_type === 'loaner') {
+                    $parentStatusLabel = $parent->statusMasterLoaner?->status;
+                } elseif ($parent->order_type === 'waiting_list') {
+                    $parentStatusLabel = null;
+                } else {
+                    $parentStatusLabel = $parent->statusMaster?->status;
+                }
+
+                $sentOutRaw = $parent->sentOut;
+                if ($sentOutRaw instanceof \DateTimeInterface) {
+                    $sentOut = $sentOutRaw->format('Y-m-d');
+                } elseif ($sentOutRaw === null || $sentOutRaw === '') {
+                    $sentOut = null;
+                } else {
+                    $raw = substr((string) $sentOutRaw, 0, 10);
+                    $sentOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
+                }
+
+                $parentRecord = [
+                    'orderID' => $parent->orderID,
+                    'status' => $parent->status,
+                    'status_label' => $parentStatusLabel,
+                    'sentOut' => $sentOut,
+                    'returnCode' => $parent->returnCode,
+                ];
+            }
         }
 
         $columns = Schema::getColumnListing('attachedloaners');
@@ -215,6 +246,7 @@ class LoanerRecordController extends Controller
                     : null,
             ],
             'parentReturnCode' => $parentReturnCode,
+            'parentRecord' => $parentRecord,
             'loanerMaster' => $attached->loanerMaster?->only([
                 'loanerID',
                 'productName',

@@ -139,69 +139,38 @@
                     </section>
                 </div>
 
-                <section class="notes-panel">
-                    <div class="notes-panel-heading">
-                        <h2 class="card-title notes-title">
-                            Notes（{{ sharedNotes.length }}件）
-                            <span v-if="tbcNotesCount > 0" class="notes-tbc-count">要確認（{{ tbcNotesCount }}件）</span>
-                        </h2>
-                        <div class="notes-actions">
-                            <button
-                                type="button"
-                                class="select-btn"
-                                :disabled="!canModifySelectedNote"
-                                :title="noteEditDeleteTitle"
-                                @click="openNoteEdit"
-                            >
-                                編集
-                            </button>
-                            <button
-                                type="button"
-                                class="select-btn delete-btn"
-                                :disabled="!canModifySelectedNote"
-                                :title="noteEditDeleteTitle"
-                                @click="openNoteDelete"
-                            >
-                                削除
-                            </button>
-                            <button type="button" class="select-btn add-btn" @click="openNoteCreate">
-                                新規追加
-                            </button>
-                        </div>
-                    </div>
-                    <p v-if="noteError" class="inline-error">{{ noteError }}</p>
-                    <div class="notes-shell">
-                        <NotesTable
-                            v-model:selected-id="selectedNoteId"
-                            :notes="sharedNotes"
-                            :record-order-id="attachedLocal.associatedID"
-                            :show-confirm-status="true"
-                            :current-user-name="authUserName"
-                            @edit="openNoteEdit"
-                        />
-                    </div>
-                </section>
-            </section>
+                <section class="period-inline-card">
+                    <h2 class="card-title">貸出期間 / status</h2>
+                    <div class="period-controls-row">
+                        <label v-if="attachedLocal.order_type === 'loaner'" class="field field-on-white">
+                            <span>status（StatusLoaner）</span>
+                            <select v-model="form.status">
+                                <option value="">選択してください</option>
+                                <option
+                                    v-for="status in statuses"
+                                    :key="status.processID_new"
+                                    :value="String(status.processID_new)"
+                                >
+                                    {{ status.status }} ({{ status.processID_new }})
+                                </option>
+                            </select>
+                        </label>
+                        <p
+                            v-else-if="attachedLocal.order_type === 'waiting_list'"
+                            class="field-hint period-waiting-hint"
+                        >
+                            waiting_list（status なし）
+                        </p>
 
-            <section class="info-card">
-                <h2 class="card-title">貸出期間 / status</h2>
-                <div class="form-stack">
-                    <label v-if="attachedLocal.order_type === 'loaner'" class="field">
-                        <span>status（StatusLoaner）</span>
-                        <select v-model="form.status">
-                            <option value="">選択してください</option>
-                            <option
-                                v-for="status in statuses"
-                                :key="status.processID_new"
-                                :value="String(status.processID_new)"
-                            >
-                                {{ status.status }} ({{ status.processID_new }})
-                            </option>
-                        </select>
-                    </label>
-                    <p v-else-if="attachedLocal.order_type === 'waiting_list'" class="field-hint">
-                        waiting_list 案件のため status リレーションはありません（DB上は -1 固定）。
-                    </p>
+                        <label v-if="dateFields.hasPlannedSent" class="field field-on-white">
+                            <span>plannedSentDate（予定開始）</span>
+                            <input v-model="form.plannedSentDate" type="date">
+                        </label>
+                        <label v-if="dateFields.hasPlannedReturned" class="field field-on-white">
+                            <span>plannedReturnedDate（予定終了）</span>
+                            <input v-model="form.plannedReturnedDate" type="date">
+                        </label>
+                    </div>
 
                     <div v-if="attachedLocal.order_type === 'waiting_list'" class="schedule-box">
                         <h3 class="section-title">同機種の貸出終了予定</h3>
@@ -264,31 +233,65 @@
                             <p v-else class="field-hint">現在以降の同機種貸出予定はありません。</p>
                         </template>
                     </div>
+                </section>
 
-                    <div v-if="dateFields.hasPlannedSent || dateFields.hasPlannedReturned" class="form-row">
-                        <label v-if="dateFields.hasPlannedSent" class="field">
-                            <span>plannedSentDate（予定開始）</span>
-                            <input v-model="form.plannedSentDate" type="date">
-                        </label>
-                        <label v-if="dateFields.hasPlannedReturned" class="field">
-                            <span>plannedReturnedDate（予定終了）</span>
-                            <input v-model="form.plannedReturnedDate" type="date">
-                        </label>
+                <section class="notes-panel">
+                    <div class="notes-panel-heading">
+                        <h2 class="card-title notes-title">
+                            Notes（{{ sharedNotes.length }}件）
+                            <span v-if="tbcNotesCount > 0" class="notes-tbc-count">要確認（{{ tbcNotesCount }}件）</span>
+                        </h2>
+                        <div class="notes-actions">
+                            <button
+                                type="button"
+                                class="select-btn"
+                                :disabled="!canModifySelectedNote"
+                                :title="noteEditDeleteTitle"
+                                @click="openNoteEdit"
+                            >
+                                編集
+                            </button>
+                            <button
+                                type="button"
+                                class="select-btn delete-btn"
+                                :disabled="!canModifySelectedNote"
+                                :title="noteEditDeleteTitle"
+                                @click="openNoteDelete"
+                            >
+                                削除
+                            </button>
+                            <button type="button" class="select-btn add-btn" @click="openNoteCreate">
+                                新規追加
+                            </button>
+                        </div>
                     </div>
+                    <p v-if="noteError" class="inline-error">{{ noteError }}</p>
+                    <div class="notes-shell">
+                        <NotesTable
+                            v-model:selected-id="selectedNoteId"
+                            :notes="sharedNotes"
+                            :record-order-id="attachedLocal.associatedID"
+                            :show-confirm-status="true"
+                            :current-user-name="authUserName"
+                            @edit="openNoteEdit"
+                        />
+                    </div>
+                </section>
+            </section>
 
-                    <section class="calendar-panel">
-                        <div class="calendar-panel-heading">
-                            <h3 class="section-title calendar-title">予約カレンダー</h3>
-                            <span class="calendar-help">予定を移動／左右端で期間変更</span>
-                        </div>
-                        <p v-if="calendarError" class="inline-error">{{ calendarError }}</p>
-                        <p v-if="!calendarFilterReady" class="field-hint">
-                            productName / loanerID が未設定のためカレンダーを表示できません。
-                        </p>
-                        <div v-else class="calendar-shell">
-                            <FullCalendar ref="calendarRef" :options="calendarOptions" />
-                        </div>
-                    </section>
+            <section class="info-card info-card-calendar">
+                <div class="calendar-panel calendar-panel-solo">
+                    <div class="calendar-panel-heading">
+                        <h3 class="section-title calendar-title">予約カレンダー</h3>
+                        <span class="calendar-help">予定を移動／左右端で期間変更</span>
+                    </div>
+                    <p v-if="calendarError" class="inline-error">{{ calendarError }}</p>
+                    <p v-if="!calendarFilterReady" class="field-hint">
+                        productName / loanerID が未設定のためカレンダーを表示できません。
+                    </p>
+                    <div v-else class="calendar-shell">
+                        <FullCalendar ref="calendarRef" :options="calendarOptions" />
+                    </div>
                 </div>
             </section>
         </div>
@@ -1027,9 +1030,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 <style scoped>
 .period-page {
     min-height: 100vh;
-    padding: 12px 16px 24px;
+    height: 100vh;
+    padding: 12px 16px 16px;
     background: #888888;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .page-header {
@@ -1038,6 +1045,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     align-items: flex-start;
     gap: 16px;
     margin-bottom: 12px;
+    flex: 0 0 auto;
 }
 
 .page-header h1 {
@@ -1094,7 +1102,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     display: grid;
     grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.2fr);
     gap: 12px;
-    align-items: start;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .info-card {
@@ -1102,6 +1112,43 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     padding: 14px;
+}
+
+.info-card-calendar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px;
+}
+
+.content-grid > .info-card:first-child {
+    min-height: 0;
+    overflow: auto;
+}
+
+.period-inline-card {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #bbbbbb;
+}
+
+.period-inline-card > .card-title {
+    margin-bottom: 8px;
+}
+
+.period-controls-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr);
+    gap: 10px;
+    align-items: end;
+}
+
+.period-waiting-hint {
+    align-self: center;
+    margin: 0;
 }
 
 .card-title {
@@ -1254,6 +1301,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     gap: 10px;
 }
 
+.period-dates-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: end;
+}
+
 .field {
     display: flex;
     flex-direction: column;
@@ -1271,6 +1325,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     border-radius: 4px;
     font-size: 13px;
     font-weight: 700;
+}
+
+.field-on-white input,
+.field-on-white select {
+    background: #fff;
 }
 
 .field-hint {
@@ -1442,11 +1501,19 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 
 .calendar-panel {
-    margin-top: 4px;
-    padding: 10px;
-    border: 1px solid #fca5a5;
-    border-radius: 6px;
-    background: #aaaaaa;
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-panel-solo {
+    height: 100%;
 }
 
 .calendar-panel-heading {
@@ -1456,6 +1523,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     gap: 8px;
     margin-bottom: 8px;
     flex-wrap: wrap;
+    flex: 0 0 auto;
 }
 
 .calendar-title {
@@ -1469,8 +1537,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 
 .calendar-shell {
-    height: 420px;
-    min-height: 360px;
+    flex: 1 1 auto;
+    min-height: 240px;
+    height: auto;
     overflow: hidden;
     background: #fff;
     border: 1px solid #fecaca;

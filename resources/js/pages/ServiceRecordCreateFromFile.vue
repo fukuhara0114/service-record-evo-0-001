@@ -1,4 +1,4 @@
-﻿<template>
+<template>
     <div class="create-page">
         <div class="page-header">
             <div>
@@ -154,6 +154,8 @@
                                         v-model="form.SN"
                                         type="text"
                                         placeholder="SN"
+                                        lang="en"
+                                        inputmode="latin"
                                         :readonly="Boolean(selectedLoanerUnit?.SN)"
                                     >
                                 </label>
@@ -206,23 +208,25 @@
                                             type="text"
                                             class="w-dealer-name"
                                             placeholder="dealer"
+                                            lang="ja"
                                         >
                                     </div>
                                     <div class="form-row row-full">
-                                        <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
+                                        <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart" lang="ja">
                                     </div>
                                     <div class="form-row row-contact">
-                                        <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                        <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
                                     </div>
                                     <div class="form-row row-phone-email">
-                                        <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
-                                        <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
+                                        <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                        <input v-model="form.email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
                                     </div>
                                     <div class="form-row row-zip">
                                         <input
                                             v-model="form.zipcode"
                                             type="text"
                                             class="w-zip"
+                                            lang="en"
                                             inputmode="numeric"
                                             maxlength="8"
                                             placeholder="Zipcode"
@@ -230,8 +234,8 @@
                                         >
                                     </div>
                                     <div class="form-row row-address">
-                                        <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
-                                        <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
+                                        <input v-model="form.address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                        <input v-model="form.address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                     </div>
                                 </div>
                             </section>
@@ -245,23 +249,24 @@
                                 </aside>
                                 <div class="stakeholder-body">
                                     <div class="form-row row-full">
-                                        <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                        <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery" lang="ja">
                                     </div>
                                     <div class="form-row row-full">
-                                        <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
+                                        <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart" lang="ja">
                                     </div>
                                     <div class="form-row row-contact">
-                                        <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                        <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
                                     </div>
                                     <div class="form-row row-phone-email">
-                                        <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
-                                        <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
+                                        <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                        <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
                                     </div>
                                     <div class="form-row row-zip">
                                         <input
                                             v-model="form.deliveryDestination_zipcode"
                                             type="text"
                                             class="w-zip"
+                                            lang="en"
                                             inputmode="numeric"
                                             maxlength="8"
                                             placeholder="Zipcode"
@@ -269,8 +274,8 @@
                                         >
                                     </div>
                                     <div class="form-row row-address">
-                                        <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
-                                        <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
+                                        <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                        <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                     </div>
                                 </div>
                             </section>
@@ -293,12 +298,14 @@
                                     type="text"
                                     class="w-product-name"
                                     placeholder="productName"
+                                    lang="en"
+                                    inputmode="latin"
                                     @input="onProductNameTyped"
                                 >
                                 <input :value="form.entityID || ''" type="text" placeholder="entityID" readonly>
                             </div>
                             <div class="form-row row-product-sn">
-                                <input v-model="form.SN" type="text" placeholder="SN">
+                                <input v-model="form.SN" type="text" placeholder="SN" lang="en" inputmode="latin">
                             </div>
                             <div class="form-row row-product-meta">
                                 <input v-model="form.receivedDate" type="date" class="w-received">
@@ -341,23 +348,25 @@
                                         type="text"
                                         class="w-dealer-name"
                                         placeholder="dealer"
+                                        lang="ja"
                                     >
                                 </div>
                                 <div class="form-row row-full">
-                                    <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart">
+                                    <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart" lang="ja">
                                 </div>
                                 <div class="form-row row-contact">
-                                    <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                    <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
                                 </div>
                                 <div class="form-row row-phone-email">
-                                    <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone">
-                                    <input v-model="form.email" type="text" class="w-email" placeholder="EMail">
+                                    <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                    <input v-model="form.email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
                                 </div>
                                 <div class="form-row row-zip">
                                     <input
                                         v-model="form.zipcode"
                                         type="text"
                                         class="w-zip"
+                                        lang="en"
                                         inputmode="numeric"
                                         maxlength="8"
                                         placeholder="Zipcode"
@@ -365,8 +374,8 @@
                                     >
                                 </div>
                                 <div class="form-row row-address">
-                                    <input v-model="form.address1" type="text" class="w-address1" placeholder="address1">
-                                    <input v-model="form.address2" type="text" class="w-address2" placeholder="address2">
+                                    <input v-model="form.address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                    <input v-model="form.address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                 </div>
                             </div>
                         </section>
@@ -383,23 +392,24 @@
                             </aside>
                             <div class="stakeholder-body">
                                 <div class="form-row row-full">
-                                    <input v-model="form.endUser" type="text" placeholder="endUser">
+                                    <input v-model="form.endUser" type="text" placeholder="endUser" lang="ja">
                                 </div>
                                 <div class="form-row row-full">
-                                    <input v-model="form.endUser_depart" type="text" placeholder="endUser_depart">
+                                    <input v-model="form.endUser_depart" type="text" placeholder="endUser_depart" lang="ja">
                                 </div>
                                 <div class="form-row row-contact">
-                                    <input v-model="form.endUser_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                    <input v-model="form.endUser_contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
                                 </div>
                                 <div class="form-row row-phone-email">
-                                    <input v-model="form.endUser_phone" type="text" class="w-phone" placeholder="Phone">
-                                    <input v-model="form.endUser_email" type="text" class="w-email" placeholder="EMail">
+                                    <input v-model="form.endUser_phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                    <input v-model="form.endUser_email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
                                 </div>
                                 <div class="form-row row-zip">
                                     <input
                                         v-model="form.endUser_zipcode"
                                         type="text"
                                         class="w-zip"
+                                        lang="en"
                                         inputmode="numeric"
                                         maxlength="8"
                                         placeholder="Zipcode"
@@ -407,8 +417,8 @@
                                     >
                                 </div>
                                 <div class="form-row row-address">
-                                    <input v-model="form.endUser_address1" type="text" class="w-address1" placeholder="address1">
-                                    <input v-model="form.endUser_address2" type="text" class="w-address2" placeholder="address2">
+                                    <input v-model="form.endUser_address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                    <input v-model="form.endUser_address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                 </div>
                             </div>
                         </section>
@@ -425,23 +435,24 @@
                             </aside>
                             <div class="stakeholder-body">
                                 <div class="form-row row-full">
-                                    <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery">
+                                    <input v-model="form.deliveryDestination_company" type="text" placeholder="delivery" lang="ja">
                                 </div>
                                 <div class="form-row row-full">
-                                    <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart">
+                                    <input v-model="form.deliveryDestination_depart" type="text" placeholder="delivery_depart" lang="ja">
                                 </div>
                                 <div class="form-row row-contact">
-                                    <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                                    <input v-model="form.deliveryDestination_contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
                                 </div>
                                 <div class="form-row row-phone-email">
-                                    <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone">
-                                    <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail">
+                                    <input v-model="form.deliveryDestination_phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                    <input v-model="form.deliveryDestination_email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
                                 </div>
                                 <div class="form-row row-zip">
                                     <input
                                         v-model="form.deliveryDestination_zipcode"
                                         type="text"
                                         class="w-zip"
+                                        lang="en"
                                         inputmode="numeric"
                                         maxlength="8"
                                         placeholder="Zipcode"
@@ -449,8 +460,8 @@
                                     >
                                 </div>
                                 <div class="form-row row-address">
-                                    <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1">
-                                    <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2">
+                                    <input v-model="form.deliveryDestination_address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                    <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                 </div>
                             </div>
                         </section>

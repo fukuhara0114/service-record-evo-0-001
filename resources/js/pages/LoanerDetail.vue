@@ -82,17 +82,33 @@
                                 </label>
                                 <label class="parent-id-field">
                                     <span>parentID</span>
-                                    <div class="parent-id-controls">
-                                        <input v-model="form.parentID" type="number">
-                                        <button
-                                            type="button"
-                                            class="btn btn-secondary parent-id-open-btn"
-                                            :disabled="!String(form.parentID || '').trim()"
-                                            title="親の service 案件詳細を新規タブで開く"
-                                            @click="openParentServiceDetail"
-                                        >
-                                            開く
-                                        </button>
+                                    <div class="parent-id-block">
+                                        <div class="parent-id-controls">
+                                            <input v-model="form.parentID" type="number">
+                                            <button
+                                                type="button"
+                                                class="btn btn-secondary parent-id-open-btn"
+                                                :disabled="!String(form.parentID || '').trim()"
+                                                title="親の service 案件詳細を新規タブで開く"
+                                                @click="openParentServiceDetail"
+                                            >
+                                                開く
+                                            </button>
+                                        </div>
+                                        <div v-if="form.parentID" class="parent-id-meta">
+                                            <div class="parent-id-meta-row">
+                                                <span class="parent-id-meta-label">status</span>
+                                                <span class="parent-id-meta-value">{{ parentStatusDisplay }}</span>
+                                            </div>
+                                            <div class="parent-id-meta-row">
+                                                <span class="parent-id-meta-label">sentOut</span>
+                                                <span class="parent-id-meta-value">{{ parentSentOutDisplay }}</span>
+                                            </div>
+                                            <div class="parent-id-meta-row">
+                                                <span class="parent-id-meta-label">経過日数</span>
+                                                <span class="parent-id-meta-value">{{ parentElapsedDaysDisplay }}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </label>
                             </div>
@@ -643,6 +659,7 @@ const props = defineProps({
     attached: { type: Object, required: true },
     record: { type: Object, required: true },
     parentReturnCode: { type: [Number, String], default: null },
+    parentRecord: { type: Object, default: null },
     loanerMaster: { type: Object, default: null },
     files: { type: Array, default: () => [] },
     notes: { type: Array, default: () => [] },
@@ -706,6 +723,7 @@ const leftPaneSize = ref(49)
 const rightPaneSize = ref(51)
 const fileBusy = computed(() => uploading.value || deleting.value || fileSortSaving.value)
 const parentReturnCode = ref(props.parentReturnCode)
+const parentInfo = ref(props.parentRecord ? { ...props.parentRecord } : null)
 const showPriceAdjustDialog = ref(false)
 const priceAdjustSaving = ref(false)
 const priceAdjustError = ref('')
@@ -884,6 +902,73 @@ const discountAmount = computed(() => {
     return Number.isFinite(num) ? num : 0
 })
 const displayPrice = computed(() => basePrice.value - discountAmount.value)
+
+function tokyoTodayYmd() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
+}
+
+function toYmd(value) {
+    if (value == null || value === '') return null
+    const raw = String(value).slice(0, 10)
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
+}
+
+function elapsedDaysFromSentOut(sentOut) {
+    const ymd = toYmd(sentOut)
+    if (!ymd) return ''
+    const today = tokyoTodayYmd()
+    if (ymd > today) return ''
+    const [y1, m1, d1] = ymd.split('-').map(Number)
+    const [y2, m2, d2] = today.split('-').map(Number)
+    const diff = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000)
+    return Number.isFinite(diff) ? String(diff) : ''
+}
+
+function parentStatusFromRecord(data) {
+    if (!data) return null
+    const label = data.status_label
+        ?? data.statusMaster?.status
+        ?? data.status_master?.status
+        ?? data.statusMasterLoaner?.status
+        ?? data.status_master_loaner?.status
+        ?? null
+    const status = data.status
+    if (label != null && String(label).trim() !== '' && status != null && status !== '') {
+        return `${label} (${status})`
+    }
+    if (label != null && String(label).trim() !== '') return String(label)
+    if (status != null && status !== '') return String(status)
+    return null
+}
+
+function normalizeParentInfo(data) {
+    if (!data) return null
+    return {
+        orderID: data.orderID ?? data.order_id ?? null,
+        status: data.status ?? null,
+        status_label: data.status_label
+            ?? data.statusMaster?.status
+            ?? data.status_master?.status
+            ?? data.statusMasterLoaner?.status
+            ?? data.status_master_loaner?.status
+            ?? null,
+        sentOut: toYmd(data.sentOut ?? data.sent_out) ?? null,
+        returnCode: data.returnCode ?? data.return_code ?? null,
+    }
+}
+
+const parentStatusDisplay = computed(() => parentStatusFromRecord(parentInfo.value) || '—')
+const parentSentOutDisplay = computed(() => toYmd(parentInfo.value?.sentOut) || '—')
+const parentElapsedDaysDisplay = computed(() => {
+    if (!parentInfo.value) return '—'
+    const days = elapsedDaysFromSentOut(parentInfo.value.sentOut)
+    return days === '' ? '' : days
+})
 
 const statuses = computed(() => props.statuses ?? [])
 const labors = computed(() => props.labors ?? [])
@@ -1095,26 +1180,32 @@ watch(() => form.status, (status, previousStatus) => {
 watch(() => form.parentID, async (parentId) => {
     if (!parentId) {
         parentReturnCode.value = null
+        parentInfo.value = null
         return
     }
     if (String(parentId) === String(props.record.parentID)) {
         parentReturnCode.value = props.parentReturnCode
+        parentInfo.value = props.parentRecord ? { ...props.parentRecord } : null
         return
     }
     try {
         const result = await apiFetch(`${page.props.appBaseUrl}/servicerecord/record/${parentId}`)
         if (!result) {
             parentReturnCode.value = null
+            parentInfo.value = null
             return
         }
         const { response, data } = result
         if (!response.ok) {
             parentReturnCode.value = null
+            parentInfo.value = null
             return
         }
         parentReturnCode.value = data.returnCode ?? null
+        parentInfo.value = normalizeParentInfo(data)
     } catch {
         parentReturnCode.value = null
+        parentInfo.value = null
     }
 })
 const activeSelectItems = computed(() =>
@@ -2250,6 +2341,12 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     align-items: center;
     gap: 4px;
 }
+.loaner-identity-col label.parent-id-field {
+    align-items: start;
+}
+.loaner-identity-col label.parent-id-field > span {
+    padding-top: 5px;
+}
 .loaner-identity-col label > span {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2268,6 +2365,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     background: #fff;
     color: #1e293b;
     font-size: 11px;
+}
+.loaner-identity-col .parent-id-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 .loaner-identity-col .parent-id-controls {
     display: flex;
@@ -2289,6 +2393,32 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .loaner-identity-col .parent-id-open-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+.loaner-identity-col .parent-id-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 2px;
+    background: #f8fafc;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #334155;
+}
+.loaner-identity-col .parent-id-meta-row {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 6px;
+    align-items: baseline;
+}
+.loaner-identity-col .parent-id-meta-label {
+    color: #64748b;
+    white-space: nowrap;
+}
+.loaner-identity-col .parent-id-meta-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 .loaner-identity-col input[readonly] {
     background: #f8fafc;

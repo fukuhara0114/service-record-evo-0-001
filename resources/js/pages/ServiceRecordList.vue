@@ -80,8 +80,11 @@
                     </button>
                 </div>
             </div>
-            <!-- グループB: 日付フィルタ + Quick Filter + Clear + RMA + Update SM -->
+            <!-- グループB: 件数 + 日付フィルタ + Quick Filter + Clear + RMA + Update SM -->
             <div class="header-center">
+                <span class="filtered-count" aria-live="polite" title="Quick Filter を含む絞り込み後の件数">
+                    {{ filteredRecords.length }}件
+                </span>
                 <div v-if="!isRestrictedListMode" class="arrival-date-filters">
                     <button
                         type="button"
@@ -91,6 +94,16 @@
                         @click="arrivalFilter = 'all'"
                     >
                         All
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: effectiveArrivalFilter === 'active' }"
+                        :disabled="!isArrivalFilterEnabled"
+                        @click="arrivalFilter = 'active'"
+                        title="status が着荷(20)以上〜出荷準備完了 起伝依頼(300)未満"
+                    >
+                        Active
                     </button>
                     <button
                         type="button"
@@ -1185,7 +1198,7 @@ const isSmListMode = computed(() =>
     orderTypeFilter.value === 'rma' || orderTypeFilter.value === 'update_sm',
 )
 const ARRIVAL_FILTER_STORAGE_KEY = 'serviceRecordArrivalFilter'
-const ARRIVAL_FILTERS = ['all', 'hide_future', 'today', '1day', '2day', '3day', '1wk']
+const ARRIVAL_FILTERS = ['all', 'active', 'hide_future', 'today', '1day', '2day', '3day', '1wk']
 
 function loadArrivalFilter() {
     if (typeof window !== 'undefined') {
@@ -1674,6 +1687,13 @@ function addDaysYmd(ymd, days) {
 
 function matchesArrivalFilter(record, filter) {
     if (filter === 'all') return true
+
+    // Active: 着荷(20)以上 〜 出荷準備完了 起伝依頼(300)未満
+    if (filter === 'active') {
+        const status = Number(record?.status)
+        if (!Number.isFinite(status)) return false
+        return status >= 20 && status < 300
+    }
 
     const ymd = formatListDate(record?.receivedDate)
     const today = tokyoTodayYmd()
@@ -3072,6 +3092,21 @@ async function saveRecord() {
     flex: 0 0 auto;
     min-width: 0;
     justify-content: center;
+}
+
+.filtered-count {
+    flex: 0 0 auto;
+    min-width: 4.5em;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.2;
 }
 
 /* グループC: 出荷カレンダー + 閉じる（右寄せ・内容を崩さない） */

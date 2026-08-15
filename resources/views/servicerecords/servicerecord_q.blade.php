@@ -274,6 +274,24 @@
         word-break: break-all !important;     */
     }
     
+    #myLargeTable thead th.sortable-th {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    #myLargeTable thead th.sortable-th:hover {
+        filter: brightness(1.08);
+    }
+
+    #myLargeTable thead th.sortable-th.is-sorted {
+        background-color: #083a9e !important;
+    }
+
+    #myLargeTable thead th .sort-mark {
+        font-size: 0.85em;
+        opacity: 0.95;
+    }
+
     /* 共通設定（thのみに適用されるように調整） */
     #myLargeTable th {
         overflow: hidden;
@@ -301,23 +319,18 @@
         <div class="header-filters-center">
             <form method="get" action="{{ url('/servicerecord_q') }}" class="query-search-row">
                 <label class="query-field">
-                    <span>dealer</span>
-                    <input type="text" name="dealer" value="{{ $filters['dealer'] ?? '' }}" placeholder="dealer">
+                    <input type="text" name="dealer" value="{{ $filters['dealer'] ?? '' }}" placeholder="dealer" aria-label="dealer">
                 </label>
                 <label class="query-field">
-                    <span>productName</span>
-                    <input type="text" name="productName" value="{{ $filters['productName'] ?? '' }}" placeholder="productName">
+                    <input type="text" name="productName" value="{{ $filters['productName'] ?? '' }}" placeholder="productName" aria-label="productName">
                 </label>
                 <label class="query-field">
-                    <span>SN</span>
-                    <input type="text" name="SN" value="{{ $filters['SN'] ?? '' }}" placeholder="SN">
+                    <input type="text" name="SN" value="{{ $filters['SN'] ?? '' }}" placeholder="SN" aria-label="SN">
                 </label>
                 <label class="query-field">
-                    <span>endUser</span>
-                    <input type="text" name="endUser" value="{{ $filters['endUser'] ?? '' }}" placeholder="endUser">
+                    <input type="text" name="endUser" value="{{ $filters['endUser'] ?? '' }}" placeholder="endUser" aria-label="endUser">
                 </label>
                 <label class="query-field query-field-year">
-                    <span>受注年</span>
                     <select name="year">
                         <option value="" @selected($selectedYear === null)>過去1年</option>
                         <option value="all" @selected($selectedYear === 'all')>全件</option>
@@ -363,25 +376,25 @@
         <table id="myLargeTable" style="width:100%">
             <thead>
                 <tr>
-                    <th style="width:  80px;">ID</th>
-                    <th style="width:  80px;">着荷日</th>
-                    <th style="width:  80px;">受注日</th>
-                    <th style="width: 120px;">Status</th>
-                    <th style="width:  80px;">RMA</th>
-                    <th style="width: 150px;">製品名</th>
-                    <th style="width: 120px;">SN</th>
-                    <th style="width: 100px;">作業内容</th>
-                    <th style="width:  60px;">作業担当</th>
-                    <th style="width: 200px;">販社</th>
-                    <th style="width: 200px;">部署</th>
-                    <th style="width: 100px;">担当者</th>
-                    <th style="width: 200px;">E/U</th>
-                    <th style="width: 200px;">E/U部署</th>
-                    <th style="width: 100px;">E/U担当者</th>
-                    <th style="width: 100px;">E/U都道府県</th>
-                    <th style="width: 300px;">E/U住所</th>
-                    <th style="width: 350px;">E/U Email</th>
-                    <th style="width: 220px;">E/U Tel</th>
+                    <th class="sortable-th" data-sort-key="orderID" style="width:  80px;">ID</th>
+                    <th class="sortable-th" data-sort-key="receivedDate" style="width:  80px;">着荷日</th>
+                    <th class="sortable-th" data-sort-key="orderDate" style="width:  80px;">受注日</th>
+                    <th class="sortable-th" data-sort-key="status" style="width: 120px;">Status</th>
+                    <th class="sortable-th" data-sort-key="RMA" style="width:  80px;">RMA</th>
+                    <th class="sortable-th" data-sort-key="productName" style="width: 150px;">製品名</th>
+                    <th class="sortable-th" data-sort-key="SN" style="width: 120px;">SN</th>
+                    <th class="sortable-th" data-sort-key="returnCode" style="width: 100px;">作業内容</th>
+                    <th class="sortable-th" data-sort-key="laborName" style="width:  60px;">作業担当</th>
+                    <th class="sortable-th" data-sort-key="dealer" style="width: 200px;">販社</th>
+                    <th class="sortable-th" data-sort-key="dealer_depart" style="width: 200px;">部署</th>
+                    <th class="sortable-th" data-sort-key="contactPerson" style="width: 100px;">担当者</th>
+                    <th class="sortable-th" data-sort-key="endUser" style="width: 200px;">E/U</th>
+                    <th class="sortable-th" data-sort-key="endUser_depart" style="width: 200px;">E/U部署</th>
+                    <th class="sortable-th" data-sort-key="endUser_contactPerson" style="width: 100px;">E/U担当者</th>
+                    <th class="sortable-th" data-sort-key="endUser_address1" style="width: 100px;">E/U都道府県</th>
+                    <th class="sortable-th" data-sort-key="endUser_address2" style="width: 300px;">E/U住所</th>
+                    <th class="sortable-th" data-sort-key="endUser_email" style="width: 350px;">E/U Email</th>
+                    <th class="sortable-th" data-sort-key="endUser_phone" style="width: 220px;">E/U Tel</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -396,6 +409,10 @@
     const appBaseUrl = @json(url('/'));
     const queryHitCount = Array.isArray(allRecords) ? allRecords.length : 0;
 
+    let displayedRecords = Array.isArray(allRecords) ? allRecords.slice() : [];
+    let listColumnSortKey = null;
+    let listColumnSortDir = 'asc'; // asc | desc
+
     function updateResultCount(visibleCount) {
         const el = document.getElementById('resultCount');
         if (!el) return;
@@ -407,10 +424,92 @@
         }
     }
 
+    function statusLabel(r) {
+        if (r?.order_type === 'waiting_list') return '';
+        if (r?.order_type === 'loaner') return r.status_master_loaner?.status || '';
+        return r.status_master?.status || '';
+    }
+
+    function recordSortValue(record, key) {
+        switch (key) {
+            case 'orderID':
+            case 'status': {
+                const n = Number(record?.[key]);
+                return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
+            }
+            case 'returnCode':
+                return record?.return_code_master?.description || '';
+            case 'laborName':
+                return record?.labor_master?.laborName || '';
+            case 'receivedDate':
+            case 'orderDate':
+            case 'RMA':
+            case 'productName':
+            case 'SN':
+            case 'dealer':
+            case 'dealer_depart':
+            case 'contactPerson':
+            case 'endUser':
+            case 'endUser_depart':
+            case 'endUser_contactPerson':
+            case 'endUser_address1':
+            case 'endUser_address2':
+            case 'endUser_email':
+            case 'endUser_phone':
+                return record?.[key] ?? '';
+            default:
+                return record?.[key] ?? '';
+        }
+    }
+
+    function sortRecordsByColumn(records, key, dir) {
+        if (!key) return records.slice();
+        const mult = dir === 'desc' ? -1 : 1;
+        return records.slice().sort((a, b) => {
+            const va = recordSortValue(a, key);
+            const vb = recordSortValue(b, key);
+            let cmp = 0;
+            if (typeof va === 'number' && typeof vb === 'number') {
+                cmp = va - vb;
+            } else {
+                cmp = String(va).localeCompare(String(vb), 'ja', {
+                    numeric: true,
+                    sensitivity: 'base',
+                });
+            }
+            if (cmp !== 0) return cmp * mult;
+            const idA = Number(a?.orderID);
+            const idB = Number(b?.orderID);
+            return (Number.isFinite(idA) ? idA : 0) - (Number.isFinite(idB) ? idB : 0);
+        });
+    }
+
+    function updateSortHeaderMarks() {
+        document.querySelectorAll('#myLargeTable thead th.sortable-th').forEach((th) => {
+            const key = th.getAttribute('data-sort-key');
+            const label = th.getAttribute('data-label') || th.textContent.replace(/\s*[▲▼]\s*$/, '').trim();
+            th.setAttribute('data-label', label);
+            const active = listColumnSortKey === key;
+            th.classList.toggle('is-sorted', active);
+            th.title = active
+                ? (listColumnSortDir === 'desc' ? '降順（クリックで昇順）' : '昇順（クリックで降順）')
+                : 'クリックで並べ替え';
+            th.innerHTML = active
+                ? `${label}<span class="sort-mark" aria-hidden="true">${listColumnSortDir === 'desc' ? ' ▼' : ' ▲'}</span>`
+                : label;
+        });
+    }
+
+    function applyCurrentSort(records) {
+        if (!listColumnSortKey) return records.slice();
+        return sortRecordsByColumn(records, listColumnSortKey, listColumnSortDir);
+    }
+
     function renderTable(filteredData) {
         const tbody = document.getElementById('tableBody');
         let html = '';
-        const rows = Array.isArray(filteredData) ? filteredData : [];
+        displayedRecords = Array.isArray(filteredData) ? filteredData.slice() : [];
+        const rows = applyCurrentSort(displayedRecords);
 
         for (let i = 0; i < rows.length; i++) {
             const r = rows[i];
@@ -443,14 +542,27 @@
         }
         tbody.innerHTML = html;
         updateResultCount(rows.length);
+        updateSortHeaderMarks();
     }
-    renderTable(allRecords);
 
-    function statusLabel(r) {
-        if (r?.order_type === 'waiting_list') return '';
-        if (r?.order_type === 'loaner') return r.status_master_loaner?.status || '';
-        return r.status_master?.status || '';
+    function toggleColumnSort(key) {
+        if (!key) return;
+        if (listColumnSortKey === key) {
+            listColumnSortDir = listColumnSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            listColumnSortKey = key;
+            listColumnSortDir = 'asc';
+        }
+        renderTable(displayedRecords);
     }
+
+    document.querySelectorAll('#myLargeTable thead th.sortable-th').forEach((th) => {
+        th.addEventListener('click', () => {
+            toggleColumnSort(th.getAttribute('data-sort-key'));
+        });
+    });
+
+    renderTable(allRecords);
 
     document.getElementById('customSearchInput').addEventListener('input', function() {
         const searchValue = this.value.toLowerCase().replace(/　/g, ' ');
@@ -463,10 +575,12 @@
 
         const filtered = allRecords.filter(r => {
             const combinedText = [
-                r.receivedDate, r.orderDate, r.productName, r.SN, r.endUser,
+                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.RMA,
+                r.productName, r.SN, r.endUser,
                 r.endUser_depart, r.endUser_contactPerson,
                 r.endUser_address1, r.endUser_address2,
-                r.endUser_email, r.endUser_phone, r.dealer, r.dealer_depart
+                r.endUser_email, r.endUser_phone, r.dealer, r.dealer_depart,
+                r.return_code_master?.description, r.labor_master?.laborName, r.contactPerson,
             ].join(' ').toLowerCase();
 
             return keywords.every(keyword => combinedText.includes(keyword));
