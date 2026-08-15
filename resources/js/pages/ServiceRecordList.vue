@@ -230,7 +230,13 @@
                 <table id="myLargeTable">
                     <thead>
                         <tr>
-                            <th style="width: 80px; text-align: center;">OrderID</th>
+                            <SortableTh
+                                sort-key="orderID"
+                                :active-key="listColumnSortKey"
+                                :direction="listColumnSortDir"
+                                style="width: 80px; text-align: center;"
+                                @sort="toggleColumnSort"
+                            >OrderID</SortableTh>
                             <th v-if="mode === 'shippingPrep'" style="width: 44px; text-align: center;">
                                 <input
                                     type="checkbox"
@@ -241,18 +247,18 @@
                                     @change="toggleAbroadSelectAll($event)"
                                 >
                             </th>
-                            <th>予定出荷日</th>
-                            <th>ステータス</th>
-                            <th>RMA#</th>
-                            <th>製品名</th>
-                            <th>S/N</th>
-                            <th>作業内容</th>
-                            <th>担当者</th>
-                            <th>販売店</th>
-                            <th>部署</th>
-                            <th>担当者</th>
-                            <th>Email</th>
-                            <th>Phone</th>
+                            <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">予定出荷日</SortableTh>
+                            <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                            <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                            <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                            <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                            <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                            <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                            <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                            <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                            <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                            <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                            <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                         </tr>
                     </thead>
                     <tbody>
@@ -327,7 +333,13 @@
                         <table id="myLargeTable">
                             <thead>
                                 <tr>
-                                    <th style="width: 80px; text-align: center;">OrderID</th>
+                                    <SortableTh
+                                        sort-key="orderID"
+                                        :active-key="listColumnSortKey"
+                                        :direction="listColumnSortDir"
+                                        style="width: 80px; text-align: center;"
+                                        @sort="toggleColumnSort"
+                                    >OrderID</SortableTh>
                                     <th v-if="mode === 'shippingPrep'" style="width: 44px; text-align: center;">
                                         <input
                                             type="checkbox"
@@ -338,18 +350,18 @@
                                             @change="toggleAbroadSelectAll($event)"
                                         >
                                     </th>
-                                    <th>予定出荷日</th>
-                                    <th>ステータス</th>
-                                    <th>RMA#</th>
-                                    <th>製品名</th>
-                                    <th>S/N</th>
-                                    <th>作業内容</th>
-                                    <th>担当者</th>
-                                    <th>販売店</th>
-                                    <th>部署</th>
-                                    <th>担当者</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
+                                    <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">予定出荷日</SortableTh>
+                                    <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                                    <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                                    <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                                    <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                                    <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                                    <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                                    <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                                    <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                                    <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                                    <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                                    <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                                 </tr>
                             </thead>
                             <tbody>
@@ -464,24 +476,24 @@
             <table id="myLargeTable">
                 <thead>
                     <tr v-if="mode === 'engineer'">
-                        <th style="width: 80px; text-align: center;">OrderID</th>
-                        <th>受領日</th>
-                        <th>order_type</th>
-                        <th>ステータス</th>
-                        <th>RMA#</th>
-                        <th>製品名</th>
-                        <th>item</th>
-                        <th>S/N</th>
-                        <th>作業内容</th>
-                        <th>担当者</th>
-                        <th>販売店</th>
-                        <th>部署</th>
-                        <th>担当者</th>
-                        <th>Email</th>
-                        <th>Phone</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
+                        <SortableTh sort-key="order_type" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">order_type</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                        <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                        <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                     </tr>
                     <tr v-else-if="orderTypeFilter === 'abroad'">
-                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
                         <th style="width: 44px; text-align: center;">
                             <input
                                 type="checkbox"
@@ -492,17 +504,17 @@
                                 @change="toggleAbroadSelectAll($event)"
                             >
                         </th>
-                        <th>receivedDate</th>
-                        <th>status</th>
-                        <th>productName</th>
-                        <th>SN</th>
-                        <th>作業内容</th>
-                        <th>dealer</th>
-                        <th>A2LA</th>
-                        <th>symptoms</th>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">receivedDate</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">status</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">productName</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer</SortableTh>
+                        <SortableTh sort-key="a2la" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">A2LA</SortableTh>
+                        <SortableTh sort-key="symptoms" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">symptoms</SortableTh>
                     </tr>
                     <tr v-else-if="isSmListMode">
-                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
                         <th style="width: 44px; text-align: center;">
                             <input
                                 type="checkbox"
@@ -513,43 +525,43 @@
                                 @change="toggleAbroadSelectAll($event)"
                             >
                         </th>
-                        <th>RMA#</th>
-                        <th>sm_workorder</th>
-                        <th>productName</th>
-                        <th>SN</th>
-                        <th>entityID</th>
-                        <th>作業内容</th>
-                        <th>incident</th>
-                        <th style="width: 96px; text-align: center;">symptomsNum</th>
-                        <th>symptoms</th>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="sm_workorder" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">sm_workorder</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">productName</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="entityID" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">entityID</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="incident" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">incident</SortableTh>
+                        <SortableTh sort-key="symptomsNum" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 96px; text-align: center;" @sort="toggleColumnSort">symptomsNum</SortableTh>
+                        <SortableTh sort-key="symptoms" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">symptoms</SortableTh>
                     </tr>
                     <tr v-else-if="orderTypeFilter === 'loaner'">
-                        <th style="width: 80px; text-align: center;">orderID</th>
-                        <th style="width: 80px; text-align: center;">parentID</th>
-                        <th>status</th>
-                        <th>productName</th>
-                        <th>item</th>
-                        <th>SN</th>
-                        <th>dealer</th>
-                        <th>dealer_depart</th>
-                        <th>contactPerson</th>
-                        <th>shippingOut_requiredDate</th>
-                        <th>shippedDate</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">orderID</SortableTh>
+                        <SortableTh sort-key="parentID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">parentID</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">status</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">productName</SortableTh>
+                        <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer_depart</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">contactPerson</SortableTh>
+                        <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">shippingOut_requiredDate</SortableTh>
+                        <SortableTh sort-key="shippedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">shippedDate</SortableTh>
                     </tr>
                     <tr v-else-if="orderTypeFilter === 'waiting_list'">
-                        <th style="width: 88px; text-align: center;">繰上</th>
-                        <th style="width: 80px; text-align: center;">orderID</th>
-                        <th style="width: 80px; text-align: center;">ParentID</th>
-                        <th>ProductName</th>
-                        <th>item</th>
-                        <th>SN</th>
-                        <th>dealer</th>
-                        <th>dealer_depart</th>
-                        <th>contactPerson</th>
-                        <th>返却元</th>
+                        <SortableTh sort-key="promotion_ready" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 88px; text-align: center;" @sort="toggleColumnSort">繰上</SortableTh>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">orderID</SortableTh>
+                        <SortableTh sort-key="parentID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">ParentID</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ProductName</SortableTh>
+                        <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer_depart</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">contactPerson</SortableTh>
+                        <SortableTh sort-key="promotion_source_orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">返却元</SortableTh>
                     </tr>
                     <tr v-else-if="orderTypeFilter === 'invoice'">
-                        <th style="width: 80px; text-align: center;">OrderID</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
                         <th style="width: 44px; text-align: center;">
                             <input
                                 type="checkbox"
@@ -560,33 +572,33 @@
                                 @change="toggleAbroadSelectAll($event)"
                             >
                         </th>
-                        <th>出荷予定日</th>
-                        <th>ステータス</th>
-                        <th>RMA#</th>
-                        <th>製品名</th>
-                        <th>S/N</th>
-                        <th>作業内容</th>
-                        <th>担当者</th>
-                        <th>販売店</th>
-                        <th>部署</th>
-                        <th>担当者</th>
-                        <th>Email</th>
-                        <th>Phone</th>
+                        <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">出荷予定日</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                        <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                     </tr>
                     <tr v-else>
-                        <th style="width: 80px; text-align: center;">OrderID</th>
-                        <th>受領日</th>
-                        <th>ステータス</th>
-                        <th>RMA#</th>
-                        <th>製品名</th>
-                        <th>S/N</th>
-                        <th>作業内容</th>
-                        <th>担当者</th>
-                        <th>販売店</th>
-                        <th>部署</th>
-                        <th>担当者</th>
-                        <th>Email</th>
-                        <th>Phone</th>
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                        <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                     </tr>
                 </thead>
                 <tbody>
@@ -999,6 +1011,7 @@ import { apiFetch } from '@/utils/apiFetch'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
 import DetailShell from '@/components/ServiceRecord/Layer2/DetailShell.vue'
 import InputDialogA from '@/components/ServiceRecord/Layer3/InputDialogA.vue'
@@ -1710,6 +1723,78 @@ function sortByStatusAscThenOrderId(records) {
     })
 }
 
+/** ヘッダークリックによる一覧ソート（全タブ共通） */
+const listColumnSortKey = ref(null)
+const listColumnSortDir = ref('asc') // asc | desc
+
+function toggleColumnSort(key) {
+    if (!key) return
+    if (listColumnSortKey.value === key) {
+        listColumnSortDir.value = listColumnSortDir.value === 'asc' ? 'desc' : 'asc'
+        return
+    }
+    listColumnSortKey.value = key
+    listColumnSortDir.value = 'asc'
+}
+
+function clearColumnSort() {
+    listColumnSortKey.value = null
+    listColumnSortDir.value = 'asc'
+}
+
+function recordColumnSortValue(record, key) {
+    switch (key) {
+        case 'orderID':
+        case 'parentID':
+        case 'promotion_source_orderID':
+        case 'status': {
+            const n = Number(record?.[key])
+            return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
+        }
+        case 'symptomsNum': {
+            const n = Number(symptomsNumForRecord(record))
+            return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
+        }
+        case 'promotion_ready':
+            return isPromotionReady(record) ? 1 : 0
+        case 'returnCode':
+            return record?.return_code_master?.description || ''
+        case 'laborName':
+            return record?.labor_master?.laborName || ''
+        case 'order_type':
+            return engineerOrderTypeLabel(record) || ''
+        case 'a2la':
+            return abroadA2laLabel(record?.a2la) || ''
+        case 'receivedDate':
+        case 'shippingOut_requiredDate':
+        case 'shippedDate':
+            return formatListDate(record?.[key]) || ''
+        default:
+            return record?.[key] ?? ''
+    }
+}
+
+function sortRecordsByColumn(records, key, dir) {
+    const mult = dir === 'desc' ? -1 : 1
+    return [...records].sort((a, b) => {
+        const va = recordColumnSortValue(a, key)
+        const vb = recordColumnSortValue(b, key)
+        let cmp = 0
+        if (typeof va === 'number' && typeof vb === 'number') {
+            cmp = va - vb
+        } else {
+            cmp = String(va).localeCompare(String(vb), 'ja', {
+                numeric: true,
+                sensitivity: 'base',
+            })
+        }
+        if (cmp !== 0) return cmp * mult
+        const idA = Number(a?.orderID)
+        const idB = Number(b?.orderID)
+        return (Number.isFinite(idA) ? idA : 0) - (Number.isFinite(idB) ? idB : 0)
+    })
+}
+
 const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
@@ -1787,15 +1872,23 @@ const filteredRecords = computed(() => {
         }
     }
 
-    const sortByShippingAndDealer =
-        props.mode === 'logistics'
-        || props.mode === 'shippingPrep'
-        || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
+    if (listColumnSortKey.value) {
+        records = sortRecordsByColumn(
+            records,
+            listColumnSortKey.value,
+            listColumnSortDir.value,
+        )
+    } else {
+        const sortByShippingAndDealer =
+            props.mode === 'logistics'
+            || props.mode === 'shippingPrep'
+            || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
 
-    if (sortByShippingAndDealer) {
-        records = sortByShippingOutDescThenDealer(records)
-    } else if (!isBoardMode.value && orderTypeFilter.value === 'loaner') {
-        records = sortByStatusAscThenOrderId(records)
+        if (sortByShippingAndDealer) {
+            records = sortByShippingOutDescThenDealer(records)
+        } else if (!isBoardMode.value && orderTypeFilter.value === 'loaner') {
+            records = sortByStatusAscThenOrderId(records)
+        }
     }
 
     return records
@@ -2177,6 +2270,7 @@ async function downloadAbroadExcelFile() {
 }
 
 watch(orderTypeFilter, (value) => {
+    clearColumnSort()
     persistOrderTypeFilter(value)
     syncOrderTypeQuery(value)
     if (value !== 'abroad' && value !== 'rma' && value !== 'update_sm') {

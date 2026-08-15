@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cb224f3e372cd72ac6de09d1a79a5596",
+    "content-hash": "7a6e6e865c0d2494fca95078bc158903",
     "packages": [
         {
             "name": "brick/math",
@@ -209,6 +209,68 @@
                 "source": "https://github.com/dflydev/dflydev-dot-access-data/tree/v3.0.3"
             },
             "time": "2024-07-08T12:26:09+00:00"
+        },
+        {
+            "name": "directorytree/imapengine",
+            "version": "v1.25.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/DirectoryTree/ImapEngine.git",
+                "reference": "e3e0e5f5b1f1713013d17ea2a72277ffcfb44088"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/DirectoryTree/ImapEngine/zipball/e3e0e5f5b1f1713013d17ea2a72277ffcfb44088",
+                "reference": "e3e0e5f5b1f1713013d17ea2a72277ffcfb44088",
+                "shasum": ""
+            },
+            "require": {
+                "egulias/email-validator": "^4.0",
+                "illuminate/collections": ">=9.0",
+                "nesbot/carbon": ">=2.0",
+                "php": "^8.1",
+                "symfony/mime": ">=6.0",
+                "zbateson/mail-mime-parser": "^3.0|^4.0"
+            },
+            "require-dev": {
+                "pestphp/pest": "^2.0|^3.0|^4.0",
+                "spatie/ray": "^1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "DirectoryTree\\ImapEngine\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Steve Bauman",
+                    "email": "steven_bauman@outlook.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A fully-featured IMAP library -- without the PHP extension",
+            "homepage": "https://github.com/directorytree/imapengine",
+            "keywords": [
+                "engine",
+                "imap",
+                "mail"
+            ],
+            "support": {
+                "issues": "https://github.com/DirectoryTree/ImapEngine/issues",
+                "source": "https://github.com/DirectoryTree/ImapEngine/tree/v1.25.5"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/stevebauman",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-08-10T02:59:51+00:00"
         },
         {
             "name": "doctrine/inflector",
