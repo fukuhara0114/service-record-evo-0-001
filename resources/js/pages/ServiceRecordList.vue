@@ -5,7 +5,7 @@
             <div class="header-left">
                 <span v-if="mode === 'engineer'" class="mode-badge">Engineer</span>
                 <span v-else-if="mode === 'logistics'" class="mode-badge">Logistics (status=350)</span>
-                <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,385)</span>
+                <span v-else-if="mode === 'shippingPrep'" class="mode-badge">出荷準備 (status=300,310,350,385)</span>
                 <div v-if="!isRestrictedListMode" class="order-type-filters">
                     <button
                         type="button"
@@ -158,6 +158,35 @@
                         @click="arrivalFilter = '1wk'"
                     >
                         1Wk
+                    </button>
+                </div>
+                <div
+                    v-if="mode === 'logistics' || mode === 'shippingPrep'"
+                    class="order-type-filters logistics-shipping-date-filters"
+                >
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: shippingDateFilter === 'all' }"
+                        @click="shippingDateFilter = 'all'"
+                    >
+                        All
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: shippingDateFilter === 'today' }"
+                        @click="shippingDateFilter = 'today'"
+                    >
+                        Today
+                    </button>
+                    <button
+                        type="button"
+                        class="order-type-btn"
+                        :class="{ active: shippingDateFilter === 'tomorrow' }"
+                        @click="shippingDateFilter = 'tomorrow'"
+                    >
+                        Tomorrow
                     </button>
                 </div>
                 <div class="search-area">
@@ -327,6 +356,7 @@
                     :show-footer="false"
                     :status-filter="boardStatusFilter"
                     :status-by-order-id="boardStatusByOrderId"
+                    :color-by-status="mode !== 'shippingPrep'"
                     @select-order="onLogisticsCalendarSelect"
                 />
             </div>
@@ -429,6 +459,7 @@
                             :editable="false"
                             :status-filter="boardStatusFilter"
                             :status-by-order-id="boardStatusByOrderId"
+                            :color-by-status="mode !== 'shippingPrep'"
                             @select-order="onLogisticsCalendarSelect"
                         />
                     </div>
@@ -1042,6 +1073,7 @@ import StockedPartSelectDialog from '@/components/ServiceRecord/Layer3/StockedPa
 import StockedPartQuantityDialog from '@/components/ServiceRecord/Layer3/StockedPartQuantityDialog.vue'
 import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/UnregisteredEmailNoteLinkDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
+import HolidayJp from '@holiday-jp/holiday_jp'
 
 const props = defineProps({
     initialRecords: Array,
@@ -1062,9 +1094,11 @@ const isBoardMode = computed(() => props.mode === 'logistics' || props.mode === 
 const isRestrictedListMode = computed(() =>
     props.mode === 'engineer' || props.mode === 'logistics' || props.mode === 'shippingPrep',
 )
-const boardStatusFilter = computed(() => (
-    props.mode === 'shippingPrep' ? '300,385' : '300,350'
-))
+const boardStatusFilter = computed(() => {
+    if (props.mode === 'shippingPrep') return '300,310,350,385'
+    if (props.mode === 'logistics') return '350'
+    return '300,350'
+})
 
 const loanerReturnedBadgeCount = computed(() =>
     Number(props.tabBadgeCounts?.loanerReturned ?? 0) || 0,
@@ -1273,6 +1307,8 @@ function syncArrivalQuery(value) {
 }
 
 const arrivalFilter = ref(loadArrivalFilter())
+/** Logistics: 出荷予定日フィルタ（デフォルト Today）／Invoice: デフォルト All */
+const shippingDateFilter = ref(props.mode === 'logistics' ? 'today' : 'all')
 const isArrivalFilterEnabled = computed(() => orderTypeFilter.value === 'service')
 const effectiveArrivalFilter = computed(() =>
     isArrivalFilterEnabled.value ? arrivalFilter.value : 'all',
@@ -1718,6 +1754,34 @@ function addDaysYmd(ymd, days) {
     return `${utc.getUTCFullYear()}-${pad(utc.getUTCMonth() + 1)}-${pad(utc.getUTCDate())}`
 }
 
+function isNonBusinessDayYmd(ymd) {
+    const [y, m, d] = ymd.split('-').map(Number)
+    const date = new Date(y, m - 1, d, 12, 0, 0)
+    const day = date.getDay()
+    if (day === 0 || day === 6) return true
+    return HolidayJp.isHoliday(date)
+}
+
+/** 翌日以降の最初の営業日（土日・日本の祝日を除外） */
+function nextBusinessDayYmd(fromYmd = tokyoTodayYmd()) {
+    let ymd = addDaysYmd(fromYmd, 1)
+    for (let i = 0; i < 14; i++) {
+        if (!isNonBusinessDayYmd(ymd)) return ymd
+        ymd = addDaysYmd(ymd, 1)
+    }
+    return ymd
+}
+
+function matchesLogisticsShippingDateFilter(record, filter) {
+    if (filter === 'all') return true
+    const ymd = formatListDate(record?.shippingOut_requiredDate)
+    if (!ymd) return false
+    const today = tokyoTodayYmd()
+    if (filter === 'today') return ymd === today
+    if (filter === 'tomorrow') return ymd === nextBusinessDayYmd(today)
+    return true
+}
+
 function matchesArrivalFilter(record, filter) {
     if (filter === 'all') return true
 
@@ -1879,8 +1943,14 @@ const filteredRecords = computed(() => {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
     }
 
-    if (!isRestrictedListMode.value) {
+    if (!isRestrictedListMode.value && orderTypeFilter.value !== 'invoice') {
         records = records.filter((r) => matchesArrivalFilter(r, effectiveArrivalFilter.value))
+    }
+
+    if (props.mode === 'logistics' || props.mode === 'shippingPrep') {
+        records = records.filter((r) =>
+            matchesLogisticsShippingDateFilter(r, shippingDateFilter.value),
+        )
     }
 
     if (searchQuery.value) {
@@ -2400,11 +2470,8 @@ function matchesOrderTypeFilter(record, filter) {
         return isServiceOrLoaner && Number.isFinite(status) && status >= 200 && status < 300
     }
     if (filter === 'invoice') {
-        const isServiceOrLoaner = orderType === 'service'
-            || orderType === 'loaner'
-            || orderType == null
-            || orderType === ''
-        return isServiceOrLoaner && Number.isFinite(status) && status >= 300 && status < 350
+        // Invoiceページ（shipping-prep）と同じ: status 300 / 310 / 350 / 385
+        return status === 300 || status === 310 || status === 350 || status === 385
     }
     if (filter === 'loaner') {
         return orderType === 'loaner'
@@ -3175,6 +3242,20 @@ async function saveRecord() {
     padding-top: 4px;
 }
 
+/* All と案件数の間隔（header-center の gap 10px を差し引き）／幅は Tomorrow に統一 */
+.logistics-shipping-date-filters {
+    margin-left: calc(100px - 10px);
+}
+
+.logistics-shipping-date-filters .order-type-btn {
+    box-sizing: border-box;
+    width: 7.2em;
+    min-width: 7.2em;
+    padding-left: 6px;
+    padding-right: 6px;
+    text-align: center;
+}
+
 .arrival-date-filters {
     display: flex;
     gap: 6px;
@@ -3865,11 +3946,15 @@ async function saveRecord() {
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 700 !important;
 }
 
 #myLargeTable tbody td {
     background: #f5f5f5;
+    font-weight: 700 !important;
+}
+
+.scrollable-table-zone #myLargeTable {
     font-weight: 700;
 }
 
@@ -3941,11 +4026,11 @@ async function saveRecord() {
 }
 
 #myLargeTable td.status-cell-underline-350 {
-    border-bottom: 3px solid #facc15;
+    border-bottom: 5px solid #facc15;
 }
 
 #myLargeTable td.status-cell-underline-385 {
-    border-bottom: 3px solid #2563eb;
+    border-bottom: 5px solid #2563eb;
 }
 
 .global-loading {

@@ -241,6 +241,17 @@
         border-collapse: collapse !important;
         border: 2px solid #1e1f21 !important;
     }
+    #myLargeTable tbody tr td {
+        border: 1px solid #333333 !important;
+        padding: 3px 4px !important;
+        overflow: hidden !important;          /* 枠からはみ出た部分を隠す */
+        vertical-align: top !important;       /* テキストを上揃えにする */
+
+        white-space: nowrap !important;       /* 💡 絶対に自動改行させない */
+        text-overflow: ellipsis !important;   /* 💡 はみ出た部分を「...」で省略表示する */
+        font-weight: 700 !important;
+    }
+
     #myLargeTable thead th {
         position: -webkit-sticky !important;
         position: sticky !important;
@@ -250,19 +261,8 @@
         z-index: 9999 !important;
         box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
         white-space: nowrap; /* ヘッダー文字は潰れないように改行禁止のままにします */
-        border: 1px solid #333333 !important; 
-    }
-
-    /* 上下の罫線とホバー設定 */
-
-    #myLargeTable tbody tr td {
         border: 1px solid #333333 !important;
-        padding: 3px 4px !important;
-        overflow: hidden !important;          /* 枠からはみ出た部分を隠す */
-        vertical-align: top !important;       /* テキストを上揃えにする */
-
-        white-space: nowrap !important;       /* 💡 絶対に自動改行させない */
-        text-overflow: ellipsis !important;   /* 💡 はみ出た部分を「...」で省略表示する */
+        font-weight: 700 !important;
     }
 
     #myLargeTable_ tbody tr:hover td {

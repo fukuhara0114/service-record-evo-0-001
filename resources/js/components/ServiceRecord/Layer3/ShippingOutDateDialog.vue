@@ -179,6 +179,8 @@ const props = defineProps({
     statusFilter: { type: [Number, String], default: null },
     /** orderID → status のマップ（一覧側の値を優先して色分けする） */
     statusByOrderId: { type: Object, default: () => ({}) },
+    /** false のとき status によるイベント色分け・凡例を出さない */
+    colorByStatus: { type: Boolean, default: true },
     orderId: { type: [Number, String], default: null },
     productName: { type: String, default: '' },
     serialNumber: { type: String, default: '' },
@@ -224,8 +226,11 @@ const browseHintText = computed(() => {
 })
 
 const showStatusColors = computed(() =>
-    normalizeStatusFilter(props.statusFilter).length > 0
-    || Boolean(props.statusByOrderId && Object.keys(props.statusByOrderId).length > 0),
+    props.colorByStatus
+    && (
+        normalizeStatusFilter(props.statusFilter).length > 0
+        || Boolean(props.statusByOrderId && Object.keys(props.statusByOrderId).length > 0)
+    ),
 )
 const statusCount300 = ref(0)
 const statusCount350 = ref(0)
@@ -489,6 +494,14 @@ function resolveEventRecordStatus(eventLike) {
 }
 
 function eventStyleByStatus(status) {
+    if (!props.colorByStatus) {
+        return {
+            className: '',
+            backgroundColor: undefined,
+            borderColor: undefined,
+            textColor: undefined,
+        }
+    }
     const code = resolveRecordStatus(status)
     if (code === 300) {
         return {
