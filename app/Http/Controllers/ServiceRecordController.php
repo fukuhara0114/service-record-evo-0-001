@@ -21,11 +21,13 @@ use App\Models\MaintenanceContractMaster;
 use App\Models\ReturnCode;
 use App\Models\Status;
 use App\Services\EmlReplyDraftService;
+use App\Services\Gmail\RemandNotificationMailer;
 use App\Services\MasterPriceVersionResolver;
 use App\Support\LoanerStatusFlow;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -163,6 +165,30 @@ class ServiceRecordController extends Controller
         return $this->renderServiceRecordList($request, 'admin');
     }
 
+    /**
+     * メール等から案件詳細を直接開くための入口。
+     * クエリの & が &amp; に化けても壊れないよう、パスのみの URL を使う。
+     */
+    public function openDetail(int $orderID)
+    {
+        $record = ServiceRecord::query()
+            ->where('orderID', $orderID)
+            ->first(['orderID', 'order_type']);
+
+        if (! $record) {
+            abort(404, '指定された案件は存在しません。');
+        }
+
+        $isLoaner = in_array($record->order_type, ['loaner', 'waiting_list'], true);
+        $query = http_build_query([
+            'orderType' => $isLoaner ? 'loaner' : 'service',
+            'arrival' => 'all',
+            'openOrderID' => $orderID,
+        ]);
+
+        return redirect(url('/servicerecord/administrator').'?'.$query);
+    }
+
     // engineer用表示（自分の laborID の案件のみ）
     public function engineer(Request $request)
     {
@@ -254,8 +280,10 @@ class ServiceRecordController extends Controller
         }
 
         if ($mode === 'shippingPrep' || $mode === 'logistics') {
-            // 出荷予定日の降順 → dealer あいうえお順（一覧表示の既定ソート）
+            // 出荷予定日の降順（NULLは末尾）→ dealer 昇順 → orderID
+            // dealer のあいうえお順は一覧側（localeCompare ja）でも再ソートする
             $records = $query
+                ->orderByRaw('CASE WHEN shippingOut_requiredDate IS NULL THEN 1 ELSE 0 END ASC')
                 ->orderByDesc('shippingOut_requiredDate')
                 ->orderBy('dealer', 'asc')
                 ->orderBy('orderID', 'asc')
@@ -3018,7 +3046,7 @@ class ServiceRecordController extends Controller
 
         $record = ServiceRecord::findOrFail($orderID);
 
-        $data = $request->except(['_token', '_method', 'allow_over_capacity']);
+        $data = $request->except(['_token', '_method', 'allow_over_capacity', 'notify_remand']);
 
         if (
             array_key_exists('status', $data)
@@ -3036,7 +3064,32 @@ class ServiceRecordController extends Controller
         $orderDateChanged = array_key_exists('orderDate', $data)
             && (string) ($data['orderDate'] ?? '') !== (string) ($record->orderDate ?? '');
 
+        $wasRemandOn = $this->isRemandFlagOn($record->remand);
+        $notifyRemandRequested = $request->boolean('notify_remand');
+
         $record->update($data);
+        $record->refresh();
+
+        $becameRemandOn = ! $wasRemandOn && $this->isRemandFlagOn($record->remand);
+        $shouldNotifyRemand = $notifyRemandRequested || $becameRemandOn;
+        if ($shouldNotifyRemand) {
+            $orderIdForMail = (int) $record->orderID;
+            // メール送信でレスポンスを遅延させない（差戻ダイアログの二重保存防止にも寄与）
+            dispatch(function () use ($orderIdForMail) {
+                $fresh = ServiceRecord::query()->where('orderID', $orderIdForMail)->first();
+                if (! $fresh) {
+                    return;
+                }
+                try {
+                    app(RemandNotificationMailer::class)->notify($fresh);
+                } catch (\Throwable $e) {
+                    Log::error('差戻通知メール処理で例外が発生しました', [
+                        'orderID' => $orderIdForMail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+        }
 
         $updatedLoaners = [];
         if (
@@ -3061,10 +3114,34 @@ class ServiceRecordController extends Controller
                 'message' => '更新しました。',
                 'record' => $record->fresh($freshRelations),
                 'loaners' => $updatedLoaners,
+                'remand_mail' => $shouldNotifyRemand ? ['queued' => true] : null,
             ]);
         }
 
         return redirect()->route('servicerecord.index')->with('success', '更新しました。');
+    }
+
+    private function isRemandFlagOn(mixed $value): bool
+    {
+        return $value === 1 || $value === '1' || $value === true;
+    }
+
+    private function sendRemandNotification(ServiceRecord $record): array
+    {
+        try {
+            return app(RemandNotificationMailer::class)->notify($record);
+        } catch (\Throwable $e) {
+            Log::error('差戻通知メール処理で例外が発生しました', [
+                'orderID' => $record->orderID,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'sent' => [],
+                'skipped' => [],
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 
     /**

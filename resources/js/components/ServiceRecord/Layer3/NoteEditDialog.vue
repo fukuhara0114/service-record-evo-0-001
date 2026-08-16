@@ -109,6 +109,7 @@ function toggleTbc() {
 }
 
 async function save() {
+    if (saving.value) return
     if (!noteText.value.trim()) {
         error.value = '内容を入力してください。'
         return
@@ -156,6 +157,7 @@ async function save() {
         })
 
         if (!result) {
+            saving.value = false
             return
         }
 
@@ -165,13 +167,13 @@ async function save() {
             throw new Error(data.message || `保存に失敗しました。（HTTP ${response.status}）`)
         }
 
+        // 成功時は saving を落さない（親処理完了まで再クリック防止。閉じるとアンマウントされる）
         emit('saved', {
             ...data,
             remand: !!props.payload?.remand,
         })
     } catch (e) {
         error.value = e.message || '保存に失敗しました。'
-    } finally {
         saving.value = false
     }
 }

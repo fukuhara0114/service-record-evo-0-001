@@ -127,6 +127,8 @@
 <body>
     @php
         $showMasterPriceRevision = strtolower((string) (auth()->user()?->name ?? '')) === 'hfukuhara';
+        $permission = strtolower((string) (auth()->user()?->permission ?? ''));
+        $showUsers = in_array($permission, ['administrator', 'admin'], true);
     @endphp
 
     <div class="menu-container menu-desktop">
@@ -139,6 +141,9 @@
         <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">Loaner</a>
         <a href="{{ url('/servicerecord/maintenance-contracts') }}" class="btn">Contract</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
+        @if ($showUsers)
+            <a href="{{ url('/users') }}" class="btn">Users</a>
+        @endif
         @if ($showMasterPriceRevision)
             <a href="{{ url('/servicerecord/master-price-revision') }}" class="btn">価格改定</a>
         @endif

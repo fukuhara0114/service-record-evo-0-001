@@ -1102,11 +1102,17 @@ onMounted(() => {
         startLogisticsAutoRefresh()
     }
 
-    const openOrderID = params.get('openOrderID')?.trim()
+    const openOrderID = resolveOpenOrderIdFromSearch(window.location.search)
     if (openOrderID) {
         try {
             const url = new URL(window.location.href)
             url.searchParams.delete('openOrderID')
+            // メール化けした amp;openOrderID なども除去
+            for (const key of [...url.searchParams.keys()]) {
+                if (key !== 'openOrderID' && /(^|;)openOrderID$/i.test(key)) {
+                    url.searchParams.delete(key)
+                }
+            }
             window.history.replaceState({}, '', url.href)
         } catch {
             // ignore
@@ -1133,6 +1139,26 @@ onUnmounted(() => {
     stopLogisticsAutoRefresh()
     stopSmListAutoRefresh()
 })
+
+function resolveOpenOrderIdFromSearch(search) {
+    try {
+        const params = new URLSearchParams(search)
+        const direct = params.get('openOrderID')?.trim()
+        if (direct) return direct
+
+        // メール等で & が &amp; になり amp;openOrderID になった場合
+        for (const [key, value] of params.entries()) {
+            const normalized = String(key).replace(/^amp;/i, '')
+            if (normalized === 'openOrderID') {
+                const trimmed = String(value ?? '').trim()
+                if (trimmed) return trimmed
+            }
+        }
+    } catch {
+        // ignore
+    }
+    return null
+}
 
 // --- 第1階層 ---
 const searchQuery = ref('')
@@ -1293,7 +1319,7 @@ function resolveCallerReturnUrl() {
     try {
         const params = new URLSearchParams(window.location.search)
         fromQuery = sanitizeSameOriginUrl(params.get('returnUrl'))
-        hasOpenOrderID = Boolean(params.get('openOrderID')?.trim())
+        hasOpenOrderID = Boolean(resolveOpenOrderIdFromSearch(window.location.search))
     } catch {
         // ignore
     }
@@ -1711,7 +1737,7 @@ function matchesArrivalFilter(record, filter) {
     return true
 }
 
-/** 出荷予定日の降順 → dealer のあいうえお順 */
+/** 出荷予定日の降順 → dealer のあいうえお昇順 → orderID */
 function sortByShippingOutDescThenDealer(records) {
     return [...records].sort((a, b) => {
         const da = formatListDate(a?.shippingOut_requiredDate) || ''
@@ -1724,7 +1750,11 @@ function sortByShippingOutDescThenDealer(records) {
         }
         const dealerA = String(a?.dealer ?? '')
         const dealerB = String(b?.dealer ?? '')
-        return dealerA.localeCompare(dealerB, 'ja')
+        const byDealer = dealerA.localeCompare(dealerB, 'ja')
+        if (byDealer !== 0) return byDealer
+        const idA = Number(a?.orderID)
+        const idB = Number(b?.orderID)
+        return (Number.isFinite(idA) ? idA : 0) - (Number.isFinite(idB) ? idB : 0)
     })
 }
 
@@ -2745,23 +2775,21 @@ async function onDialogSaved(result) {
     }
 
     const isRemandNote = activeDialog.value === 'NOTE' && (dialogPayload.value?.remand || result?.remand)
+    const remandStatus = Number(dialogPayload.value?.remandStatus ?? 40)
 
-    if (result && activeRecord.value) {
-        Object.assign(activeRecord.value, result)
-    }
-
+    // 差戻: 先にダイアログを閉じ、status 更新中の再保存を防ぐ
     if (isRemandNote) {
+        closeDialog()
         try {
-            const remandStatus = Number(dialogPayload.value?.remandStatus ?? 40)
-            await updateActiveRecordStatus(Number.isFinite(remandStatus) ? remandStatus : 40)
-            closeDialog()
+            await updateActiveRecordStatus(Number.isFinite(remandStatus) ? remandStatus : 40, {
+                notifyRemand: true,
+            })
             await finishEngineerWorkflow()
         } catch (e) {
             saveError.value = e.message || '差戻処理に失敗しました。'
             if (activeRecord.value?.orderID) {
                 await loadAttachments(activeRecord.value.orderID)
             }
-            closeDialog()
         }
         return
     }
@@ -2773,7 +2801,7 @@ async function onDialogSaved(result) {
     closeDialog()
 }
 
-async function updateActiveRecordStatus(status) {
+async function updateActiveRecordStatus(status, options = {}) {
     if (!activeRecord.value?.orderID) {
         throw new Error('案件が選択されていません。')
     }
@@ -2785,7 +2813,10 @@ async function updateActiveRecordStatus(status) {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+            status,
+            notify_remand: !!options.notifyRemand,
+        }),
     })
 
     if (!result?.response?.ok) {

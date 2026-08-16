@@ -30,13 +30,21 @@ class User extends Authenticatable
         'email',
         'password',
         'permission',
-        'laborID'
+        'laborID',
+        'receive_info',
     ];
 
     // JSONなどに出さない（セキュリティ）
     protected $hidden = [
         'password',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'receive_info' => 'integer',
+        ];
+    }
 
     public function serviceRecords()
     {

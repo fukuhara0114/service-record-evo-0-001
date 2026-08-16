@@ -9,6 +9,7 @@ use App\Http\Controllers\LoanerRecordController;
 use App\Http\Controllers\MaintenanceContractController;
 use App\Http\Controllers\MasterPriceRevisionController;
 use App\Http\Controllers\ServiceRecordController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth; // ✨ 追加
 
@@ -43,9 +44,17 @@ Route::middleware('auth')->group(function () {
     
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+    Route::get('/users', [UserController::class, 'page'])->name('users.index');
+    Route::put('/users', [UserController::class, 'save'])->name('users.save');
+    Route::get('/api/users', [UserController::class, 'index'])->name('users.api');
+    Route::post('/api/users', [UserController::class, 'store'])->name('users.store');
+
 
     Route::get('/servicerecord',[ServiceRecordController::class, 'index'])->name('servicerecord.index');
     Route::get('/servicerecord/administrator',[ServiceRecordController::class, 'administrator'])->name('servicerecord.administrator');
+    Route::get('/servicerecord/open/{orderID}', [ServiceRecordController::class, 'openDetail'])
+        ->whereNumber('orderID')
+        ->name('servicerecord.open');
     Route::get('/servicerecord/engineer',[ServiceRecordController::class, 'engineer'])->name('servicerecord.engineer');
     Route::get('/servicerecord/logistics',[ServiceRecordController::class, 'logistics'])->name('servicerecord.logistics');
     Route::get('/servicerecord/shipping-prep',[ServiceRecordController::class, 'shippingPrep'])->name('servicerecord.shipping-prep');
