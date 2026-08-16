@@ -10,6 +10,7 @@ use App\Models\Labor;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use App\Services\Gmail\AssignNotificationMailer;
 use App\Services\LoanerApplicationPdfService;
 use App\Services\MasterPriceVersionResolver;
 use App\Support\LoanerStatusFlow;
@@ -17,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -938,6 +940,30 @@ class LoanerRecordController extends Controller
 
         $attached->refresh();
         $record->refresh();
+
+        $notifyLoanerCheck = $request->boolean('notify_loaner_check')
+            && (int) ($record->status ?? 0) === LoanerStatusFlow::ACCEPTANCE
+            && $record->laborID !== null
+            && $record->laborID !== ''
+            && (int) $record->laborID !== 0;
+        if ($notifyLoanerCheck) {
+            $orderIdForMail = (int) $record->orderID;
+            $loanerDetailId = (int) $attached->id;
+            dispatch(function () use ($orderIdForMail, $loanerDetailId) {
+                $fresh = ServiceRecord::query()->where('orderID', $orderIdForMail)->first();
+                if (! $fresh) {
+                    return;
+                }
+                try {
+                    app(AssignNotificationMailer::class)->notifyLoanerEquipmentCheck($fresh, $loanerDetailId);
+                } catch (\Throwable $e) {
+                    Log::error('貸出機材チェック通知メール処理で例外が発生しました', [
+                        'orderID' => $orderIdForMail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+        }
 
         $promotionFromLending = $promotionTriggered
             && LoanerStatusFlow::crossedToInactiveList($previousStatus, $record->status);

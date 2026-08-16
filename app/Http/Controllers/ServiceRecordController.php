@@ -21,6 +21,7 @@ use App\Models\MaintenanceContractMaster;
 use App\Models\ReturnCode;
 use App\Models\Status;
 use App\Services\EmlReplyDraftService;
+use App\Services\Gmail\AssignNotificationMailer;
 use App\Services\Gmail\RemandNotificationMailer;
 use App\Services\MasterPriceVersionResolver;
 use App\Support\LoanerStatusFlow;
@@ -3047,7 +3048,7 @@ class ServiceRecordController extends Controller
 
         $record = ServiceRecord::findOrFail($orderID);
 
-        $data = $request->except(['_token', '_method', 'allow_over_capacity', 'notify_remand']);
+        $data = $request->except(['_token', '_method', 'allow_over_capacity', 'notify_remand', 'notify_assign']);
 
         if (
             array_key_exists('status', $data)
@@ -3067,6 +3068,7 @@ class ServiceRecordController extends Controller
 
         $wasRemandOn = $this->isRemandFlagOn($record->remand);
         $notifyRemandRequested = $request->boolean('notify_remand');
+        $previousStatusId = $record->status;
 
         $record->update($data);
         $record->refresh();
@@ -3076,16 +3078,38 @@ class ServiceRecordController extends Controller
         if ($shouldNotifyRemand) {
             $orderIdForMail = (int) $record->orderID;
             // メール送信でレスポンスを遅延させない（差戻ダイアログの二重保存防止にも寄与）
-            dispatch(function () use ($orderIdForMail) {
+            dispatch(function () use ($orderIdForMail, $previousStatusId) {
                 $fresh = ServiceRecord::query()->where('orderID', $orderIdForMail)->first();
                 if (! $fresh) {
                     return;
                 }
                 try {
-                    app(RemandNotificationMailer::class)->notify($fresh);
+                    app(RemandNotificationMailer::class)->notify($fresh, $previousStatusId);
                 } catch (\Throwable $e) {
                     Log::error('差戻通知メール処理で例外が発生しました', [
                         'orderID' => $orderIdForMail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+        }
+
+        $shouldNotifyAssign = $request->boolean('notify_assign')
+            && (int) ($record->status ?? 0) === 90
+            && $record->laborID !== null
+            && $record->laborID !== '';
+        if ($shouldNotifyAssign) {
+            $orderIdForAssignMail = (int) $record->orderID;
+            dispatch(function () use ($orderIdForAssignMail) {
+                $fresh = ServiceRecord::query()->where('orderID', $orderIdForAssignMail)->first();
+                if (! $fresh) {
+                    return;
+                }
+                try {
+                    app(AssignNotificationMailer::class)->notify($fresh);
+                } catch (\Throwable $e) {
+                    Log::error('アサイン通知メール処理で例外が発生しました', [
+                        'orderID' => $orderIdForAssignMail,
                         'error' => $e->getMessage(),
                     ]);
                 }
@@ -3116,6 +3140,7 @@ class ServiceRecordController extends Controller
                 'record' => $record->fresh($freshRelations),
                 'loaners' => $updatedLoaners,
                 'remand_mail' => $shouldNotifyRemand ? ['queued' => true] : null,
+                'assign_mail' => $shouldNotifyAssign ? ['queued' => true] : null,
             ]);
         }
 
@@ -3125,6 +3150,20 @@ class ServiceRecordController extends Controller
     private function isRemandFlagOn(mixed $value): bool
     {
         return $value === 1 || $value === '1' || $value === true;
+    }
+
+    /**
+     * アサイン通知の対象ユーザー数を返す（DetailFormA 保存前確認用）
+     */
+    public function assignNotifyTargets(Request $request)
+    {
+        $laborId = $request->query('laborID');
+        $targets = app(AssignNotificationMailer::class)->targetsForLabor($laborId);
+
+        return response()->json([
+            'count' => count($targets),
+            'users' => $targets,
+        ]);
     }
 
     private function sendRemandNotification(ServiceRecord $record): array

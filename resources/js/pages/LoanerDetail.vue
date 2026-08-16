@@ -1970,10 +1970,35 @@ async function save(options = {}) {
         return false
     }
 
+    let notifyLoanerCheck = false
+    if (
+        Number.isFinite(savingStatus)
+        && savingStatus === acceptanceStatusId.value
+        && laborToSave !== ''
+        && laborToSave !== '0'
+    ) {
+        try {
+            const previewUrl = `${page.props.appBaseUrl}/servicerecord/assign-notify/targets?laborID=${encodeURIComponent(laborToSave)}`
+            const preview = await apiFetch(previewUrl, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+            })
+            const count = Number(preview?.data?.count ?? 0)
+            if (Number.isFinite(count) && count > 0) {
+                notifyLoanerCheck = !!window.confirm(
+                    `同じ laborID の担当者 ${count} 名に機材チェック通知メールを送信しますか？\n\n[はい]=送信　[いいえ]=送信しない`,
+                )
+            }
+        } catch (e) {
+            console.warn('loaner check notify targets check failed', e)
+        }
+    }
+
     const payload = { ...form }
     payload.parentID = numericNullable(form.parentID)
     payload.loanerID = numericNullable(form.loanerID)
     payload.status = Number.isFinite(savingStatus) ? savingStatus : numericNullable(form.status)
+    payload.notify_loaner_check = notifyLoanerCheck
 
     // laborID は常に明示送信（未選択時のみ省略）。返却時は必須。
     if (laborToSave !== '') {

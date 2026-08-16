@@ -3,7 +3,10 @@
 namespace App\Services\Gmail;
 
 use App\Mail\UserNotificationMail;
+use App\Models\AttachedNote;
 use App\Models\ServiceRecord;
+use App\Models\Status;
+use App\Models\StatusLoaner;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -16,20 +19,26 @@ class RemandNotificationMailer
      *
      * @return array{sent: list<string>, skipped: list<string>, subject: string}
      */
-    public function notify(ServiceRecord $record): array
+    public function notify(ServiceRecord $record, mixed $previousStatusId = null, ?string $reason = null): array
     {
         $orderId = (string) $record->orderID;
         $dealer = trim((string) ($record->dealer ?? ''));
         $productName = trim((string) ($record->productName ?? ''));
         $sn = trim((string) ($record->SN ?? ''));
         $link = $this->detailLink($record);
+        $statusLabel = $this->formatPreviousStatusLabel($record, $previousStatusId);
+        $reasonText = $this->resolveReasonText($record, $reason);
 
         $subject = "【差戻】 orderID: {$orderId},   {$dealer},  {$productName}, {$sn}";
         $body = "orderID: {$orderId}\n"
             ."dealer ： {$dealer}\n"
             ."製品名 ： {$productName}\n"
             ."SN ： {$sn}\n"
-            ."が差し戻されました\n"
+            ."が「{$statusLabel}」から差し戻されました\n"
+            ."\n"
+            ."理由：\n"
+            ."{$reasonText}\n"
+            ."\n"
             ."link :  [{$link}]";
 
         $users = User::query()
@@ -103,6 +112,45 @@ class RemandNotificationMailer
     {
         // メールクライアントが & を &amp; に化けさせるため、クエリ無しのパス形式にする
         return url('/servicerecord/open/'.$record->orderID);
+    }
+
+    private function formatPreviousStatusLabel(ServiceRecord $record, mixed $previousStatusId): string
+    {
+        $statusId = $previousStatusId;
+        if ($statusId === null || $statusId === '') {
+            $statusId = $record->status;
+        }
+        if ($statusId === null || $statusId === '') {
+            return '不明';
+        }
+
+        $id = (int) $statusId;
+        $name = '';
+        if (in_array($record->order_type, ['loaner'], true)) {
+            $name = (string) (StatusLoaner::query()->where('processID_new', $id)->value('status') ?? '');
+        } else {
+            $name = (string) (Status::query()->where('processID_new', $id)->value('status') ?? '');
+        }
+
+        $name = trim($name);
+
+        return $name !== '' ? "{$name} ({$id})" : (string) $id;
+    }
+
+    private function resolveReasonText(ServiceRecord $record, ?string $reason): string
+    {
+        $raw = trim((string) ($reason ?? ''));
+        if ($raw === '') {
+            $raw = (string) (AttachedNote::query()
+                ->where('associatedID', $record->orderID)
+                ->where('note', 'like', '[差戻理由]%')
+                ->orderByDesc('id')
+                ->value('note') ?? '');
+        }
+
+        $stripped = preg_replace('/^\[差戻理由\][　\s]*/u', '', trim($raw)) ?? '';
+
+        return trim($stripped) !== '' ? trim($stripped) : '（理由未入力）';
     }
 
     private function assertSmtpConfigured(): void

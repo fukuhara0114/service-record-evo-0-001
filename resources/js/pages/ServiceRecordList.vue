@@ -3035,6 +3035,30 @@ async function saveRecord() {
         return
     }
 
+    let notifyAssign = false
+    if (detailLayout.value === 'A' && Number(draftRecord.value.status) === 90) {
+        const laborId = draftRecord.value.laborID
+        if (laborId !== null && laborId !== undefined && String(laborId).trim() !== '') {
+            try {
+                const previewUrl = `${window.location.origin}${getBasePath()}/assign-notify/targets?laborID=${encodeURIComponent(String(laborId))}`
+                const preview = await apiFetch(previewUrl, {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                })
+                const count = Number(preview?.data?.count ?? 0)
+                if (Number.isFinite(count) && count > 0) {
+                    const ok = window.confirm(
+                        `同じ laborID の担当者 ${count} 名にアサイン通知メールを送信しますか？\n\n[はい]=送信　[いいえ]=送信しない`,
+                    )
+                    notifyAssign = !!ok
+                }
+            } catch (e) {
+                // 対象確認失敗時はメール無しで保存続行
+                console.warn('assign notify targets check failed', e)
+            }
+        }
+    }
+
     isSavingRecord.value = true
     saveError.value = ''
 
@@ -3097,6 +3121,7 @@ async function saveRecord() {
                 preData: draftRecord.value.preData,
                 postData: draftRecord.value.postData,
                 remand: draftRecord.value.remand === 1 || draftRecord.value.remand === '1' || draftRecord.value.remand === true ? 1 : 0,
+                notify_assign: notifyAssign,
             }),
         })
 
