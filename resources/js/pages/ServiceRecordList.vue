@@ -1737,9 +1737,15 @@ function matchesArrivalFilter(record, filter) {
     return true
 }
 
-/** 出荷予定日の降順 → dealer のあいうえお昇順 → orderID */
-function sortByShippingOutDescThenDealer(records) {
+/** status 昇順 → 出荷予定日の降順 → dealer のあいうえお昇順 → orderID */
+function sortByStatusAscThenShippingOutDescThenDealer(records) {
     return [...records].sort((a, b) => {
+        const statusA = Number(a?.status)
+        const statusB = Number(b?.status)
+        const sa = Number.isFinite(statusA) ? statusA : Number.POSITIVE_INFINITY
+        const sb = Number.isFinite(statusB) ? statusB : Number.POSITIVE_INFINITY
+        if (sa !== sb) return sa - sb
+
         const da = formatListDate(a?.shippingOut_requiredDate) || ''
         const db = formatListDate(b?.shippingOut_requiredDate) || ''
         if (da !== db) {
@@ -1748,10 +1754,12 @@ function sortByShippingOutDescThenDealer(records) {
             const byDate = db.localeCompare(da)
             if (byDate !== 0) return byDate
         }
+
         const dealerA = String(a?.dealer ?? '')
         const dealerB = String(b?.dealer ?? '')
         const byDealer = dealerA.localeCompare(dealerB, 'ja')
         if (byDealer !== 0) return byDealer
+
         const idA = Number(a?.orderID)
         const idB = Number(b?.orderID)
         return (Number.isFinite(idA) ? idA : 0) - (Number.isFinite(idB) ? idB : 0)
@@ -1929,13 +1937,13 @@ const filteredRecords = computed(() => {
             listColumnSortDir.value,
         )
     } else {
-        const sortByShippingAndDealer =
+        const sortByStatusShippingDealer =
             props.mode === 'logistics'
             || props.mode === 'shippingPrep'
             || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
 
-        if (sortByShippingAndDealer) {
-            records = sortByShippingOutDescThenDealer(records)
+        if (sortByStatusShippingDealer) {
+            records = sortByStatusAscThenShippingOutDescThenDealer(records)
         } else if (!isBoardMode.value && orderTypeFilter.value === 'loaner') {
             records = sortByStatusAscThenOrderId(records)
         }
