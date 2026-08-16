@@ -3008,7 +3008,7 @@ function resolveDetailFormAPrice(draft, parts = []) {
 
     const discountRaw = Number(draft.discount_service ?? 0)
     const discount = Number.isFinite(discountRaw) ? discountRaw : 0
-    const total = workPrice + a2laPrice + partsTotal - discount
+    const total = workPrice + a2laPrice + partsTotal + discount
     return Number.isFinite(total) ? total : null
 }
 

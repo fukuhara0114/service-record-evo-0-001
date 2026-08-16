@@ -475,7 +475,7 @@ const adjustmentAmount = computed(() => {
 })
 
 const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
-const grandTotal = computed(() => subtotal.value - adjustmentAmount.value)
+const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
 
 function formatPrice(value) {
     const num = Number(value)
@@ -487,7 +487,7 @@ function formatSignedAmount(value) {
     const num = Number(value)
     if (!Number.isFinite(num) || num === 0) return '0'
     const abs = formatPrice(Math.abs(num))
-    return num > 0 ? `-${abs}` : `+${abs}`
+    return num > 0 ? `+${abs}` : `-${abs}`
 }
 
 function toDateInputValue(value) {

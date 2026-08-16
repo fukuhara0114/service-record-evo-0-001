@@ -687,7 +687,7 @@
                             v-model="priceAdjustForm.amount"
                             type="number"
                             class="confirm-input"
-                            placeholder="例: 5000（表示は 元価格 - 調整額）"
+                            placeholder="例: 5000（表示は 元価格 + 調整額）"
                         >
                     </label>
                     <label class="confirm-field">
@@ -1398,7 +1398,7 @@ const displayAdjustmentAmount = computed(() => {
 const displayPrice = computed(() => {
     const discount = Number(displayAdjustmentAmount.value)
     const discountValue = Number.isFinite(discount) ? discount : 0
-    return basePrice.value - discountValue
+    return basePrice.value + discountValue
 })
 
 // 画面上の「価格」数値を price カラムへ反映（draft 差し替え時も再同期）

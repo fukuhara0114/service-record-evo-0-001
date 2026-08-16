@@ -546,7 +546,7 @@
                             v-model="priceAdjustForm.amount"
                             type="number"
                             class="confirm-input"
-                            placeholder="例: 5000（表示は 元価格 - 調整額）"
+                            placeholder="例: 5000（表示は 元価格 + 調整額）"
                         >
                     </label>
                     <label class="confirm-field">
@@ -978,7 +978,7 @@ const discountAmount = computed(() => {
     const num = Number(form.discount_service)
     return Number.isFinite(num) ? num : 0
 })
-const displayPrice = computed(() => basePrice.value - discountAmount.value)
+const displayPrice = computed(() => basePrice.value + discountAmount.value)
 
 function tokyoTodayYmd() {
     return new Intl.DateTimeFormat('en-CA', {
