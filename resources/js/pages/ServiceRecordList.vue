@@ -285,7 +285,7 @@
                         >
                             <td
                                 style="text-align: center; font-weight: bold;"
-                                :class="orderIdUnderlineClass(r)"
+                                :class="shippingStatusCellUnderlineClass(r)"
                             >{{ r.orderID }}</td>
                             <td
                                 v-if="mode === 'shippingPrep'"
@@ -300,7 +300,7 @@
                                 >
                             </td>
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
-                            <td>{{ statusLabel(r) }}</td>
+                            <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
@@ -388,7 +388,7 @@
                                 >
                                     <td
                                         style="text-align: center; font-weight: bold;"
-                                        :class="orderIdUnderlineClass(r)"
+                                        :class="shippingStatusCellUnderlineClass(r)"
                                     >{{ r.orderID }}</td>
                                     <td
                                         v-if="mode === 'shippingPrep'"
@@ -403,7 +403,7 @@
                                         >
                                     </td>
                                     <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
-                                    <td>{{ statusLabel(r) }}</td>
+                                    <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
                                     <td>{{ r.RMA }}</td>
                                     <td>{{ r.productName }}</td>
                                     <td>{{ r.SN }}</td>
@@ -730,7 +730,10 @@
                             <td style="text-align: center;">{{ r.promotion_source_orderID || '—' }}</td>
                         </template>
                         <template v-else-if="orderTypeFilter === 'invoice'">
-                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td
+                                style="text-align: center; font-weight: bold;"
+                                :class="shippingStatusCellUnderlineClass(r)"
+                            >{{ r.orderID }}</td>
                             <td style="text-align: center;" @click.stop @dblclick.stop>
                                 <input
                                     type="checkbox"
@@ -739,7 +742,7 @@
                                 >
                             </td>
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
-                            <td>{{ statusLabel(r) }}</td>
+                            <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
@@ -1654,11 +1657,15 @@ const boardStatusByOrderId = computed(() => {
     return map
 })
 
-function orderIdUnderlineClass(record) {
-    if (props.mode !== 'shippingPrep') return ''
+function shippingStatusCellUnderlineClass(record) {
+    const inShippingPrepOrInvoice = props.mode === 'shippingPrep'
+        || props.mode === 'logistics'
+        || (!isBoardMode.value && orderTypeFilter.value === 'invoice')
+    if (!inShippingPrepOrInvoice) return ''
+
     const status = Number(record?.status)
-    if (status === 300) return 'order-id-status-300'
-    if (status === 385) return 'order-id-status-385'
+    if (status === 350) return 'status-cell-underline-350'
+    if (status === 385) return 'status-cell-underline-385'
     return ''
 }
 
@@ -3933,18 +3940,12 @@ async function saveRecord() {
     background-color: #7e25eb !important;
 }
 
-#myLargeTable td.order-id-status-300 {
-    text-decoration: underline;
-    text-decoration-color: #facc15;
-    text-decoration-thickness: 3px;
-    text-underline-offset: 3px;
+#myLargeTable td.status-cell-underline-350 {
+    border-bottom: 3px solid #facc15;
 }
 
-#myLargeTable td.order-id-status-385 {
-    text-decoration: underline;
-    text-decoration-color: #2563eb;
-    text-decoration-thickness: 3px;
-    text-underline-offset: 3px;
+#myLargeTable td.status-cell-underline-385 {
+    border-bottom: 3px solid #2563eb;
 }
 
 .global-loading {
