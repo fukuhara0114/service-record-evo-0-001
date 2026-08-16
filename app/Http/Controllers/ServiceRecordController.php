@@ -819,13 +819,17 @@ class ServiceRecordController extends Controller
 
         $records->each(function (ServiceRecord $record) {
             if ($record->order_type === 'loaner') {
+                $label = $record->statusMasterLoaner?->status;
                 $record->unsetRelation('statusMaster');
             } elseif ($record->order_type === 'waiting_list') {
+                $label = null;
                 $record->unsetRelation('statusMaster');
                 $record->unsetRelation('statusMasterLoaner');
             } else {
+                $label = $record->statusMaster?->status;
                 $record->unsetRelation('statusMasterLoaner');
             }
+            $record->setAttribute('status_label', $label);
         });
 
         if (in_array($orderTypeFilter, ['loaner', 'waiting_list'], true)) {

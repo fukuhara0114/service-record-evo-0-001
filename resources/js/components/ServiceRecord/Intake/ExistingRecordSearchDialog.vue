@@ -41,7 +41,10 @@
                             @click="selectedOrderId = record.orderID"
                         >
                             <strong>{{ record.productName || '—' }}</strong>
-                            <span>orderID: {{ record.orderID }}</span>
+                            <span class="result-order-status-row">
+                                <span>orderID: {{ record.orderID }}</span>
+                                <span class="result-status">{{ formatRecordStatus(record) }}</span>
+                            </span>
                             <span v-if="purpose === 'loaner'">type: {{ record.order_type || '—' }}</span>
                             <span v-if="purpose === 'loaner'">item: {{ record.item || '—' }}</span>
                             <span>S/N: {{ record.SN || '—' }}</span>
@@ -258,6 +261,24 @@ const dialogHint = computed(() => {
     }
     return 'productName / SN / dealer / contactPerson で検索します'
 })
+
+function formatRecordStatus(record) {
+    if (!record) return '—'
+    const id = record.status
+    const label = record.status_label
+        ?? record.statusMaster?.status
+        ?? record.status_master?.status
+        ?? record.statusMasterLoaner?.status
+        ?? record.status_master_loaner?.status
+        ?? props.statuses?.find(s => String(s.processID_new) === String(id))?.status
+        ?? null
+    if (label != null && label !== '' && id != null && id !== '') {
+        return `${label} (${id})`
+    }
+    if (label != null && label !== '') return String(label)
+    if (id != null && id !== '') return String(id)
+    return '—'
+}
 
 watch(
     () => props.records,
@@ -540,6 +561,16 @@ function confirmLink() {
 
 .result-item strong {
     color: #1e293b;
+}
+
+.result-order-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+}
+
+.result-status {
+    margin-left: 50px;
 }
 
 .detail-scroll {
