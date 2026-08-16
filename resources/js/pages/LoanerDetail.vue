@@ -8,6 +8,14 @@
             <div class="header-actions">
                 <span v-if="success" class="save-message success">{{ success }}</span>
                 <span v-if="error" class="save-message error">{{ error }}</span>
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    :disabled="saving || applicationFormLoading"
+                    @click="openApplicationForm"
+                >
+                    {{ applicationFormLoading ? '生成中...' : '申込書発行' }}
+                </button>
                 <button type="button" class="btn btn-primary" :disabled="saving" @click="save()">
                     {{ saving ? '保存中...' : '保存' }}
                 </button>
@@ -463,6 +471,41 @@
             </div>
         </div>
 
+        <div
+            v-if="showApplicationFormDialog"
+            class="confirm-overlay application-form-overlay"
+            @click.self="closeApplicationFormDialog"
+        >
+            <div class="confirm-panel application-form-panel" role="dialog" aria-modal="true" aria-labelledby="application-form-title">
+                <div class="confirm-header application-form-header">
+                    <h3 id="application-form-title">代替機申込書プレビュー</h3>
+                    <div class="application-form-header-actions">
+                        <button type="button" class="btn btn-secondary application-form-btn" @click="closeApplicationFormDialog">閉じる</button>
+                        <a
+                            v-if="applicationFormPdfUrl"
+                            class="btn btn-primary application-form-btn"
+                            :href="applicationFormPdfUrl"
+                            :download="applicationFormFilename"
+                        >
+                            ダウンロード
+                        </a>
+                        <button type="button" class="close-btn" @click="closeApplicationFormDialog">×</button>
+                    </div>
+                </div>
+                <div class="confirm-body application-form-body">
+                    <p v-if="applicationFormError" class="confirm-error">{{ applicationFormError }}</p>
+                    <div class="application-form-viewport">
+                        <img
+                            v-if="applicationFormPreviewUrl"
+                            class="application-form-image"
+                            :src="applicationFormPreviewUrl"
+                            alt="代替機申込書プレビュー"
+                        >
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div v-if="showPriceAdjustDialog" class="confirm-overlay" @click.self="closePriceAdjustDialog">
             <div class="confirm-panel" @click.stop>
                 <div class="confirm-header">
@@ -651,6 +694,7 @@ import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { handleUnauthorizedResponse } from '@/utils/auth'
 import { pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const SHIP_PREP_STATUS_ID = 300
@@ -731,6 +775,12 @@ const priceAdjustForm = reactive({
     amount: '',
     reason: '',
 })
+const showApplicationFormDialog = ref(false)
+const applicationFormLoading = ref(false)
+const applicationFormError = ref('')
+const applicationFormPreviewUrl = ref('')
+const applicationFormPdfUrl = ref('')
+const applicationFormFilename = ref('loaner_application.pdf')
 const showNoteDialog = ref(false)
 const noteDialogMode = ref('create')
 const noteSaving = ref(false)
@@ -769,7 +819,11 @@ watch(
     { immediate: true },
 )
 
-const authUserName = computed(() => String(page.props.auth?.user?.kanji_name ?? '').trim())
+const authUserName = computed(() => String(
+    page.props.authUser?.kanji_name
+    ?? page.props.auth?.user?.kanji_name
+    ?? '',
+).trim())
 const sharedNotes = computed(() =>
     noteItems.value.filter(note => !(note?.personal === true || note?.personal === 1 || note?.personal === '1')),
 )
@@ -1707,6 +1761,107 @@ async function deleteFile() {
     }
 }
 
+function revokeApplicationFormUrl() {
+    if (applicationFormPreviewUrl.value) {
+        URL.revokeObjectURL(applicationFormPreviewUrl.value)
+        applicationFormPreviewUrl.value = ''
+    }
+    if (applicationFormPdfUrl.value) {
+        URL.revokeObjectURL(applicationFormPdfUrl.value)
+        applicationFormPdfUrl.value = ''
+    }
+}
+
+function closeApplicationFormDialog() {
+    showApplicationFormDialog.value = false
+    applicationFormError.value = ''
+    revokeApplicationFormUrl()
+}
+
+async function openApplicationForm() {
+    if (applicationFormLoading.value) return
+    applicationFormLoading.value = true
+    applicationFormError.value = ''
+    error.value = ''
+    revokeApplicationFormUrl()
+
+    const manageNum = String(selectedUnit.value?.manageNum || props.loanerMaster?.manageNum || '').trim()
+    const payload = {
+        contactPerson: form.contactPerson,
+        phone: form.phone,
+        fax: form.fax,
+        manageNum,
+        item: displayItemLabel.value,
+        loanerID: form.loanerID,
+        SN: form.SN,
+        price: displayPrice.value,
+        sentDate: form.sentDate || form.plannedSentDate,
+        plannedReturnedDate: form.plannedReturnedDate,
+        returnedDate: form.returnedDate,
+        dealer: form.dealer,
+        dealer_depart: form.dealer_depart,
+        zipcode: form.zipcode,
+        address1: form.address1,
+        address2: form.address2,
+        deliveryDestination_company: form.deliveryDestination_company,
+        deliveryDestination_depart: form.deliveryDestination_depart,
+        deliveryDestination_contactPerson: form.deliveryDestination_contactPerson,
+        deliveryDestination_zipcode: form.deliveryDestination_zipcode,
+        deliveryDestination_address1: form.deliveryDestination_address1,
+        deliveryDestination_address2: form.deliveryDestination_address2,
+        deliveryDestination_phone: form.deliveryDestination_phone,
+        parentID: form.parentID ? Number(form.parentID) : null,
+        repairSN: parentInfo.value?.SN || '',
+        senderName: authUserName.value,
+    }
+
+    const endpoint = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${props.attached.id}/application-form`
+    const common = {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': getCsrfToken(),
+        },
+        body: JSON.stringify(payload),
+    }
+
+    try {
+        const [pngResponse, pdfResponse] = await Promise.all([
+            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'image/png' } }),
+            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'application/pdf' } }),
+        ])
+        if (handleUnauthorizedResponse(pngResponse) || handleUnauthorizedResponse(pdfResponse)) return
+
+        if (!pngResponse.ok) {
+            let message = `申込書の生成に失敗しました。（HTTP ${pngResponse.status}）`
+            const ct = pngResponse.headers.get('Content-Type') || ''
+            if (ct.includes('application/json')) {
+                const data = await pngResponse.json().catch(() => ({}))
+                message = data.message || data.error || message
+            }
+            throw new Error(message)
+        }
+        if (!pdfResponse.ok) {
+            throw new Error(`申込書 PDF の取得に失敗しました。（HTTP ${pdfResponse.status}）`)
+        }
+
+        const pngBlob = await pngResponse.blob()
+        const pdfBlob = await pdfResponse.blob()
+        applicationFormPreviewUrl.value = URL.createObjectURL(pngBlob)
+        applicationFormPdfUrl.value = URL.createObjectURL(pdfBlob)
+        applicationFormFilename.value = `loaner_application_${props.record.orderID || props.attached.id}.pdf`
+        showApplicationFormDialog.value = true
+    } catch (e) {
+        applicationFormError.value = e.message || '申込書の生成に失敗しました。'
+        error.value = applicationFormError.value
+        showApplicationFormDialog.value = true
+    } finally {
+        applicationFormLoading.value = false
+    }
+}
+
 async function save(options = {}) {
     // @click="save" だと MouseEvent が渡るため、素のオブジェクト以外は無視する
     const opts = (options && typeof options === 'object' && !('isTrusted' in options))
@@ -2095,7 +2250,10 @@ function updateCalendarSize() {
 }
 
 onMounted(() => window.addEventListener('resize', updateCalendarSize))
-onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', updateCalendarSize)
+    revokeApplicationFormUrl()
+})
 </script>
 
 <style scoped>
@@ -2165,6 +2323,13 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 .btn:disabled { opacity: .6; cursor: wait; }
 .btn-primary { background: #2563eb; color: #fff; }
+a.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-sizing: border-box;
+}
 .btn-secondary { background: #64748b; color: #fff; }
 .select-btn { padding: 2px 8px; border-color: #94a3b8; background: #fff; color: #334155; font-size: 11px; }
 
@@ -2658,6 +2823,66 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     background: rgba(15, 23, 42, .5);
 }
 .confirm-panel { width: min(420px, 100%); padding: 16px; border-radius: 7px; background: #fff; box-shadow: 0 12px 32px rgba(15, 23, 42, .25); }
+.application-form-overlay {
+    padding: 0;
+    align-items: stretch;
+    justify-content: center;
+}
+.application-form-panel {
+    /* 高さ最大。幅はプレビュー領域に A4 縦をスクロール無しで収める幅 + 200px */
+    --af-chrome: 56px;
+    height: 100vh;
+    max-height: 100vh;
+    width: calc((100vh - var(--af-chrome)) * 210 / 297 + 200px);
+    max-width: 100vw;
+    margin: 0;
+    border-radius: 0;
+    padding: 0 0 8px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+.application-form-panel .application-form-header {
+    margin: 0;
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    gap: 12px;
+}
+.application-form-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+.application-form-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0;
+    padding: 0 12px;
+    overflow: hidden;
+}
+.application-form-viewport {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e293b;
+    border-radius: 4px;
+}
+.application-form-image {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
 .confirm-panel h3 { margin: 0 0 10px; font-size: 15px; }
 .confirm-panel p { overflow-wrap: anywhere; }
 .confirm-header {

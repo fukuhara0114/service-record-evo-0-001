@@ -10,10 +10,12 @@ use App\Models\Labor;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use App\Services\LoanerApplicationPdfService;
 use App\Services\MasterPriceVersionResolver;
 use App\Support\LoanerStatusFlow;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -176,6 +178,7 @@ class LoanerRecordController extends Controller
                     'status_label' => $parentStatusLabel,
                     'sentOut' => $sentOut,
                     'returnCode' => $parent->returnCode,
+                    'SN' => $parent->SN,
                 ];
             }
         }
@@ -511,6 +514,151 @@ class LoanerRecordController extends Controller
         }
 
         return $latest->first();
+    }
+
+    /**
+     * 代替機申込書 PDF（プレビュー用・保存なし）
+     */
+    public function applicationForm(Request $request, int $id, LoanerApplicationPdfService $pdfService)
+    {
+        $attached = AttachedLoaner::with(['serviceRecord', 'loanerMaster'])->find($id);
+        if (!$attached) {
+            $attached = AttachedLoaner::with(['serviceRecord', 'loanerMaster'])
+                ->where('associatedID', $id)
+                ->orderByDesc('id')
+                ->first();
+        }
+        if (!$attached) {
+            return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
+        }
+
+        $record = $attached->serviceRecord;
+        if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
+            return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
+        }
+
+        $payload = $request->validate([
+            'contactPerson' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:255',
+            'fax' => 'nullable|string|max:255',
+            'manageNum' => 'nullable|string|max:255',
+            'item' => 'nullable|string|max:255',
+            'loanerID' => 'nullable',
+            'SN' => 'nullable|string|max:255',
+            'price' => 'nullable|numeric',
+            'sentDate' => 'nullable|string|max:32',
+            'plannedReturnedDate' => 'nullable|string|max:32',
+            'returnedDate' => 'nullable|string|max:32',
+            'dealer' => 'nullable|string|max:255',
+            'dealer_depart' => 'nullable|string|max:255',
+            'zipcode' => 'nullable|string|max:20',
+            'address1' => 'nullable|string|max:255',
+            'address2' => 'nullable|string|max:255',
+            'deliveryDestination_company' => 'nullable|string|max:255',
+            'deliveryDestination_depart' => 'nullable|string|max:255',
+            'deliveryDestination_contactPerson' => 'nullable|string|max:255',
+            'deliveryDestination_zipcode' => 'nullable|string|max:20',
+            'deliveryDestination_address1' => 'nullable|string|max:255',
+            'deliveryDestination_address2' => 'nullable|string|max:255',
+            'deliveryDestination_phone' => 'nullable|string|max:255',
+            'deliveryDestination_fax' => 'nullable|string|max:255',
+            'parentID' => 'nullable|integer',
+            'repairSN' => 'nullable|string|max:255',
+            'senderName' => 'nullable|string|max:255',
+        ]);
+
+        $senderName = trim((string) ($payload['senderName'] ?? ''));
+        if ($senderName === '') {
+            $user = Auth::user();
+            $senderName = trim((string) ($user->kanji_name ?? $user->name ?? ''));
+            if ($senderName === '' && !empty($record->laborID)) {
+                $senderName = trim((string) (
+                    Labor::query()->where('laborID', $record->laborID)->value('laborName') ?? ''
+                ));
+            }
+        }
+
+        $repairSn = trim((string) ($payload['repairSN'] ?? ''));
+        if ($repairSn === '') {
+            $parentId = $payload['parentID'] ?? $record->parentID;
+            if ($parentId) {
+                $repairSn = trim((string) (
+                    ServiceRecord::query()->where('orderID', $parentId)->value('SN') ?? ''
+                ));
+            }
+        }
+
+        $payload['senderName'] = $senderName;
+        $payload['recvName'] = $senderName;
+        $payload['repairSN'] = $repairSn;
+
+        // 画面未入力でも DB の依頼社・発送先を補完
+        $fallbackKeys = [
+            'contactPerson', 'phone', 'fax', 'dealer', 'dealer_depart',
+            'zipcode', 'address1', 'address2',
+            'deliveryDestination_company', 'deliveryDestination_depart',
+            'deliveryDestination_contactPerson', 'deliveryDestination_zipcode',
+            'deliveryDestination_address1', 'deliveryDestination_address2',
+            'deliveryDestination_phone', 'deliveryDestination_fax',
+            'SN',
+        ];
+        foreach ($fallbackKeys as $key) {
+            $current = trim((string) ($payload[$key] ?? ''));
+            if ($current !== '') {
+                continue;
+            }
+            $fromRecord = $record->{$key} ?? null;
+            if ($fromRecord !== null && trim((string) $fromRecord) !== '') {
+                $payload[$key] = is_string($fromRecord) ? trim($fromRecord) : $fromRecord;
+            }
+        }
+        if (trim((string) ($payload['manageNum'] ?? '')) === '') {
+            $payload['manageNum'] = $attached->loanerMaster?->manageNum
+                ?? LoanerMaster::query()->where('loanerID', $record->loanerID)->value('manageNum');
+        }
+        if (trim((string) ($payload['item'] ?? '')) === '') {
+            $payload['item'] = $attached->loanerMaster?->item
+                ?? $record->productName;
+        }
+        if (!isset($payload['loanerID']) || $payload['loanerID'] === '' || $payload['loanerID'] === null) {
+            $payload['loanerID'] = $attached->loanerID ?? $record->loanerID;
+        }
+
+        try {
+            $binary = $pdfService->generate($payload);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => '申込書 PDF の生成に失敗しました。',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $filename = 'loaner_application_'.$record->orderID.'_'.date('Ymd_His').'.pdf';
+        $wantPng = $request->query('format') === 'png'
+            || str_contains((string) $request->header('Accept', ''), 'image/png');
+
+        if ($wantPng) {
+            try {
+                $png = $pdfService->pdfToPng($binary);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'message' => '申込書プレビュー画像の生成に失敗しました。',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return response($png, 200, [
+                'Content-Type' => 'image/png',
+                'Content-Disposition' => 'inline; filename="'.preg_replace('/\.pdf$/i', '.png', $filename).'"',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            ]);
+        }
+
+        return response($binary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
     }
 
     public function updateDetail(Request $request, int $id)
