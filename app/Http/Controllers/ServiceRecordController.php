@@ -231,7 +231,7 @@ class ServiceRecordController extends Controller
         if ($mode === 'logistics') {
             $query->where('status', 350);
         } elseif ($mode === 'shippingPrep') {
-            $query->whereIn('status', [300, 385]);
+            $query->whereIn('status', [300, 310 ,350, 385]);
         } elseif ($mode === 'engineer') {
             // service: status=受注(90) かつ自分の labor
             // loaner: status=受け入れ確認中(396) かつ自分の labor
@@ -280,9 +280,10 @@ class ServiceRecordController extends Controller
         }
 
         if ($mode === 'shippingPrep' || $mode === 'logistics') {
-            // 出荷予定日の降順（NULLは末尾）→ dealer 昇順 → orderID
+            // status 昇順 → 出荷予定日の降順（NULLは末尾）→ dealer 昇順 → orderID
             // dealer のあいうえお順は一覧側（localeCompare ja）でも再ソートする
             $records = $query
+                ->orderBy('status', 'asc')
                 ->orderByRaw('CASE WHEN shippingOut_requiredDate IS NULL THEN 1 ELSE 0 END ASC')
                 ->orderByDesc('shippingOut_requiredDate')
                 ->orderBy('dealer', 'asc')
