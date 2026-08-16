@@ -1813,7 +1813,7 @@ class LoanerRecordController extends Controller
         }
 
         $statusColumn = $this->resolveStatusColumn();
-        if (!Schema::hasColumn('loanermaster', $statusColumn)) {
+        if (!Schema::hasColumn((new LoanerMaster)->getTable(), $statusColumn)) {
             return;
         }
 
@@ -2073,7 +2073,7 @@ class LoanerRecordController extends Controller
             return $column;
         }
 
-        $schema = Schema::getColumnListing('loanermaster');
+        $schema = Schema::getColumnListing((new LoanerMaster)->getTable());
 
         if (in_array('currentStatus', $schema, true)) {
             return $column = 'currentStatus';

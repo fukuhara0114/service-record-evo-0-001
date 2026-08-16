@@ -150,7 +150,7 @@ class LoanerMaster extends Model
     {
         static $existingColumns = null;
         if ($existingColumns === null) {
-            $existingColumns = array_flip(Schema::getColumnListing('loanermaster'));
+            $existingColumns = array_flip(Schema::getColumnListing('loanermaster008'));
         }
 
         $payload = [];

@@ -760,15 +760,16 @@ class ServiceRecordController extends Controller
         }
 
         if ($orderTypeFilter === 'loaner') {
-            // サービス案件の productName が loaner の item に含まれる
+            // サービス案件の productName が loaner の item に含まれる（大文字小文字無視）
             // サービス案件の dealer が loaner の dealer に含まれる
             if ($productName !== '') {
-                $itemLike = $this->likeContains($productName);
-                $query->whereExists(function ($sub) use ($itemLike) {
+                $itemLike = $this->likeContains(mb_strtolower($productName, 'UTF-8'));
+                $loanerTable = (new LoanerMaster)->getTable();
+                $query->whereExists(function ($sub) use ($itemLike, $loanerTable) {
                     $sub->select(DB::raw(1))
-                        ->from('loanermaster')
-                        ->whereColumn('loanermaster.loanerID', 'servicerecord.loanerID')
-                        ->where('loanermaster.item', 'like', $itemLike);
+                        ->from($loanerTable)
+                        ->whereColumn("{$loanerTable}.loanerID", 'servicerecord.loanerID')
+                        ->whereRaw("LOWER({$loanerTable}.item) LIKE ?", [$itemLike]);
                 });
             }
             if ($dealer !== '') {
@@ -795,7 +796,10 @@ class ServiceRecordController extends Controller
         } else {
             // サービス案件検索: 各入力は対応カラムへの部分一致（AND）
             if ($productName !== '') {
-                $query->where('productName', 'like', $this->likeContains($productName));
+                $query->whereRaw(
+                    'LOWER(productName) LIKE ?',
+                    [$this->likeContains(mb_strtolower($productName, 'UTF-8'))]
+                );
             }
             if ($sn !== '') {
                 $query->where('SN', 'like', $this->likeContains($sn));
@@ -2020,7 +2024,8 @@ class ServiceRecordController extends Controller
             'serviceID'
         )->sortBy('productName', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
-        $loanerStatusColumn = Schema::hasColumn('loanermaster', 'currentStatus')
+        $loanerTable = (new LoanerMaster)->getTable();
+        $loanerStatusColumn = Schema::hasColumn($loanerTable, 'currentStatus')
             ? 'currentStatus'
             : 'currentStatus';
         $loaners = app(MasterPriceVersionResolver::class)->latestByKey(
