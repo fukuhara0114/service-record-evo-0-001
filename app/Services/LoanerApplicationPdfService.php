@@ -157,7 +157,6 @@ class LoanerApplicationPdfService
         }
 
         $sentDate = $this->formatDateDash($data['sentDate'] ?? null);
-        $contactWithSama = $contact !== '' ? $contact.' 様' : '';
 
         // 直送先が空なら貸出先を流用（正解PDFと同じ）
         if ($deliveryCompany === '' && $deliveryPerson === '') {
@@ -174,7 +173,7 @@ class LoanerApplicationPdfService
         return [
             // Email送付先: 会社名 / 担当 / TEL / FAX
             'fax_company' => $dealer,
-            'fax_contactPerson' => $contactWithSama,
+            'fax_contactPerson' => $contact,
             'fax_phone' => $phone,
             'fax_fax' => $fax,
 
@@ -192,7 +191,7 @@ class LoanerApplicationPdfService
 
             'dealer_name' => $dealer,
             'dealer_depart' => $dealerDepart,
-            'dealer_contactPerson' => $contactWithSama,
+            'dealer_contactPerson' => $contact,
             'dealer_zip' => $zip,
             'dealer_address1' => $address1,
             'dealer_address2' => $address2,
@@ -201,7 +200,7 @@ class LoanerApplicationPdfService
 
             'user_name' => $deliveryCompany,
             'user_depart' => $deliveryDepart,
-            'user_contactPerson' => $deliveryPerson !== '' ? $deliveryPerson.' 様' : '',
+            'user_contactPerson' => $deliveryPerson,
             'user_zip' => $deliveryZip,
             'user_address1' => $deliveryAddress1,
             'user_address2' => $deliveryAddress2,

@@ -8,14 +8,6 @@
             <div class="header-actions">
                 <span v-if="success" class="save-message success">{{ success }}</span>
                 <span v-if="error" class="save-message error">{{ error }}</span>
-                <button
-                    type="button"
-                    class="btn btn-secondary"
-                    :disabled="saving || applicationFormLoading"
-                    @click="openApplicationForm"
-                >
-                    {{ applicationFormLoading ? '生成中...' : '申込書発行' }}
-                </button>
                 <button type="button" class="btn btn-primary" :disabled="saving" @click="save()">
                     {{ saving ? '保存中...' : '保存' }}
                 </button>
@@ -148,6 +140,16 @@
                                         {{ form.shippingOut_requiredDate || '選択してください' }}
                                     </button>
                                 </div>
+                                <div class="commerce-application-form-slot">
+                                    <button
+                                        type="button"
+                                        class="btn btn-secondary application-form-issue-btn"
+                                        :disabled="saving || applicationFormLoading"
+                                        @click="openApplicationForm"
+                                    >
+                                        {{ applicationFormLoading ? '生成中...' : '申込書発行' }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -241,7 +243,14 @@
                                 <label><span>email</span><input v-model="form.email" type="text"></label>
                                 <label class="zip-row">
                                     <span class="zip-mark">〒</span>
-                                    <input v-model="form.zipcode" type="text" class="zip-input" placeholder="zipcode">
+                                    <input
+                                        v-model="form.zipcode"
+                                        type="text"
+                                        class="zip-input"
+                                        placeholder="zipcode"
+                                        @change="lookupZip('dealer')"
+                                        @blur="lookupZip('dealer')"
+                                    >
                                 </label>
                                 <div class="address-pair">
                                     <input v-model="form.address1" type="text" class="address1-input" placeholder="address1" aria-label="address1">
@@ -251,8 +260,15 @@
                         </section>
 
                         <section class="panel person-panel">
-                            <div class="panel-heading">
+                            <div class="panel-heading delivery-heading">
                                 <h2>発送先</h2>
+                                <button
+                                    type="button"
+                                    class="select-btn delivery-copy-btn"
+                                    @click="copyDealerToDelivery"
+                                >
+                                    依頼者Copy
+                                </button>
                             </div>
                             <div class="person-stack">
                                 <label><span>会社名</span><input v-model="form.deliveryDestination_company" type="text"></label>
@@ -262,7 +278,14 @@
                                 <label><span>email</span><input v-model="form.deliveryDestination_email" type="text"></label>
                                 <label class="zip-row">
                                     <span class="zip-mark">〒</span>
-                                    <input v-model="form.deliveryDestination_zipcode" type="text" class="zip-input" placeholder="zipcode">
+                                    <input
+                                        v-model="form.deliveryDestination_zipcode"
+                                        type="text"
+                                        class="zip-input"
+                                        placeholder="zipcode"
+                                        @change="lookupZip('delivery')"
+                                        @blur="lookupZip('delivery')"
+                                    >
                                 </label>
                                 <div class="address-pair">
                                     <input
@@ -1541,8 +1564,52 @@ function onMasterSelected(result) {
             .forEach((field) => {
                 form[field] = result[field] ?? ''
             })
+        void lookupZip('dealer')
     }
     activeSelectKind.value = null
+}
+
+function normalizeZipcode(value) {
+    return String(value || '').replace(/\D/g, '')
+}
+
+async function lookupZip(target) {
+    const raw = target === 'delivery' ? form.deliveryDestination_zipcode : form.zipcode
+    const zip = normalizeZipcode(raw)
+    if (zip.length !== 7) return
+
+    try {
+        const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${encodeURIComponent(zip)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const hit = Array.isArray(data?.results) ? data.results[0] : null
+        if (!hit) return
+
+        const pref = String(hit.address1 || '')
+        const cityTown = `${String(hit.address2 || '')}${String(hit.address3 || '')}`
+        if (target === 'delivery') {
+            form.deliveryDestination_zipcode = zip
+            form.deliveryDestination_address1 = pref
+            form.deliveryDestination_address2 = cityTown
+        } else {
+            form.zipcode = zip
+            form.address1 = pref
+            form.address2 = cityTown
+        }
+    } catch {
+        // 検索失敗時は手入力のまま
+    }
+}
+
+function copyDealerToDelivery() {
+    form.deliveryDestination_company = form.dealer || ''
+    form.deliveryDestination_depart = form.dealer_depart || ''
+    form.deliveryDestination_contactPerson = form.contactPerson || ''
+    form.deliveryDestination_phone = form.phone || ''
+    form.deliveryDestination_email = form.email || ''
+    form.deliveryDestination_zipcode = form.zipcode || ''
+    form.deliveryDestination_address1 = form.address1 || ''
+    form.deliveryDestination_address2 = form.address2 || ''
 }
 
 function filesApiBase() {
@@ -2338,6 +2405,13 @@ a.btn {
 .left-pane { width: 100%; height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow-x: hidden; overflow-y: auto; padding-right: 3px; }
 .panel { min-width: 0; min-height: 0; border: 1px solid #94a3b8; background: #fff; padding: 7px; overflow: visible; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
+.panel-heading h2 { margin: 0; }
+.delivery-heading {
+    justify-content: flex-start;
+}
+.delivery-copy-btn {
+    margin-left: 50px;
+}
 .panel h2 { margin: 0; font-size: 13px; }
 .panel h3 { margin: 7px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #cbd5e1; font-size: 11px; color: #475569; }
 
@@ -2488,7 +2562,7 @@ a.btn {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     gap: 8px 12px;
-    align-items: start;
+    align-items: stretch;
 }
 .loaner-identity-col,
 .loaner-commerce-col {
@@ -2498,6 +2572,9 @@ a.btn {
     padding: 6px;
     border: 1px solid #cbd5e1;
     background: #e2e8f0;
+}
+.loaner-commerce-col {
+    grid-template-rows: auto auto auto auto 1fr;
 }
 .loaner-identity-col label {
     min-width: 0;
@@ -2684,6 +2761,23 @@ a.btn {
     font-weight: 700;
     border-radius: 4px;
     align-self: center;
+}
+.application-form-issue-btn {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.commerce-application-form-slot {
+    display: flex;
+    align-items: flex-end;
+    justify-content: stretch;
+    min-height: 48px;
+    margin-top: auto;
+    padding-top: 6px;
 }
 .labor-required-field span { color: #b45309; font-weight: 700; }
 .labor-required-field select { border-color: #f59e0b; background: #fffbeb; }
