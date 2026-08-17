@@ -128,13 +128,9 @@ class LoanerRecordController extends Controller
             'loanerMaster:loanerID,productName,item,SN,manageNum,groupName,price',
         ];
 
-        $attached = $this->resolveLoanerAttached($id, $with);
-        if (!$attached) {
-            abort(404, '指定された貸出案件は存在しません。');
-        }
-
-        $record = $attached->serviceRecord;
-        if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
+        // URL の {id} = 一覧で選んだ orderID
+        [$attached, $record] = $this->resolveLoanerDetailByOrderId($id, $with);
+        if (!$attached || !$record) {
             abort(404, '指定された貸出案件は存在しません。');
         }
 
@@ -515,13 +511,17 @@ class LoanerRecordController extends Controller
      */
     public function applicationForm(Request $request, int $id, LoanerApplicationPdfService $pdfService)
     {
-        $attached = $this->resolveLoanerAttached($id, ['serviceRecord', 'loanerMaster']);
-        if (!$attached) {
-            return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
+        // 画面からは attached.id で呼ばれる。明細行から orderID を得て案件を開く。
+        $attachedRow = AttachedLoaner::query()->find($id);
+        $orderId = $attachedRow?->associatedID;
+        if ($orderId === null || $orderId === '') {
+            $orderId = $id;
         }
 
-        $record = $attached->serviceRecord;
-        if (!$record || !in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
+        $resolved = $this->resolveLoanerDetailByOrderId((int) $orderId, ['serviceRecord', 'loanerMaster']);
+        $attached = $resolved[0] ?? null;
+        $record = $resolved[1] ?? null;
+        if (!$attached || !$record) {
             return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
         }
 
@@ -2052,58 +2052,41 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * 貸出詳細の {id} を解決する。
-     * - 一覧は orderID（associatedID）で遷移する
-     * - カレンダー等は attachedloaners.id で遷移する
-     * id が両方に当たる場合は associatedID（orderID）側を優先し、デプロイ環境での取り違え 404 を防ぐ。
+     * 一覧で選ばれた orderID の servicerecord（loaner / waiting_list）を開く。
+     * 画面用の attachedloaners 行は、その orderID に紐づくものを使う。
      *
      * @param  list<string>  $with
+     * @return array{0: ?AttachedLoaner, 1: ?ServiceRecord}
      */
-    private function resolveLoanerAttached(int $id, array $with = []): ?AttachedLoaner
+    private function resolveLoanerDetailByOrderId(int $orderId, array $with = []): array
     {
-        $isLoanerLike = static function (?ServiceRecord $record): bool {
-            return $record !== null
-                && in_array($record->order_type, ['loaner', 'waiting_list'], true);
-        };
-
-        $byPk = AttachedLoaner::with($with)->find($id);
-        $byAssociated = AttachedLoaner::with($with)
-            ->where('associatedID', $id)
-            ->orderByDesc('id')
-            ->first();
-
-        $pkOk = $byPk && $isLoanerLike($byPk->serviceRecord);
-        $associatedOk = $byAssociated && $isLoanerLike($byAssociated->serviceRecord);
-
-        if ($pkOk && $associatedOk) {
-            if ((int) $byPk->associatedID === $id) {
-                return $byPk;
-            }
-
-            return $byAssociated;
-        }
-
-        if ($associatedOk) {
-            return $byAssociated;
-        }
-
-        if ($pkOk) {
-            return $byPk;
-        }
-
-        // attached が無い／紐づきずれ: orderID で servicerecord を特定して再検索
         $record = ServiceRecord::query()
-            ->where('orderID', $id)
+            ->where('orderID', $orderId)
             ->whereIn('order_type', ['loaner', 'waiting_list'])
             ->first();
+
         if (!$record) {
-            return null;
+            return [null, null];
         }
 
-        return AttachedLoaner::with($with)
+        $attached = AttachedLoaner::with($with)
             ->where('associatedID', $record->orderID)
             ->orderByDesc('id')
             ->first();
+
+        if (!$attached) {
+            $created = $this->createAttachedLoanerReservation(
+                $record,
+                null,
+                (string) $record->order_type,
+                (string) ($record->productName ?? ''),
+            );
+            if ($created) {
+                $attached = AttachedLoaner::with($with)->find($created->id);
+            }
+        }
+
+        return [$attached, $record];
     }
 
     private function resolveStatusColumn(): string

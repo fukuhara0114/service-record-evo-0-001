@@ -332,9 +332,9 @@
                                                 </td>
                                                 <td>
                                                     <a
-                                                        v-if="loaner.attachedLoanerId"
+                                                        v-if="loaner.orderID"
                                                         class="loaner-period-link"
-                                                        :href="loanerDetailUrl(loaner.attachedLoanerId)"
+                                                        :href="loanerDetailUrl(loaner.orderID)"
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                     >
@@ -992,10 +992,10 @@ const statusOptions = computed(() => {
     return page.props.statuses ?? []
 })
 
-function loanerDetailUrl(attachedId) {
+function loanerDetailUrl(orderId) {
     const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
     const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''
-    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${attachedId}${params}`
+    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${orderId}${params}`
 }
 
 function isNoteOwner(note) {

@@ -438,9 +438,9 @@ function loanerDetailUrl(event) {
     })
     const orderID = event?.extendedProps?.associatedID
     const loanerID = event?.extendedProps?.loanerID
-    if (orderID != null && orderID !== '') params.set('orderID', String(orderID))
     if (loanerID != null && loanerID !== '') params.set('loanerID', String(loanerID))
-    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${event.id}?${params.toString()}`
+    const detailId = orderID != null && orderID !== '' ? orderID : event.id
+    return `${page.props.appBaseUrl}/servicerecord/loaner/detail/${detailId}?${params.toString()}`
 }
 
 function reloadEvents() {

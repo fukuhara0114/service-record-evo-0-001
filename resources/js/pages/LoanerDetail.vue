@@ -1322,7 +1322,8 @@ const calendarOptions = {
     eventResize: updateEventPeriod,
     eventClick(info) {
         if (!info.event.id || String(info.event.id) === String(props.attached.id)) return
-        window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${info.event.id}`
+        const orderId = info.event.extendedProps?.associatedID || info.event.id
+        window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${orderId}`
     },
 }
 
