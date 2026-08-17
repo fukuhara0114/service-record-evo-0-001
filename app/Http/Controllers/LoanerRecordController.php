@@ -130,11 +130,20 @@ class LoanerRecordController extends Controller
 
         // URL の {id} = 一覧で選んだ orderID → servicerecord を開く
         [$attached, $record] = $this->resolveLoanerDetailByOrderId($id, $with);
-        if (!$record) {
-            abort(404, '指定された貸出案件は存在しません。');
-        }
-        if (!$attached) {
-            abort(404, '貸出案件の明細行(attachedloaners)を用意できませんでした。');
+        if (!$record || !$attached) {
+            // 標準の「404 | 見つかりません」だと abort とルート未到達の区別が付かないため、本文で返す
+            $any = ServiceRecord::query()->where('orderID', $id)->first(['orderID', 'order_type', 'productName']);
+            $lines = [
+                'LoanerDetail diagnose (controller reached)',
+                'requested_id='.$id,
+                'record_loaner_or_waiting='.($record ? 'yes' : 'no'),
+                'attached='.($attached ? 'yes' : 'no'),
+                'any_servicerecord_order_type='.($any ? (string) ($any->order_type ?? 'null') : 'NOT_FOUND'),
+                'any_servicerecord_productName='.($any ? (string) ($any->productName ?? '') : ''),
+            ];
+
+            return response(implode("\n", $lines), 404)
+                ->header('Content-Type', 'text/plain; charset=UTF-8');
         }
 
         $parentReturnCode = null;
