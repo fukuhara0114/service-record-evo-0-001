@@ -130,20 +130,17 @@ class LoanerRecordController extends Controller
 
         // URL の {id} = 一覧で選んだ orderID → servicerecord を開く
         [$attached, $record] = $this->resolveLoanerDetailByOrderId($id, $with);
-        if (!$record || !$attached) {
-            // 標準の「404 | 見つかりません」だと abort とルート未到達の区別が付かないため、本文で返す
-            $any = ServiceRecord::query()->where('orderID', $id)->first(['orderID', 'order_type', 'productName']);
-            $lines = [
-                'LoanerDetail diagnose (controller reached)',
-                'requested_id='.$id,
-                'record_loaner_or_waiting='.($record ? 'yes' : 'no'),
-                'attached='.($attached ? 'yes' : 'no'),
-                'any_servicerecord_order_type='.($any ? (string) ($any->order_type ?? 'null') : 'NOT_FOUND'),
-                'any_servicerecord_productName='.($any ? (string) ($any->productName ?? '') : ''),
-            ];
-
-            return response(implode("\n", $lines), 404)
-                ->header('Content-Type', 'text/plain; charset=UTF-8');
+        if (!$record) {
+            return response(
+                "LoanerDetail: servicerecord not found for orderID={$id}",
+                404
+            )->header('Content-Type', 'text/plain; charset=UTF-8');
+        }
+        if (!$attached) {
+            return response(
+                "LoanerDetail: attachedloaners create failed for orderID={$id} order_type={$record->order_type} productName={$record->productName}",
+                404
+            )->header('Content-Type', 'text/plain; charset=UTF-8');
         }
 
         $parentReturnCode = null;
@@ -1511,13 +1508,7 @@ class LoanerRecordController extends Controller
 
         // waiting_list で個体未定でも loanerID が必須な場合は、同機種の代表個体を仮紐づけ
         if ($loanerId == null) {
-            $fallback = LoanerMaster::query()
-                ->where('productName', $requestedProductName)
-                ->orderBy('loanerID')
-                ->orderBy('id')
-                ->first();
-            // loanerID が空のマスタもあるため id をフォールバックに使う
-            $loanerId = $fallback?->loanerID ?? $fallback?->id;
+            $loanerId = $this->resolveFallbackLoanerId($requestedProductName);
         }
 
         if ($loanerId == null && $available) {
@@ -2108,12 +2099,18 @@ class LoanerRecordController extends Controller
 
     /**
      * orderID に紐づく attachedloaners が無いときの最低限行。
+     * waiting_list は loanerID 未設定・機種名の大文字小文字差でも落ちないようにする。
      *
      * @param  list<string>  $with
      */
     private function ensureMinimalAttachedLoaner(ServiceRecord $record, array $with = []): ?AttachedLoaner
     {
         $columns = Schema::getColumnListing('attachedloaners');
+        $loanerId = $record->loanerID;
+        if ($loanerId === null || $loanerId === '') {
+            $loanerId = $this->resolveFallbackLoanerId((string) ($record->productName ?? ''));
+        }
+
         $payload = [
             'associatedID' => $record->orderID,
             'comment' => $record->order_type === 'waiting_list'
@@ -2121,8 +2118,9 @@ class LoanerRecordController extends Controller
                 : 'loaner reservation',
         ];
 
-        if (in_array('loanerID', $columns, true) && $record->loanerID !== null && $record->loanerID !== '') {
-            $payload['loanerID'] = $record->loanerID;
+        if (in_array('loanerID', $columns, true)) {
+            // NOT NULL 対策: どうしても無ければ 0
+            $payload['loanerID'] = ($loanerId === null || $loanerId === '') ? 0 : $loanerId;
         }
         if (in_array('productName', $columns, true)) {
             $payload['productName'] = $record->productName;
@@ -2151,6 +2149,7 @@ class LoanerRecordController extends Controller
         } catch (\Throwable $e) {
             Log::error('貸出明細の最低限作成に失敗しました', [
                 'orderID' => $record->orderID,
+                'payload' => $payload,
                 'error' => $e->getMessage(),
             ]);
 
@@ -2158,6 +2157,36 @@ class LoanerRecordController extends Controller
         }
 
         return AttachedLoaner::with($with)->find($created->id);
+    }
+
+    /**
+     * productName の大文字小文字差を無視して loanerID を探す。
+     */
+    private function resolveFallbackLoanerId(string $productName): mixed
+    {
+        $productName = trim($productName);
+        $base = LoanerMaster::query()->orderBy('loanerID')->orderBy('id');
+
+        if ($productName !== '') {
+            $lower = mb_strtolower($productName, 'UTF-8');
+            $exact = (clone $base)
+                ->whereRaw('LOWER(productName) = ?', [$lower])
+                ->first();
+            if ($exact) {
+                return $exact->loanerID ?? $exact->id;
+            }
+
+            $partial = (clone $base)
+                ->whereRaw('LOWER(productName) LIKE ?', ['%'.$lower.'%'])
+                ->first();
+            if ($partial) {
+                return $partial->loanerID ?? $partial->id;
+            }
+        }
+
+        $any = $base->first();
+
+        return $any?->loanerID ?? $any?->id;
     }
 
     private function resolveStatusColumn(): string
