@@ -128,10 +128,13 @@ class LoanerRecordController extends Controller
             'loanerMaster:loanerID,productName,item,SN,manageNum,groupName,price',
         ];
 
-        // URL の {id} = 一覧で選んだ orderID
+        // URL の {id} = 一覧で選んだ orderID → servicerecord を開く
         [$attached, $record] = $this->resolveLoanerDetailByOrderId($id, $with);
-        if (!$attached || !$record) {
+        if (!$record) {
             abort(404, '指定された貸出案件は存在しません。');
+        }
+        if (!$attached) {
+            abort(404, '貸出案件の明細行(attachedloaners)を用意できませんでした。');
         }
 
         $parentReturnCode = null;
@@ -2086,7 +2089,66 @@ class LoanerRecordController extends Controller
             }
         }
 
+        // マスタに個体が無く create できなくても、orderID の案件は開けるように最低限の明細を作る
+        if (!$attached) {
+            $attached = $this->ensureMinimalAttachedLoaner($record, $with);
+        }
+
         return [$attached, $record];
+    }
+
+    /**
+     * orderID に紐づく attachedloaners が無いときの最低限行。
+     *
+     * @param  list<string>  $with
+     */
+    private function ensureMinimalAttachedLoaner(ServiceRecord $record, array $with = []): ?AttachedLoaner
+    {
+        $columns = Schema::getColumnListing('attachedloaners');
+        $payload = [
+            'associatedID' => $record->orderID,
+            'comment' => $record->order_type === 'waiting_list'
+                ? 'waiting_list reservation'
+                : 'loaner reservation',
+        ];
+
+        if (in_array('loanerID', $columns, true) && $record->loanerID !== null && $record->loanerID !== '') {
+            $payload['loanerID'] = $record->loanerID;
+        }
+        if (in_array('productName', $columns, true)) {
+            $payload['productName'] = $record->productName;
+        }
+        if (in_array('assignStatus', $columns, true)) {
+            $payload['assignStatus'] = $record->order_type === 'waiting_list' ? 'waiting' : 'reserved';
+        }
+
+        $start = now('Asia/Tokyo')->toDateString();
+        $end = Carbon::parse($start)->addDays(14)->toDateString();
+        if (in_array('sentDate', $columns, true)) {
+            $payload['sentDate'] = $start;
+        }
+        if (in_array('returnedDate', $columns, true)) {
+            $payload['returnedDate'] = $end;
+        }
+        if (in_array('plannedSentDate', $columns, true)) {
+            $payload['plannedSentDate'] = $start;
+        }
+        if (in_array('plannedReturnedDate', $columns, true)) {
+            $payload['plannedReturnedDate'] = $end;
+        }
+
+        try {
+            $created = AttachedLoaner::create($payload);
+        } catch (\Throwable $e) {
+            Log::error('貸出明細の最低限作成に失敗しました', [
+                'orderID' => $record->orderID,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        return AttachedLoaner::with($with)->find($created->id);
     }
 
     private function resolveStatusColumn(): string
