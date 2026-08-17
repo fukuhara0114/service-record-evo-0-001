@@ -282,9 +282,10 @@ class LoanerRecordController extends Controller
             'statusFlow' => LoanerStatusFlow::meta(),
             'labors' => Labor::query()->orderBy('laborName')->get(['laborID', 'laborName']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
-            // 価格版解決用に同一 loanerID の全版を渡す
+            // 価格計算用に同一 loanerID の全版を渡す（選択ダイアログ側で最新版に絞る）
             'loanerUnits' => LoanerMaster::query()
                 ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', '')
                 ->orderBy('productName')
                 ->orderBy('loanerID')
                 ->orderByDesc('validDateMin')

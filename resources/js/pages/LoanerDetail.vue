@@ -1285,9 +1285,25 @@ watch(() => form.parentID, async (parentId) => {
         parentInfo.value = null
     }
 })
-const activeSelectItems = computed(() =>
-    activeSelectKind.value === 'dealer' ? props.dealersMaster : props.loanerUnits,
-)
+const loanerUnitsLatestForSelect = computed(() => {
+    // 機種選択ダイアログは最新版のみ（価格計算用の全版 props.loanerUnits は残す）
+    // サーバ側は validDateMin desc, id desc で渡すため、loanerID ごとに先頭が最新
+    const seen = new Set()
+    const latest = []
+    for (const unit of props.loanerUnits ?? []) {
+        const key = String(unit?.loanerID ?? '').trim()
+        if (!key) continue
+        if (seen.has(key)) continue
+        seen.add(key)
+        latest.push(unit)
+    }
+    return latest
+})
+const activeSelectItems = computed(() => {
+    if (activeSelectKind.value === 'dealer') return props.dealersMaster
+    if (activeSelectKind.value === 'loanerUnit') return loanerUnitsLatestForSelect.value
+    return props.loanerUnits
+})
 const activeSelectInitialValue = computed(() => {
     if (activeSelectKind.value === 'loanerUnit') return form.loanerID
     return props.dealersMaster.find(item => item.dealerName === form.dealer)?.id ?? null
