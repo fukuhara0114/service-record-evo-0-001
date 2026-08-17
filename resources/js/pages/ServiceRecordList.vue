@@ -1055,6 +1055,7 @@ import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
 import { redirectToLogin } from '@/utils/auth'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
@@ -2715,11 +2716,10 @@ async function openSecondLayer(record) {
         } catch {
             // keep original returnUrl
         }
-        const qs = new URLSearchParams()
-        if (returnUrl) qs.set('returnUrl', returnUrl)
-        if (props.mode === 'engineer') qs.set('from', 'engineer')
-        const params = qs.toString() ? `?${qs.toString()}` : ''
-        window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${record.orderID}${params}`
+        const qs = {}
+        if (returnUrl) qs.returnUrl = returnUrl
+        if (props.mode === 'engineer') qs.from = 'engineer'
+        window.location.href = loanerDetailUrl(record.orderID, qs)
         return
     }
 

@@ -84,7 +84,12 @@ class RemandNotificationMailer
             }
 
             try {
-                Mail::to($email)->send(new UserNotificationMail(
+                $mailer = Mail::to($email);
+                $bcc = $this->remandNotifyBcc();
+                if ($bcc !== null) {
+                    $mailer->bcc($bcc);
+                }
+                $mailer->send(new UserNotificationMail(
                     subjectLine: $subject,
                     bodyText: $body,
                     recipientName: (string) ($user->name ?: $email),
@@ -151,6 +156,16 @@ class RemandNotificationMailer
         $stripped = preg_replace('/^\[差戻理由\][　\s]*/u', '', trim($raw)) ?? '';
 
         return trim($stripped) !== '' ? trim($stripped) : '（理由未入力）';
+    }
+
+    private function remandNotifyBcc(): ?string
+    {
+        $bcc = trim((string) config('mail.remand_notify_bcc', ''));
+        if ($bcc === '' || ! filter_var($bcc, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        return $bcc;
     }
 
     private function assertSmtpConfigured(): void

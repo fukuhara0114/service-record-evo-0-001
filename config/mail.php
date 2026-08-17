@@ -115,4 +115,15 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Remand notification BCC
+    |--------------------------------------------------------------------------
+    |
+    | Always BCC this address on 差戻 (remand) notification emails.
+    |
+    */
+
+    'remand_notify_bcc' => env('MAIL_REMAND_NOTIFY_BCC'),
+
 ];
