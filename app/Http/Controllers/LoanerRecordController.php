@@ -128,15 +128,7 @@ class LoanerRecordController extends Controller
             'loanerMaster:loanerID,productName,item,SN,manageNum,groupName,price',
         ];
 
-        $attached = AttachedLoaner::with($with)->find($id);
-        if (!$attached) {
-            // 一覧からは orderID で遷移するため、associatedID でも解決する
-            $attached = AttachedLoaner::with($with)
-                ->where('associatedID', $id)
-                ->orderByDesc('id')
-                ->first();
-        }
-
+        $attached = $this->resolveLoanerAttached($id, $with);
         if (!$attached) {
             abort(404, '指定された貸出案件は存在しません。');
         }
@@ -523,13 +515,7 @@ class LoanerRecordController extends Controller
      */
     public function applicationForm(Request $request, int $id, LoanerApplicationPdfService $pdfService)
     {
-        $attached = AttachedLoaner::with(['serviceRecord', 'loanerMaster'])->find($id);
-        if (!$attached) {
-            $attached = AttachedLoaner::with(['serviceRecord', 'loanerMaster'])
-                ->where('associatedID', $id)
-                ->orderByDesc('id')
-                ->first();
-        }
+        $attached = $this->resolveLoanerAttached($id, ['serviceRecord', 'loanerMaster']);
         if (!$attached) {
             return response()->json(['message' => '指定された貸出案件は存在しません。'], 404);
         }
@@ -2063,6 +2049,61 @@ class LoanerRecordController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * 貸出詳細の {id} を解決する。
+     * - 一覧は orderID（associatedID）で遷移する
+     * - カレンダー等は attachedloaners.id で遷移する
+     * id が両方に当たる場合は associatedID（orderID）側を優先し、デプロイ環境での取り違え 404 を防ぐ。
+     *
+     * @param  list<string>  $with
+     */
+    private function resolveLoanerAttached(int $id, array $with = []): ?AttachedLoaner
+    {
+        $isLoanerLike = static function (?ServiceRecord $record): bool {
+            return $record !== null
+                && in_array($record->order_type, ['loaner', 'waiting_list'], true);
+        };
+
+        $byPk = AttachedLoaner::with($with)->find($id);
+        $byAssociated = AttachedLoaner::with($with)
+            ->where('associatedID', $id)
+            ->orderByDesc('id')
+            ->first();
+
+        $pkOk = $byPk && $isLoanerLike($byPk->serviceRecord);
+        $associatedOk = $byAssociated && $isLoanerLike($byAssociated->serviceRecord);
+
+        if ($pkOk && $associatedOk) {
+            if ((int) $byPk->associatedID === $id) {
+                return $byPk;
+            }
+
+            return $byAssociated;
+        }
+
+        if ($associatedOk) {
+            return $byAssociated;
+        }
+
+        if ($pkOk) {
+            return $byPk;
+        }
+
+        // attached が無い／紐づきずれ: orderID で servicerecord を特定して再検索
+        $record = ServiceRecord::query()
+            ->where('orderID', $id)
+            ->whereIn('order_type', ['loaner', 'waiting_list'])
+            ->first();
+        if (!$record) {
+            return null;
+        }
+
+        return AttachedLoaner::with($with)
+            ->where('associatedID', $record->orderID)
+            ->orderByDesc('id')
+            ->first();
     }
 
     private function resolveStatusColumn(): string
