@@ -142,15 +142,15 @@ class MaintenanceContractController extends Controller
             'productName' => 'required|string|max:255',
             'SN' => 'required|string|max:255',
             'dealer' => 'required|string|max:255',
+            'match' => 'nullable|in:contains,prefix',
         ]);
 
         $productName = trim((string) $validated['productName']);
         $sn = trim((string) $validated['SN']);
         $dealer = trim((string) $validated['dealer']);
+        $contains = ($validated['match'] ?? '') === 'contains';
 
-        $productPrefix = mb_substr($productName, 0, 5);
-
-        if ($productPrefix === '' || $sn === '' || $dealer === '') {
+        if ($productName === '' || $sn === '' || $dealer === '') {
             return response()->json([
                 'message' => 'productName / SN / dealer をすべて入力してください。',
                 'contracts' => [],
@@ -158,14 +158,25 @@ class MaintenanceContractController extends Controller
         }
 
         $today = Carbon::today()->toDateString();
-
-        $contracts = MaintenanceContractMaster::query()
+        $query = MaintenanceContractMaster::query()
             ->with('maintenanceContractType:id,contractType,description')
             ->whereNotNull('expireDate')
-            ->whereDate('expireDate', '>', $today)
-            ->where('instrumentName', 'like', $this->likePrefix($productPrefix))
-            ->where('SN', $sn)
-            ->where('dealer', 'like', $this->likeContains($dealer))
+            ->whereDate('expireDate', '>', $today);
+
+        if ($contains) {
+            $query
+                ->whereRaw('LOWER(instrumentName) LIKE ?', [$this->likeContains(mb_strtolower($productName, 'UTF-8'))])
+                ->whereRaw('LOWER(SN) LIKE ?', [$this->likeContains(mb_strtolower($sn, 'UTF-8'))])
+                ->whereRaw('LOWER(dealer) LIKE ?', [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]);
+        } else {
+            $productPrefix = mb_substr($productName, 0, 5);
+            $query
+                ->where('instrumentName', 'like', $this->likePrefix($productPrefix))
+                ->where('SN', $sn)
+                ->where('dealer', 'like', $this->likeContains($dealer));
+        }
+
+        $contracts = $query
             ->orderBy('expireDate')
             ->orderBy('id')
             ->limit(100)
@@ -177,7 +188,8 @@ class MaintenanceContractController extends Controller
             'contracts' => $contracts,
             'count' => $contracts->count(),
             'filters' => [
-                'productNamePrefix' => $productPrefix,
+                'match' => $contains ? 'contains' : 'prefix',
+                'productName' => $productName,
                 'SN' => $sn,
                 'dealer' => $dealer,
                 'expireDateAfter' => $today,

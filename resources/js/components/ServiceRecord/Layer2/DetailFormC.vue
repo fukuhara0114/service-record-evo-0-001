@@ -22,6 +22,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     record: Object,
@@ -32,8 +33,8 @@ defineEmits(['open-dialog'])
 const resolvedStatusLabel = computed(() => {
     if (props.record?.order_type === 'waiting_list') return ''
     if (props.record?.order_type === 'loaner') {
-        return props.record?.status_master_loaner?.status
-            || props.record?.resolved_status_master?.status
+        return loanerStatusLabel(props.record?.status_master_loaner)
+            || loanerStatusLabel(props.record?.resolved_status_master)
             || ''
     }
     return props.record?.status_master?.status || ''

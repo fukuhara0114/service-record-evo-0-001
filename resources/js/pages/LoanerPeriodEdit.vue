@@ -1,9 +1,13 @@
 <template>
     <div class="period-page">
         <div class="page-header">
-            <div>
+            <div class="header-title">
                 <h1>貸出期間の編集</h1>
                 <p class="subtitle">attachedloaners #{{ attached.id }} / orderID: {{ attached.associatedID }}</p>
+            </div>
+            <div class="header-message" aria-live="polite">
+                <p v-if="error" class="global-error">{{ error }}</p>
+                <p v-else-if="success" class="global-success">{{ success }}</p>
             </div>
             <div class="header-actions">
                 <a :href="calendarUrl" class="btn btn-secondary">カレンダー</a>
@@ -20,37 +24,74 @@
             </div>
         </div>
 
-        <p v-if="error" class="global-error">{{ error }}</p>
-        <p v-if="success" class="global-success">{{ success }}</p>
-
         <div class="content-grid">
             <section class="info-card">
                 <h2 class="card-title">貸出情報</h2>
-                <dl class="meta-grid">
-                    <div><dt>productName</dt><dd>{{ attachedLocal.productName || '—' }}</dd></div>
-                    <div><dt>item</dt><dd>{{ attachedLocal.item || '—' }}</dd></div>
-                    <div><dt>loanerID</dt><dd>{{ attachedLocal.loanerID || '—' }}</dd></div>
-                    <div><dt>SN</dt><dd>{{ attachedLocal.SN || '—' }}</dd></div>
-                    <div><dt>order_type</dt><dd>{{ attachedLocal.order_type || '—' }}</dd></div>
-                    <div><dt>assignStatus</dt><dd>{{ attachedLocal.assignStatus || '—' }}</dd></div>
-                    <div>
-                        <dt>parentID</dt>
-                        <dd>
-                            <template v-if="attachedLocal.parentID">
-                                {{ attachedLocal.parentID }}
-                                <span v-if="parentLocal" class="parent-note">
-                                    （{{ parentLocal.productName || '—' }} / {{ parentLocal.dealer || '—' }}）
-                                </span>
-                            </template>
-                            <template v-else>なし（service 案件待ち）</template>
-                        </dd>
-                    </div>
-                </dl>
+                <div class="meta-grid-wrap">
+                    <dl class="meta-grid meta-grid-row1">
+                        <div>
+                            <dt>productName</dt>
+                            <dd>{{ attachedLocal.productName || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>item</dt>
+                            <dd>{{ attachedLocal.item || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>SN</dt>
+                            <dd>{{ attachedLocal.SN || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>manageNumber</dt>
+                            <dd>{{ attachedLocal.manageNum || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>loanerID</dt>
+                            <dd>{{ attachedLocal.loanerID || '—' }}</dd>
+                        </div>
+                    </dl>
+                    <dl class="meta-grid meta-grid-row2">
+                        <div>
+                            <dt>order type</dt>
+                            <dd>{{ attachedLocal.order_type || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>assignStatus</dt>
+                            <dd>{{ attachedLocal.assignStatus || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt>parentID</dt>
+                            <dd>
+                                <template v-if="attachedLocal.parentID">
+                                    {{ attachedLocal.parentID }}
+                                    <span v-if="parentLocal" class="parent-note">
+                                        （{{ parentLocal.productName || '—' }} / {{ parentLocal.dealer || '—' }}）
+                                    </span>
+                                </template>
+                                <template v-else>なし（service 案件待ち）</template>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>enduser SN</dt>
+                            <dd>
+                                <input
+                                    v-model="form.enduser_SN"
+                                    type="text"
+                                    class="meta-input"
+                                    placeholder="enduser SN"
+                                >
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
 
                 <div class="loaner-stakeholder-stack">
                     <section class="stakeholder-card info-card-dealer">
                         <aside class="stakeholder-side">
                             <div class="stakeholder-label">dealer</div>
+                            <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
+                                switch E/U
+                            </button>
                             <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
                                 switch delivery
                             </button>
@@ -105,6 +146,9 @@
                             <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
                                 switch dealer
                             </button>
+                            <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                switch E/U
+                            </button>
                         </aside>
                         <div class="stakeholder-body">
                             <div class="form-row row-full">
@@ -137,11 +181,63 @@
                             </div>
                         </div>
                     </section>
+
+                    <section class="stakeholder-card info-card-enduser">
+                        <aside class="stakeholder-side">
+                            <div class="stakeholder-label">endUser</div>
+                            <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
+                                switch dealer
+                            </button>
+                            <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
+                                switch delivery
+                            </button>
+                        </aside>
+                        <div class="stakeholder-body">
+                            <div class="form-row row-full">
+                                <input v-model="form.endUser" type="text" placeholder="endUser">
+                            </div>
+                            <div class="form-row row-full">
+                                <input v-model="form.endUser_depart" type="text" placeholder="endUser_depart">
+                            </div>
+                            <div class="form-row row-contact">
+                                <input v-model="form.endUser_contactPerson" type="text" class="w-contact" placeholder="contactPerson">
+                            </div>
+                            <div class="form-row row-phone-email">
+                                <input v-model="form.endUser_phone" type="text" class="w-phone" placeholder="Phone">
+                                <input v-model="form.endUser_email" type="text" class="w-email" placeholder="EMail">
+                            </div>
+                            <div class="form-row row-zip">
+                                <input
+                                    v-model="form.endUser_zipcode"
+                                    type="text"
+                                    class="w-zip"
+                                    inputmode="numeric"
+                                    maxlength="8"
+                                    placeholder="Zipcode"
+                                    @input="onZipcodeInput('endUser')"
+                                >
+                            </div>
+                            <div class="form-row row-address">
+                                <input v-model="form.endUser_address1" type="text" class="w-address1" placeholder="address1">
+                                <input v-model="form.endUser_address2" type="text" class="w-address2" placeholder="address2">
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <section class="period-inline-card">
                     <h2 class="card-title">貸出期間 / status</h2>
-                    <div class="period-controls-row">
+                    <div class="period-dates-row">
+                        <label v-if="dateFields.hasPlannedSent" class="field field-on-white">
+                            <span>予定開始</span>
+                            <input v-model="form.plannedSentDate" type="date">
+                        </label>
+                        <label v-if="dateFields.hasPlannedReturned" class="field field-on-white">
+                            <span>予定終了</span>
+                            <input v-model="form.plannedReturnedDate" type="date">
+                        </label>
+                    </div>
+                    <div class="period-status-row">
                         <label v-if="attachedLocal.order_type === 'loaner'" class="field field-on-white">
                             <span>status（StatusLoaner）</span>
                             <select v-model="form.status">
@@ -151,7 +247,7 @@
                                     :key="status.processID_new"
                                     :value="String(status.processID_new)"
                                 >
-                                    {{ status.status }} ({{ status.processID_new }})
+                                    {{ loanerStatusOptionLabel(status) }}
                                 </option>
                             </select>
                         </label>
@@ -161,15 +257,6 @@
                         >
                             waiting_list（status なし）
                         </p>
-
-                        <label v-if="dateFields.hasPlannedSent" class="field field-on-white">
-                            <span>plannedSentDate（予定開始）</span>
-                            <input v-model="form.plannedSentDate" type="date">
-                        </label>
-                        <label v-if="dateFields.hasPlannedReturned" class="field field-on-white">
-                            <span>plannedReturnedDate（予定終了）</span>
-                            <input v-model="form.plannedReturnedDate" type="date">
-                        </label>
                     </div>
 
                     <div v-if="attachedLocal.order_type === 'waiting_list'" class="schedule-box">
@@ -390,6 +477,7 @@ import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     attached: {
@@ -456,6 +544,7 @@ const calendarError = ref('')
 
 const STAKEHOLDER_FIELDS = {
     dealer: ['dealer', 'dealer_depart', 'contactPerson', 'phone', 'email', 'zipcode', 'address1', 'address2'],
+    endUser: ['endUser', 'endUser_depart', 'endUser_contactPerson', 'endUser_phone', 'endUser_email', 'endUser_zipcode', 'endUser_address1', 'endUser_address2'],
     delivery: [
         'deliveryDestination_company',
         'deliveryDestination_depart',
@@ -472,6 +561,9 @@ const form = reactive({
     plannedSentDate: props.attached.plannedSentDate || '',
     plannedReturnedDate: props.attached.plannedReturnedDate || '',
     status: props.attached.status != null ? String(props.attached.status) : '',
+    enduser_SN: props.attached.enduser_SN != null && props.attached.enduser_SN !== ''
+        ? String(props.attached.enduser_SN)
+        : '',
     dealer: props.attached.dealer || '',
     dealer_depart: props.attached.dealer_depart || '',
     contactPerson: props.attached.contactPerson || '',
@@ -480,6 +572,14 @@ const form = reactive({
     zipcode: props.attached.zipcode || '',
     address1: props.attached.address1 || '',
     address2: props.attached.address2 || '',
+    endUser: props.attached.endUser || '',
+    endUser_depart: props.attached.endUser_depart || '',
+    endUser_contactPerson: props.attached.endUser_contactPerson || '',
+    endUser_phone: props.attached.endUser_phone || '',
+    endUser_email: props.attached.endUser_email || '',
+    endUser_zipcode: props.attached.endUser_zipcode || '',
+    endUser_address1: props.attached.endUser_address1 || '',
+    endUser_address2: props.attached.endUser_address2 || '',
     deliveryDestination_company: props.attached.deliveryDestination_company || '',
     deliveryDestination_depart: props.attached.deliveryDestination_depart || '',
     deliveryDestination_contactPerson: props.attached.deliveryDestination_contactPerson || '',
@@ -492,11 +592,15 @@ const form = reactive({
 
 const zipLookupTimers = {
     dealer: null,
+    endUser: null,
     delivery: null,
 }
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
-const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administrator`)
+const adminUrl = computed(() => {
+    const orderType = attachedLocal.order_type === 'waiting_list' ? 'waiting_list' : 'loaner'
+    return `${page.props.appBaseUrl}/servicerecord/administrator?orderType=${encodeURIComponent(orderType)}`
+})
 const calendarUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/calendar`)
 const statuses = computed(() => props.statuses ?? [])
 const dealers = computed(() => props.dealersMaster ?? [])
@@ -906,12 +1010,19 @@ function onZipcodeInput(kind) {
 
     zipLookupTimers[kind] = setTimeout(async () => {
         try {
-            const zipcode = kind === 'dealer' ? form.zipcode : form.deliveryDestination_zipcode
+            const zipcode = kind === 'dealer'
+                ? form.zipcode
+                : kind === 'endUser'
+                    ? form.endUser_zipcode
+                    : form.deliveryDestination_zipcode
             const address = await fetchAddressByZipcode(zipcode)
             if (!address) return
             if (kind === 'dealer') {
                 form.address1 = address.address1
                 form.address2 = address.address2
+            } else if (kind === 'endUser') {
+                form.endUser_address1 = address.address1
+                form.endUser_address2 = address.address2
             } else {
                 form.deliveryDestination_address1 = address.address1
                 form.deliveryDestination_address2 = address.address2
@@ -947,6 +1058,14 @@ async function save() {
             zipcode: form.zipcode || null,
             address1: form.address1 || null,
             address2: form.address2 || null,
+            endUser: form.endUser || null,
+            endUser_depart: form.endUser_depart || null,
+            endUser_contactPerson: form.endUser_contactPerson || null,
+            endUser_phone: form.endUser_phone || null,
+            endUser_email: form.endUser_email || null,
+            endUser_zipcode: form.endUser_zipcode || null,
+            endUser_address1: form.endUser_address1 || null,
+            endUser_address2: form.endUser_address2 || null,
             deliveryDestination_company: form.deliveryDestination_company || null,
             deliveryDestination_depart: form.deliveryDestination_depart || null,
             deliveryDestination_contactPerson: form.deliveryDestination_contactPerson || null,
@@ -955,6 +1074,9 @@ async function save() {
             deliveryDestination_zipcode: form.deliveryDestination_zipcode || null,
             deliveryDestination_address1: form.deliveryDestination_address1 || null,
             deliveryDestination_address2: form.deliveryDestination_address2 || null,
+            enduser_SN: form.enduser_SN === '' || form.enduser_SN == null
+                ? null
+                : String(form.enduser_SN).trim(),
         }
         if (props.dateFields.hasPlannedSent) {
             body.plannedSentDate = form.plannedSentDate || null
@@ -990,6 +1112,10 @@ async function save() {
         if (data.attached) {
             form.plannedSentDate = data.attached.plannedSentDate || ''
             form.plannedReturnedDate = data.attached.plannedReturnedDate || ''
+            if (Object.prototype.hasOwnProperty.call(data.attached, 'enduser_SN')) {
+                form.enduser_SN = data.attached.enduser_SN || ''
+                attachedLocal.enduser_SN = data.attached.enduser_SN
+            }
             if (Object.prototype.hasOwnProperty.call(data.attached, 'status')) {
                 form.status = data.attached.status != null ? String(data.attached.status) : ''
                 attachedLocal.status = data.attached.status
@@ -1003,6 +1129,14 @@ async function save() {
                 form.zipcode = data.record.zipcode || ''
                 form.address1 = data.record.address1 || ''
                 form.address2 = data.record.address2 || ''
+                form.endUser = data.record.endUser || ''
+                form.endUser_depart = data.record.endUser_depart || ''
+                form.endUser_contactPerson = data.record.endUser_contactPerson || ''
+                form.endUser_phone = data.record.endUser_phone || ''
+                form.endUser_email = data.record.endUser_email || ''
+                form.endUser_zipcode = data.record.endUser_zipcode || ''
+                form.endUser_address1 = data.record.endUser_address1 || ''
+                form.endUser_address2 = data.record.endUser_address2 || ''
                 form.deliveryDestination_company = data.record.deliveryDestination_company || ''
                 form.deliveryDestination_depart = data.record.deliveryDestination_depart || ''
                 form.deliveryDestination_contactPerson = data.record.deliveryDestination_contactPerson || ''
@@ -1043,9 +1177,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
     margin-bottom: 12px;
+    flex: 0 0 auto;
+    min-height: 52px;
+}
+
+.header-title {
     flex: 0 0 auto;
 }
 
@@ -1057,14 +1196,23 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 
 .subtitle {
     margin: 0;
-    color: #64748b;
+    color: #ffffff;
     font-size: 13px;
+    font-weight: 700;
+}
+
+.header-message {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
 }
 
 .header-actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
 }
 
 .btn {
@@ -1140,15 +1288,37 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     margin-bottom: 8px;
 }
 
-.period-controls-row {
-    display: grid;
-    grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr);
-    gap: 10px;
-    align-items: end;
+.period-dates-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 16px;
+    align-items: center;
+}
+
+.period-dates-row .field {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.period-dates-row .field span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.period-dates-row .field input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.period-status-row {
+    margin-top: 10px;
 }
 
 .period-waiting-hint {
-    align-self: center;
     margin: 0;
 }
 
@@ -1158,20 +1328,65 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     color: #0f172a;
 }
 
-.meta-grid {
+.meta-grid-wrap {
     margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.meta-grid {
+    margin: 0;
     display: grid;
     gap: 8px;
 }
 
+.meta-grid-row1 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.meta-grid-row2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .meta-grid > div {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     padding: 6px 8px;
     background: #f1f5f9;
     border-radius: 4px;
     font-size: 13px;
+    min-width: 0;
+}
+
+.meta-grid-row2 > div {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+}
+
+.meta-grid-row2 dt {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.meta-grid-row2 dd {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.meta-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    background: #fff;
 }
 
 .meta-grid dt {
@@ -1302,13 +1517,6 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     gap: 10px;
 }
 
-.period-dates-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    align-items: end;
-}
-
 .field {
     display: flex;
     flex-direction: column;
@@ -1409,11 +1617,15 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 
 .global-error,
 .global-success {
-    margin: 0 0 10px;
+    margin: 0;
     padding: 8px 10px;
     border-radius: 4px;
     font-size: 13px;
     font-weight: 700;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .global-error {

@@ -20,6 +20,7 @@ use App\Models\Labor;
 use App\Models\MaintenanceContractMaster;
 use App\Models\ReturnCode;
 use App\Models\Status;
+use App\Models\StatusLoaner;
 use App\Services\EmlReplyDraftService;
 use App\Services\Gmail\AssignNotificationMailer;
 use App\Services\Gmail\RemandNotificationMailer;
@@ -352,7 +353,9 @@ class ServiceRecordController extends Controller
         }
 
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
-        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
+        $statusesLoaner = StatusLoaner::mapForDisplay(
+            StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
+        );
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all();
         $dealers = Dealer::orderBy('dealerName')->get();
@@ -433,33 +436,89 @@ class ServiceRecordController extends Controller
     {
         $isLoanerLike = static fn (ServiceRecord $record) => in_array($record->order_type, ['loaner', 'waiting_list'], true);
 
-        $loanerIds = $records
-            ->filter($isLoanerLike)
-            ->pluck('loanerID')
+        $loanerLikeRecords = $records->filter($isLoanerLike);
+
+        $orderIds = $loanerLikeRecords
+            ->pluck('orderID')
             ->filter(fn ($id) => $id !== null && $id !== '')
             ->unique()
             ->values()
             ->all();
 
+        $enduserSnByOrderId = [];
+        $attachedLoanerIdByOrderId = [];
+        $snByOrderId = [];
+        if ($orderIds !== []) {
+            $attachedRows = AttachedLoaner::query()
+                ->with('loanerMaster:loanerID,SN')
+                ->whereIn('associatedID', $orderIds)
+                ->orderByDesc('id')
+                ->get(['associatedID', 'loanerID', 'repairInstrument-SN']);
+
+            foreach ($attachedRows as $attached) {
+                $orderKey = (string) $attached->associatedID;
+                if (!array_key_exists($orderKey, $enduserSnByOrderId)) {
+                    $enduserSnByOrderId[$orderKey] = $attached->getAttribute('repairInstrument-SN');
+                }
+                if (!array_key_exists($orderKey, $attachedLoanerIdByOrderId)) {
+                    $attachedLoanerId = $attached->loanerID;
+                    if ($attachedLoanerId !== null && $attachedLoanerId !== '' && (int) $attachedLoanerId !== 0) {
+                        $attachedLoanerIdByOrderId[$orderKey] = $attachedLoanerId;
+                    }
+                }
+                if (!array_key_exists($orderKey, $snByOrderId)) {
+                    $attachedSn = $attached->loanerMaster?->SN;
+                    if ($attachedSn !== null && $attachedSn !== '') {
+                        $snByOrderId[$orderKey] = $attachedSn;
+                    }
+                }
+            }
+        }
+
+        $resolveLoanerId = static function (ServiceRecord $record) use ($attachedLoanerIdByOrderId): ?string {
+            $orderKey = (string) ($record->orderID ?? '');
+            $recordLoanerId = $record->loanerID;
+            if ($recordLoanerId !== null && $recordLoanerId !== '' && (int) $recordLoanerId !== 0) {
+                return (string) $recordLoanerId;
+            }
+
+            $attachedLoanerId = $attachedLoanerIdByOrderId[$orderKey] ?? null;
+            if ($attachedLoanerId !== null && $attachedLoanerId !== '' && (int) $attachedLoanerId !== 0) {
+                return (string) $attachedLoanerId;
+            }
+
+            return null;
+        };
+
+        $loanerIds = $loanerLikeRecords
+            ->map(fn (ServiceRecord $record) => $resolveLoanerId($record))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         $itemByLoanerId = [];
+        $snByLoanerId = [];
         if ($loanerIds !== []) {
             $masters = app(MasterPriceVersionResolver::class)->latestByKey(
                 LoanerMaster::query()
                     ->whereIn('loanerID', $loanerIds)
-                    ->select(['id', 'loanerID', 'item', 'productName', 'validDateMin', 'validDateMax']),
+                    ->select(['id', 'loanerID', 'item', 'SN', 'productName', 'validDateMin', 'validDateMax']),
                 'loanerID',
             );
             foreach ($masters as $master) {
-                $itemByLoanerId[(string) $master->loanerID] = $master->item;
+                $key = (string) $master->loanerID;
+                $itemByLoanerId[$key] = $master->item;
+                $snByLoanerId[$key] = $master->SN;
             }
         }
 
         // loanerID が無い/不一致の場合のフォールバック: 同 productName の item
-        $productNames = $records
-            ->filter($isLoanerLike)
-            ->filter(function (ServiceRecord $record) use ($itemByLoanerId) {
-                $key = (string) ($record->loanerID ?? '');
-                return ($itemByLoanerId[$key] ?? null) === null || ($itemByLoanerId[$key] ?? '') === '';
+        $productNames = $loanerLikeRecords
+            ->filter(function (ServiceRecord $record) use ($itemByLoanerId, $resolveLoanerId) {
+                $key = $resolveLoanerId($record) ?? '';
+
+                return $key === '' || ($itemByLoanerId[$key] ?? null) === null || ($itemByLoanerId[$key] ?? '') === '';
             })
             ->pluck('productName')
             ->filter(fn ($name) => $name !== null && $name !== '')
@@ -482,19 +541,38 @@ class ServiceRecordController extends Controller
             }
         }
 
-        $records->each(function (ServiceRecord $record) use ($itemByLoanerId, $itemByProductName, $isLoanerLike) {
+        $records->each(function (ServiceRecord $record) use (
+            $itemByLoanerId,
+            $itemByProductName,
+            $snByLoanerId,
+            $snByOrderId,
+            $enduserSnByOrderId,
+            $isLoanerLike,
+            $resolveLoanerId,
+        ) {
             if (!$isLoanerLike($record)) {
                 $record->setAttribute('item', null);
 
                 return;
             }
-            $key = (string) ($record->loanerID ?? '');
-            $item = $itemByLoanerId[$key] ?? null;
+
+            $loanerKey = $resolveLoanerId($record) ?? '';
+            $item = $loanerKey !== '' ? ($itemByLoanerId[$loanerKey] ?? null) : null;
             if ($item === null || $item === '') {
                 $productKey = (string) ($record->productName ?? '');
                 $item = $itemByProductName[$productKey] ?? null;
             }
             $record->setAttribute('item', $item);
+
+            $orderKey = (string) ($record->orderID ?? '');
+            $masterSn = $snByOrderId[$orderKey]
+                ?? ($loanerKey !== '' ? ($snByLoanerId[$loanerKey] ?? null) : null)
+                ?? ($record->SN ?? null);
+            if ($masterSn !== null && $masterSn !== '') {
+                $record->setAttribute('SN', $masterSn);
+            }
+
+            $record->setAttribute('enduser_SN', $enduserSnByOrderId[$orderKey] ?? null);
         });
     }
 
@@ -588,7 +666,9 @@ class ServiceRecordController extends Controller
             ->get();
 
         $statuses = \App\Models\Status::orderBy('processID_new')->get(['processID_new', 'status']);
-        $statusesLoaner = \App\Models\StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
+        $statusesLoaner = StatusLoaner::mapForDisplay(
+            StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
+        );
         $returnCodes = \App\Models\ReturnCode::all();
         $labors = \App\Models\Labor::all(['laborID', 'laborName']);
         $dealers = \App\Models\Dealer::orderBy('dealerName')->get();
@@ -819,7 +899,7 @@ class ServiceRecordController extends Controller
 
         $records->each(function (ServiceRecord $record) {
             if ($record->order_type === 'loaner') {
-                $label = $record->statusMasterLoaner?->status;
+                $label = StatusLoaner::resolveLabel($record->statusMasterLoaner);
                 $record->unsetRelation('statusMaster');
             } elseif ($record->order_type === 'waiting_list') {
                 $label = null;
@@ -2140,7 +2220,7 @@ class ServiceRecordController extends Controller
                         'status' => $loaner->status,
                         'status_label' => $loaner->order_type === 'waiting_list'
                             ? null
-                            : ($loaner->statusMasterLoaner?->status),
+                            : StatusLoaner::resolveLabel($loaner->statusMasterLoaner),
                         'productName' => $loaner->productName,
                         'SN' => $loaner->SN,
                         'price' => $loaner->price,

@@ -175,6 +175,34 @@
                                     在庫有 {{ availableLoanerCount }}台
                                     <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
                                 </p>
+                                <label class="field field-inline field-instrument-name">
+                                    <span>機種名</span>
+                                    <input
+                                        v-model="form.instrumentName"
+                                        type="text"
+                                        placeholder="機種名"
+                                        lang="en"
+                                        inputmode="latin"
+                                    >
+                                </label>
+                                <label class="field field-inline field-enduser-sn">
+                                    <span>enduser_SN</span>
+                                    <input
+                                        v-model="form.enduser_SN"
+                                        type="text"
+                                        placeholder="enduser_SN"
+                                        lang="en"
+                                        inputmode="latin"
+                                    >
+                                </label>
+                                <button
+                                    type="button"
+                                    class="tab-btn tab-btn-action btn-loaner-maintenance"
+                                    :disabled="maintenanceSearchLoading"
+                                    @click="searchMaintenanceContracts"
+                                >
+                                    {{ maintenanceSearchLoading ? '検索中...' : '保守検索' }}
+                                </button>
                                 <button
                                     type="button"
                                     class="btn btn-primary btn-stock-list"
@@ -190,6 +218,9 @@
                             <section class="info-card info-card-dealer stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">dealer</div>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
+                                        switch E/U
+                                    </button>
                                     <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
                                         switch delivery
                                     </button>
@@ -240,11 +271,57 @@
                                 </div>
                             </section>
 
+                            <section class="info-card info-card-enduser stakeholder-card">
+                                <aside class="stakeholder-side">
+                                    <div class="stakeholder-label">endUser</div>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
+                                        switch dealer
+                                    </button>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
+                                        switch delivery
+                                    </button>
+                                </aside>
+                                <div class="stakeholder-body">
+                                    <div class="form-row row-full">
+                                        <input v-model="form.endUser" type="text" placeholder="endUser" lang="ja">
+                                    </div>
+                                    <div class="form-row row-full">
+                                        <input v-model="form.endUser_depart" type="text" placeholder="endUser_depart" lang="ja">
+                                    </div>
+                                    <div class="form-row row-contact">
+                                        <input v-model="form.endUser_contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
+                                    </div>
+                                    <div class="form-row row-phone-email">
+                                        <input v-model="form.endUser_phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
+                                        <input v-model="form.endUser_email" type="text" class="w-email" placeholder="EMail" lang="en" inputmode="email">
+                                    </div>
+                                    <div class="form-row row-zip">
+                                        <input
+                                            v-model="form.endUser_zipcode"
+                                            type="text"
+                                            class="w-zip"
+                                            lang="en"
+                                            inputmode="numeric"
+                                            maxlength="8"
+                                            placeholder="Zipcode"
+                                            @input="onZipcodeInput('endUser')"
+                                        >
+                                    </div>
+                                    <div class="form-row row-address">
+                                        <input v-model="form.endUser_address1" type="text" class="w-address1" placeholder="address1" lang="ja">
+                                        <input v-model="form.endUser_address2" type="text" class="w-address2" placeholder="address2" lang="ja">
+                                    </div>
+                                </div>
+                            </section>
+
                             <section class="info-card info-card-delivery stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">delivery</div>
                                     <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
                                         switch dealer
+                                    </button>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                        switch E/U
                                     </button>
                                 </aside>
                                 <div class="stakeholder-body">
@@ -280,6 +357,72 @@
                                 </div>
                             </section>
                         </div>
+
+                        <section
+                            v-if="maintenanceSearchDone || maintenanceContracts.length"
+                            class="info-card info-card-maintenance"
+                        >
+                            <div class="maintenance-header">
+                                <h3>保守契約検索結果</h3>
+                                <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                    {{ maintenanceContracts.length }}件
+                                </span>
+                                <button
+                                    v-if="selectedMaintenanceContractId"
+                                    type="button"
+                                    class="btn btn-secondary maintenance-clear-btn"
+                                    @click="clearMaintenanceSelection"
+                                >
+                                    選択解除
+                                </button>
+                            </div>
+                            <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
+                            <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
+                                <table class="maintenance-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 36px;"></th>
+                                            <th>dealer</th>
+                                            <th>契約種別</th>
+                                            <th>instrumentName</th>
+                                            <th>SN</th>
+                                            <th>開始</th>
+                                            <th>契約終了</th>
+                                            <th>RefNumber</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="row in maintenanceContracts"
+                                            :key="row.id"
+                                            :class="{ selected: isMaintenanceSelected(row.id) }"
+                                            @click="toggleMaintenanceSelection(row.id)"
+                                        >
+                                            <td style="text-align: center;" @click.stop>
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="isMaintenanceSelected(row.id)"
+                                                    @change="toggleMaintenanceSelection(row.id)"
+                                                >
+                                            </td>
+                                            <td>{{ row.dealer || '—' }}</td>
+                                            <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
+                                            <td>{{ row.instrumentName || '—' }}</td>
+                                            <td>{{ row.SN || '—' }}</td>
+                                            <td>{{ row.startDate || '—' }}</td>
+                                            <td>{{ row.expireDate || '—' }}</td>
+                                            <td>{{ row.RefNumber || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
+                                条件に一致する有効な保守契約はありません。
+                            </p>
+                            <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
+                                選択中の保守契約は保存時に Note として案件へ紐づけられます。
+                            </p>
+                        </section>
                     </div>
 
                     <div v-else class="form-stack">
@@ -312,7 +455,7 @@
                                 <select v-model="form.status" class="w-status">
                                     <option value="">status</option>
                                     <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
-                                        {{ status.status }} ({{ status.processID_new }})
+                                        {{ loanerStatusOptionLabel(status) }}
                                     </option>
                                 </select>
                                 <select v-model="form.returnCode" class="w-return">
@@ -796,6 +939,7 @@ import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { startFileImport } from '@/utils/startFileImport'
 import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
@@ -902,6 +1046,8 @@ const form = reactive({
     item: '',
     entityID: '',
     SN: '',
+    enduser_SN: '',
+    instrumentName: '',
     loanerID: '',
     returnCode: '',
     plannedSentDate: defaultPeriodStart(),
@@ -1266,6 +1412,7 @@ function onMasterSelected(result) {
     if (activeSelectKind.value === 'loanerProduct') {
         form.productName = result.productName ?? ''
         form.item = result.item ?? ''
+        form.instrumentName = String(result.item || result.productName || '').trim()
         form.serviceID = ''
         form.entityID = ''
         form.SN = ''
@@ -1290,6 +1437,7 @@ function onMasterSelected(result) {
 function clearLoanerProductSelection() {
     form.productName = ''
     form.item = ''
+    form.instrumentName = ''
     form.SN = ''
     form.loanerID = ''
     loanerAvailability.value = null
@@ -1523,8 +1671,6 @@ function switchToLoanerTab() {
 }
 
 async function searchMaintenanceContracts() {
-    if (isLoanerCase.value) return
-
     // 入力確定前（IME 変換中など）の値漏れを防ぐ
     if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
         document.activeElement.blur()
@@ -1533,32 +1679,58 @@ async function searchMaintenanceContracts() {
 
     // DOM 上の実値も同期（表示はあるが v-model 未反映のケース対策）
     if (typeof document !== 'undefined') {
-        const root = document.querySelector('.panel-form .form-stack:not(.form-stack-loaner)')
-            || document.querySelector('.panel-form')
+        const root = isLoanerCase.value
+            ? document.querySelector('.form-stack-loaner')
+            : (document.querySelector('.panel-form .form-stack:not(.form-stack-loaner)')
+                || document.querySelector('.panel-form'))
         if (root) {
-            const productInput = root.querySelector('input.w-product-name')
-            const dealerInput = root.querySelector('input.w-dealer-name')
-            const snInput = root.querySelector('.info-card-main input[placeholder="SN"]')
-                || root.querySelector('input[placeholder="SN"]')
-            if (productInput && String(productInput.value || '').trim()) {
-                form.productName = String(productInput.value).trim()
-            }
-            if (dealerInput && String(dealerInput.value || '').trim()) {
-                form.dealer = String(dealerInput.value).trim()
-            }
-            if (snInput && String(snInput.value || '').trim()) {
-                form.SN = String(snInput.value).trim()
+            if (isLoanerCase.value) {
+                const dealerInput = root.querySelector('input.w-dealer-name')
+                const enduserSnInput = root.querySelector('.field-enduser-sn input')
+                const instrumentInput = root.querySelector('.field-instrument-name input')
+                if (dealerInput && String(dealerInput.value || '').trim()) {
+                    form.dealer = String(dealerInput.value).trim()
+                }
+                if (enduserSnInput && String(enduserSnInput.value || '').trim()) {
+                    form.enduser_SN = String(enduserSnInput.value).trim()
+                }
+                if (instrumentInput && String(instrumentInput.value || '').trim()) {
+                    form.instrumentName = String(instrumentInput.value).trim()
+                }
+            } else {
+                const productInput = root.querySelector('input.w-product-name')
+                const dealerInput = root.querySelector('input.w-dealer-name')
+                const snInput = root.querySelector('.info-card-main input[placeholder="SN"]')
+                    || root.querySelector('input[placeholder="SN"]')
+                if (productInput && String(productInput.value || '').trim()) {
+                    form.productName = String(productInput.value).trim()
+                }
+                if (dealerInput && String(dealerInput.value || '').trim()) {
+                    form.dealer = String(dealerInput.value).trim()
+                }
+                if (snInput && String(snInput.value || '').trim()) {
+                    form.SN = String(snInput.value).trim()
+                }
             }
         }
     }
 
-    const productName = String(form.productName ?? '').trim()
-    const sn = String(form.SN ?? '').trim()
+    const itemOrProduct = isLoanerCase.value
+        ? String(form.instrumentName ?? '').trim()
+        : String(form.productName ?? '').trim()
+    const sn = isLoanerCase.value
+        ? String(form.enduser_SN ?? '').trim()
+        : String(form.SN ?? '').trim()
     const dealer = String(form.dealer ?? '').trim()
 
     const missing = []
-    if (!productName) missing.push('productName')
-    if (!sn) missing.push('SN')
+    if (isLoanerCase.value) {
+        if (!itemOrProduct) missing.push('機種名')
+        if (!sn) missing.push('enduser_SN')
+    } else {
+        if (!itemOrProduct) missing.push('productName')
+        if (!sn) missing.push('SN')
+    }
     if (!dealer) missing.push('dealer')
 
     if (missing.length) {
@@ -1578,10 +1750,13 @@ async function searchMaintenanceContracts() {
 
     try {
         const params = new URLSearchParams({
-            productName,
+            productName: itemOrProduct,
             SN: sn,
             dealer,
         })
+        if (isLoanerCase.value) {
+            params.set('match', 'contains')
+        }
         const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/search?${params.toString()}`
         const result = await apiFetch(url)
         if (!result) return
@@ -1874,6 +2049,9 @@ async function saveLoanerCase() {
                 status: null,
                 returnCode: null,
                 SN: form.SN || null,
+                enduser_SN: form.enduser_SN === '' || form.enduser_SN == null
+                    ? null
+                    : String(form.enduser_SN).trim(),
                 loanerID: form.loanerID === '' ? null : Number(form.loanerID),
                 plannedSentDate: form.plannedSentDate || null,
                 plannedReturnedDate: form.plannedReturnedDate || null,
@@ -1902,6 +2080,9 @@ async function saveLoanerCase() {
                 deliveryDestination_address2: form.deliveryDestination_address2 || null,
                 sourceFileId: hasSourceFile.value ? props.sourceFile.id : null,
                 additionalFileIds: form.additionalFileIds.map(id => Number(id)),
+                maintenanceContractId: selectedMaintenanceContractId.value
+                    ? Number(selectedMaintenanceContractId.value)
+                    : null,
             }),
         })
 
@@ -2468,9 +2649,27 @@ async function save() {
 .loaner-stakeholder-stack {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0;
     min-height: 0;
     flex: 1 1 auto;
+}
+
+.loaner-stakeholder-stack > .info-card {
+    border-radius: 0;
+}
+
+.loaner-stakeholder-stack > .info-card + .info-card {
+    border-top: none;
+}
+
+.loaner-stakeholder-stack > .info-card:first-child {
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.loaner-stakeholder-stack > .info-card:last-child {
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
 }
 
 .info-card {
@@ -2548,6 +2747,19 @@ async function save() {
 
 .loaner-top-row .field-sn {
     flex: 0 1 160px;
+}
+
+.loaner-top-row .field-enduser-sn {
+    flex: 0 1 180px;
+}
+
+.loaner-top-row .field-instrument-name {
+    flex: 0 1 180px;
+}
+
+.btn-loaner-maintenance {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .loaner-top-row .field-date {

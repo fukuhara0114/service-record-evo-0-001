@@ -11,7 +11,7 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 class LoanerApplicationPdfService
 {
     /**
-     * @var array<string, array{x:float,y:float,size?:float}>
+     * @var array<string, array{x:float,y:float,size?:float,max_w?:float}>
      */
     private const POSITIONS = [
         'fax_company' => ['x' => 30.0, 'y' => 35.0, 'size' => 8],
@@ -49,7 +49,8 @@ class LoanerApplicationPdfService
         'user_phone' => ['x' => 60.0, 'y' => 250.1, 'size' => 8],
         'user_fax' => ['x' => 132.0, 'y' => 250.1, 'size' => 8],
 
-        // 修理機材 SN は顧客記入欄のため永久に印字しない
+        // 修理機材 SN（enduser_SN）
+        'repair_sn' => ['x' => 52.0, 'y' => 270.1, 'size' => 13],
     ];
 
     /**
@@ -75,8 +76,8 @@ class LoanerApplicationPdfService
         $pdf->SetTitle('代替機申込書');
         $pdf->SetTextColor(0, 0, 0);
 
-        $fontName = $this->resolveJapaneseFont($pdf);
-        $pdf->SetFont($fontName, '', 8, '', true);
+        $fontName = $this->resolveJapaneseFont($pdf, true);
+        $pdf->SetFont($fontName, 'B', 8, '', true);
 
         $pdf->setSourceFile($template);
         $tpl = $pdf->importPage(1);
@@ -105,15 +106,15 @@ class LoanerApplicationPdfService
             $maxW = isset($pos['max_w']) ? (float) $pos['max_w'] : 0.0;
             if ($maxW > 0) {
                 while ($size > 4.0) {
-                    $pdf->SetFont($fontName, '', $size, '', true);
+                    $pdf->SetFont($fontName, 'B', $size, '', true);
                     if ($pdf->GetStringWidth($text) <= $maxW) {
                         break;
                     }
                     $size -= 0.5;
                 }
-                $pdf->SetFont($fontName, '', $size, '', true);
+                $pdf->SetFont($fontName, 'B', $size, '', true);
             } else {
-                $pdf->SetFont($fontName, '', $size, '', true);
+                $pdf->SetFont($fontName, 'B', $size, '', true);
             }
             $pdf->Text($pos['x'], $pos['y'], $text);
         }
@@ -146,13 +147,19 @@ class LoanerApplicationPdfService
         $deliveryFax = trim((string) ($data['deliveryDestination_fax'] ?? ''));
 
         $manageNum = trim((string) ($data['manageNum'] ?? ''));
-        $item = trim((string) ($data['item'] ?? ''));
-        $equipNo = trim((string) ($data['loanerID'] ?? ''));
+        $item = $this->sanitizeItemLabel(trim((string) ($data['item'] ?? '')));
         $sn = trim((string) ($data['SN'] ?? ''));
-        $price = $this->formatPrice($data['price'] ?? null);
-        if ($price === '0' || $price === '') {
-            $priceLabel = '';
+        $repairSn = trim((string) ($data['enduser_SN'] ?? $data['repairSN'] ?? ''));
+
+        $chargeType = ($data['chargeType'] ?? 'paid') === 'free' ? 'free' : 'paid';
+        if ($chargeType === 'free') {
+            $price = '0';
+            $priceLabel = '¥0';
         } else {
+            $price = $this->formatPrice($data['price'] ?? null);
+            if ($price === '') {
+                $price = '0';
+            }
             $priceLabel = '¥'.$price;
         }
 
@@ -181,7 +188,7 @@ class LoanerApplicationPdfService
 
             '1-1' => $manageNum !== '' ? $manageNum : '-',
             '1-2' => $item,
-            '1-3' => $equipNo !== '' ? $equipNo : '-',
+            '1-3' => $manageNum !== '' ? $manageNum : '-',
             '1-4' => $sn,
             '1-5' => $price,
 
@@ -206,17 +213,16 @@ class LoanerApplicationPdfService
             'user_address2' => $deliveryAddress2,
             'user_phone' => $deliveryPhone,
             'user_fax' => $deliveryFax,
+
+            'repair_sn' => $repairSn,
         ];
     }
 
-    private function resolveJapaneseFont(Fpdi $pdf): string
+    private function resolveJapaneseFont(Fpdi $pdf, bool $bold = false): string
     {
-        $tcpdfFonts = [
-            'bizudgothicb',
-            'bizudgothicr',
-            'yugothr',
-            'ipag',
-        ];
+        $tcpdfFonts = $bold
+            ? ['bizudgothicb', 'bizudgothicr', 'yugothr', 'ipag']
+            : ['bizudgothicr', 'bizudgothicb', 'yugothr', 'ipag'];
         $fontDir = defined('K_PATH_FONTS') ? K_PATH_FONTS : (base_path('vendor/tecnickcom/tcpdf/fonts').DIRECTORY_SEPARATOR);
         foreach ($tcpdfFonts as $name) {
             if (is_file($fontDir.$name.'.php')) {
@@ -224,12 +230,21 @@ class LoanerApplicationPdfService
             }
         }
 
-        foreach ([
-            storage_path('fonts/BIZ-UDGothicB.ttf'),
-            storage_path('fonts/BIZ-UDGothicR.ttf'),
+        $fontCandidates = $bold
+            ? [
+                storage_path('fonts/BIZ-UDGothicB.ttf'),
+                storage_path('fonts/BIZ-UDGothicR.ttf'),
+            ]
+            : [
+                storage_path('fonts/BIZ-UDGothicR.ttf'),
+                storage_path('fonts/BIZ-UDGothicB.ttf'),
+            ];
+        $fontCandidates = array_merge($fontCandidates, [
             storage_path('fonts/YuGothR.ttf'),
             storage_path('fonts/ipag.ttf'),
-        ] as $path) {
+        ]);
+
+        foreach ($fontCandidates as $path) {
             if (! is_file($path)) {
                 continue;
             }
@@ -310,6 +325,15 @@ class LoanerApplicationPdfService
             @unlink($pdfPath);
             @unlink($pngPath);
         }
+    }
+
+    private function sanitizeItemLabel(string $item): string
+    {
+        if ($item === '') {
+            return '';
+        }
+
+        return trim(str_replace('【簿外】', '', $item));
     }
 
     private function formatDateDash(mixed $value): string

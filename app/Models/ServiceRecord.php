@@ -147,7 +147,7 @@ class ServiceRecord extends Model
     public function statusMasterLoaner()
     {
         return $this->belongsTo(StatusLoaner::class, 'status', 'processID_new')
-            ->select(['processID_new', 'status']);
+            ->select(StatusLoaner::selectColumnsForDisplay());
     }
 
     /**

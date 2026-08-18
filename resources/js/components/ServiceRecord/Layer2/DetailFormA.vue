@@ -45,7 +45,7 @@
                                                     :key="status.processID_new"
                                                     :value="status.processID_new"
                                                 >
-                                                    {{ status.status }} ({{ status.processID_new }})
+                                                    {{ loanerStatusOptionLabel(status) }}
                                                 </option>
                                             </select>
                                         </dd>
@@ -869,6 +869,7 @@ import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTypeDialog.vue'
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()

@@ -424,9 +424,16 @@
         }
     }
 
+    function loanerStatusLabelRow(row) {
+        if (!row) return '';
+        const statusNew = String(row.status_new ?? '').trim();
+        if (statusNew) return statusNew;
+        return String(row.status ?? '').trim();
+    }
+
     function statusLabel(r) {
         if (r?.order_type === 'waiting_list') return '';
-        if (r?.order_type === 'loaner') return r.status_master_loaner?.status || '';
+        if (r?.order_type === 'loaner') return loanerStatusLabelRow(r.status_master_loaner) || '';
         return r.status_master?.status || '';
     }
 

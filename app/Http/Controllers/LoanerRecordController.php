@@ -8,6 +8,7 @@ use App\Models\AttachedNote;
 use App\Models\Dealer;
 use App\Models\Labor;
 use App\Models\LoanerMaster;
+use App\Models\MaintenanceContractMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
 use App\Services\Gmail\AssignNotificationMailer;
@@ -75,7 +76,9 @@ class LoanerRecordController extends Controller
             })
             ->values();
 
-        $statuses = StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']);
+        $statuses = StatusLoaner::mapForDisplay(
+            StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
+        );
         $dealers = Dealer::orderBy('dealerName')->get();
         $unregisteredStatus = $this->resolveUnregisteredStatus();
 
@@ -154,7 +157,7 @@ class LoanerRecordController extends Controller
             if ($parent) {
                 $parentReturnCode = $parent->returnCode;
                 if ($parent->order_type === 'loaner') {
-                    $parentStatusLabel = $parent->statusMasterLoaner?->status;
+                    $parentStatusLabel = StatusLoaner::resolveLabel($parent->statusMasterLoaner);
                 } elseif ($parent->order_type === 'waiting_list') {
                     $parentStatusLabel = null;
                 } else {
@@ -195,6 +198,7 @@ class LoanerRecordController extends Controller
                 'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
                 'assignStatus' => $attached->assignStatus ?? null,
                 'comment' => $attached->comment,
+                'enduser_SN' => $attached->getAttribute('repairInstrument-SN'),
             ],
             'record' => $record->only([
                 'orderID',
@@ -244,7 +248,7 @@ class LoanerRecordController extends Controller
                 'promotion_source_orderID',
             ]) + [
                 'status_label' => $record->order_type === 'loaner'
-                    ? $record->statusMasterLoaner?->status
+                    ? StatusLoaner::resolveLabel($record->statusMasterLoaner)
                     : null,
             ],
             'parentReturnCode' => $parentReturnCode,
@@ -278,7 +282,9 @@ class LoanerRecordController extends Controller
                     ->orderBy('id')
                     ->get()
             ),
-            'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
+            'statuses' => StatusLoaner::mapForDisplay(
+                StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
+            ),
             'statusFlow' => LoanerStatusFlow::meta(),
             'labors' => Labor::query()->orderBy('laborName')->get(['laborID', 'laborName']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
@@ -364,10 +370,7 @@ class LoanerRecordController extends Controller
         }
 
         $user = $request->user();
-        $initialStatus = $this->resolveUnregisteredStatus()?->processID_new;
-        if ($initialStatus === null) {
-            $initialStatus = LoanerStatusFlow::STOCK;
-        }
+        $initialStatus = $this->resolveInitialLoanerStatusId();
 
         DB::transaction(function () use ($record, $attached, $available, $user, $initialStatus) {
             $record->order_type = 'loaner';
@@ -409,7 +412,7 @@ class LoanerRecordController extends Controller
             }
             $attached->save();
 
-            $this->setLoanerInventoryStatus($available->loanerID, 1);
+            $this->setLoanerInventoryStatus($available->loanerID, (int) $initialStatus);
         });
 
         $record->refresh();
@@ -428,6 +431,71 @@ class LoanerRecordController extends Controller
                 'loanerID',
                 'promotion_ready_at',
                 'promotion_source_orderID',
+            ]),
+            'attached' => [
+                'id' => $attached->id,
+                'loanerID' => $attached->loanerID,
+                'assignStatus' => $attached->assignStatus ?? null,
+            ],
+        ]);
+    }
+
+    public function cancelReservation(Request $request, int $id)
+    {
+        $attachedRow = AttachedLoaner::query()->find($id);
+        $orderId = $attachedRow?->associatedID ?: $id;
+
+        $resolved = $this->resolveLoanerDetailByOrderId((int) $orderId, ['serviceRecord']);
+        $attached = $resolved[0] ?? $attachedRow;
+        $record = $resolved[1] ?? $attached?->serviceRecord;
+
+        if (!$attached || !$record || $record->order_type !== 'waiting_list') {
+            return response()->json(['message' => 'waiting_list 案件のみ予約キャンセルできます。'], 422);
+        }
+
+        $user = $request->user();
+        $loanerId = $record->loanerID ?? $attached->loanerID;
+
+        DB::transaction(function () use ($record, $attached, $user, $loanerId) {
+            $record->order_type = 'loaner';
+            $record->status = LoanerStatusFlow::COMPLETE;
+            $record->RMA = 'loaner';
+            if (Schema::hasColumn('servicerecord', 'promotion_ready_at')) {
+                $record->promotion_ready_at = null;
+            }
+            if (Schema::hasColumn('servicerecord', 'promotion_source_orderID')) {
+                $record->promotion_source_orderID = null;
+            }
+            $record->lastEditPerson = $user?->kanji_name;
+            $record->lastEditDate = now();
+            $record->save();
+
+            $attachedColumns = Schema::getColumnListing('attachedloaners');
+            if (in_array('assignStatus', $attachedColumns, true)) {
+                $attached->assignStatus = 'cancelled';
+            }
+            if (in_array('comment', $attachedColumns, true)) {
+                $comment = trim((string) ($attached->comment ?? ''));
+                $note = 'reservation cancelled from waiting_list';
+                $attached->comment = $comment === '' ? $note : $comment;
+            }
+            $attached->save();
+
+            if ($loanerId !== null && $loanerId !== '') {
+                $this->setLoanerInventoryStatus($loanerId, 0);
+            }
+        });
+
+        $record->refresh();
+        $attached->refresh();
+
+        return response()->json([
+            'message' => '予約をキャンセルしました。',
+            'record' => $record->only([
+                'orderID',
+                'order_type',
+                'status',
+                'loanerID',
             ]),
             'attached' => [
                 'id' => $attached->id,
@@ -521,6 +589,8 @@ class LoanerRecordController extends Controller
      */
     public function applicationForm(Request $request, int $id, LoanerApplicationPdfService $pdfService)
     {
+        $this->stringifyEnduserSn($request);
+
         // 画面からは attached.id で呼ばれる。明細行から orderID を得て案件を開く。
         $attachedRow = AttachedLoaner::query()->find($id);
         $orderId = $attachedRow?->associatedID;
@@ -536,6 +606,8 @@ class LoanerRecordController extends Controller
         }
 
         $payload = $request->validate([
+            'chargeType' => 'required|in:paid,free',
+            'enduser_SN' => 'nullable|string|max:255',
             'contactPerson' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:255',
             'fax' => 'nullable|string|max:255',
@@ -544,6 +616,7 @@ class LoanerRecordController extends Controller
             'loanerID' => 'nullable',
             'SN' => 'nullable|string|max:255',
             'price' => 'nullable|numeric',
+            'orderDate' => 'nullable|date',
             'sentDate' => 'nullable|string|max:32',
             'plannedReturnedDate' => 'nullable|string|max:32',
             'returnedDate' => 'nullable|string|max:32',
@@ -561,9 +634,10 @@ class LoanerRecordController extends Controller
             'deliveryDestination_phone' => 'nullable|string|max:255',
             'deliveryDestination_fax' => 'nullable|string|max:255',
             'parentID' => 'nullable|integer',
-            'repairSN' => 'nullable|string|max:255',
             'senderName' => 'nullable|string|max:255',
         ]);
+
+        $payload['repairSN'] = trim((string) ($payload['enduser_SN'] ?? ''));
 
         $senderName = trim((string) ($payload['senderName'] ?? ''));
         if ($senderName === '') {
@@ -576,19 +650,8 @@ class LoanerRecordController extends Controller
             }
         }
 
-        $repairSn = trim((string) ($payload['repairSN'] ?? ''));
-        if ($repairSn === '') {
-            $parentId = $payload['parentID'] ?? $record->parentID;
-            if ($parentId) {
-                $repairSn = trim((string) (
-                    ServiceRecord::query()->where('orderID', $parentId)->value('SN') ?? ''
-                ));
-            }
-        }
-
         $payload['senderName'] = $senderName;
         $payload['recvName'] = $senderName;
-        $payload['repairSN'] = $repairSn;
 
         // 画面未入力でも DB の依頼社・発送先を補完
         $fallbackKeys = [
@@ -620,6 +683,28 @@ class LoanerRecordController extends Controller
         }
         if (!isset($payload['loanerID']) || $payload['loanerID'] === '' || $payload['loanerID'] === null) {
             $payload['loanerID'] = $attached->loanerID ?? $record->loanerID;
+        }
+
+        if ($payload['chargeType'] === 'free') {
+            $payload['price'] = 0;
+        } else {
+            $explicitPrice = $payload['price'] ?? null;
+            if ($explicitPrice !== null && $explicitPrice !== '' && is_numeric($explicitPrice)) {
+                $payload['price'] = (float) $explicitPrice;
+            } else {
+                $loanerId = $payload['loanerID'] ?? $attached->loanerID ?? $record->loanerID;
+                $orderDate = $payload['orderDate'] ?? $record->orderDate;
+                $master = null;
+                if ($loanerId !== null && $loanerId !== '') {
+                    $master = app(MasterPriceVersionResolver::class)->firstAsOf(
+                        LoanerMaster::query()
+                            ->where('loanerID', $loanerId)
+                            ->select(['id', 'loanerID', 'price', 'validDateMin', 'validDateMax']),
+                        $orderDate,
+                    );
+                }
+                $payload['price'] = $master?->price ?? $attached->loanerMaster?->price ?? 0;
+            }
         }
 
         try {
@@ -661,6 +746,8 @@ class LoanerRecordController extends Controller
 
     public function updateDetail(Request $request, int $id)
     {
+        $this->stringifyEnduserSn($request);
+
         $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
         $record = $attached->serviceRecord;
 
@@ -728,6 +815,7 @@ class LoanerRecordController extends Controller
         if (in_array('assignStatus', $attachedColumns, true)) {
             $attachedRules['assignStatus'] = 'nullable|string|max:255';
         }
+        $attachedRules['enduser_SN'] = 'nullable|string|max:255';
 
         $validated = $request->validate($recordRules + $attachedRules);
 
@@ -832,6 +920,7 @@ class LoanerRecordController extends Controller
             $validated,
             $recordFields,
             $attachedFields,
+            $attachedColumns,
             $request,
             $previousStatus,
             $previousLoanerId,
@@ -874,7 +963,7 @@ class LoanerRecordController extends Controller
             }
             if (
                 array_key_exists('productName', $validated)
-                && in_array('productName', Schema::getColumnListing('attachedloaners'), true)
+                && in_array('productName', $attachedColumns, true)
             ) {
                 $attachedPayload['productName'] = $validated['productName'];
             }
@@ -890,6 +979,9 @@ class LoanerRecordController extends Controller
                         ? 'waiting'
                         : 'reserved';
                 }
+            }
+            if (array_key_exists('enduser_SN', $validated) && in_array('repairInstrument-SN', $attachedColumns, true)) {
+                $attachedPayload['repairInstrument-SN'] = $validated['enduser_SN'] ?? null;
             }
             $attached->fill($attachedPayload);
             $attached->save();
@@ -993,6 +1085,7 @@ class LoanerRecordController extends Controller
                 'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
                 'assignStatus' => $attached->assignStatus ?? null,
                 'comment' => $attached->comment,
+                'enduser_SN' => $attached->getAttribute('repairInstrument-SN'),
             ],
             'promotionTriggered' => $promotionTriggered,
             'promotionFromCheck' => $promotionFromLending,
@@ -1003,6 +1096,7 @@ class LoanerRecordController extends Controller
 
     public function store(Request $request)
     {
+        $this->stringifyEnduserSn($request);
         $validated = $request->validate([
             'productName' => 'required|string|max:255',
             'receivedDate' => 'nullable|date',
@@ -1040,6 +1134,8 @@ class LoanerRecordController extends Controller
             'sourceFileId' => 'nullable|integer',
             'additionalFileIds' => 'nullable|array',
             'additionalFileIds.*' => 'integer',
+            'enduser_SN' => 'nullable|string|max:255',
+            'maintenanceContractId' => 'nullable|integer',
         ]);
 
         $available = $this->findAvailableLoaner(
@@ -1102,9 +1198,10 @@ class LoanerRecordController extends Controller
         }
 
         $status = -1; // waiting_list は status リレーションなし。NOT NULL 制約のため -1 固定
+        $loanerMasterStatus = null;
         if ($orderType === 'loaner') {
-            // 新規 loaner は常に 0（確保済み）
-            $status = LoanerStatusFlow::STOCK;
+            $loanerMasterStatus = $this->resolveInitialLoanerStatusId();
+            $status = $loanerMasterStatus;
         }
 
         $attachedLoanerId = null;
@@ -1114,6 +1211,7 @@ class LoanerRecordController extends Controller
             $available,
             $orderType,
             $status,
+            $loanerMasterStatus,
             $user,
             $parentId,
             $fileIds,
@@ -1163,12 +1261,18 @@ class LoanerRecordController extends Controller
                 $validated['productName'],
                 $validated['plannedSentDate'] ?? null,
                 $validated['plannedReturnedDate'] ?? null,
+                $validated['enduser_SN'] ?? null,
             );
             $attachedLoanerId = $attached?->id;
 
-            // 貸出登録時は在庫ステータスを「貸出中」へ（waiting_list は個体未確定のため触らない）
-            if ($orderType === 'loaner' && $available?->loanerID !== null && $available?->loanerID !== '') {
-                $this->setLoanerInventoryStatus($available->loanerID, 1);
+            // 貸出登録時は loanermaster.currentStatus を「案件未登録」(20) へ（waiting_list は個体未確定のため触らない）
+            if (
+                $orderType === 'loaner'
+                && $loanerMasterStatus !== null
+                && $available?->loanerID !== null
+                && $available?->loanerID !== ''
+            ) {
+                $this->setLoanerInventoryStatus($available->loanerID, $loanerMasterStatus);
             }
 
             if ($fileIds->isNotEmpty()) {
@@ -1176,6 +1280,29 @@ class LoanerRecordController extends Controller
                     ->whereIn('id', $fileIds)
                     ->where('associatedID', -1)
                     ->update(['associatedID' => $record->orderID]);
+            }
+
+            $maintenanceContractId = $validated['maintenanceContractId'] ?? null;
+            if ($maintenanceContractId !== null && $maintenanceContractId !== '') {
+                $contract = MaintenanceContractMaster::query()->find((int) $maintenanceContractId);
+                if ($contract) {
+                    $ref = trim((string) ($contract->RefNumber ?? ''));
+                    $start = optional($contract->startDate)->format('Y-m-d') ?: '—';
+                    $end = optional($contract->expireDate)->format('Y-m-d') ?: '—';
+                    $noteText = '保守契約番号：' . ($ref !== '' ? $ref : '—')
+                        . '、保守契約期間：' . $start . '～' . $end;
+
+                    AttachedNote::create([
+                        'associatedID' => $record->orderID,
+                        'note' => $noteText,
+                        'whoWrote' => $user?->kanji_name ?: 'unknown',
+                        'whenWrote' => now(),
+                        'important' => false,
+                        'personal' => false,
+                        'tbc' => null,
+                        'done' => null,
+                    ]);
+                }
             }
 
             return $record;
@@ -1200,7 +1327,7 @@ class LoanerRecordController extends Controller
     {
         $attached = AttachedLoaner::with([
             'serviceRecord',
-            'loanerMaster:loanerID,productName,item,SN',
+            'loanerMaster:id,loanerID,productName,item,SN,manageNum',
         ])->findOrFail($id);
 
         $columns = Schema::getColumnListing('attachedloaners');
@@ -1240,6 +1367,8 @@ class LoanerRecordController extends Controller
                 'productName' => $productName,
                 'item' => $attached->loanerMaster?->item,
                 'SN' => $attached->loanerMaster?->SN ?? $attached->serviceRecord?->SN,
+                'manageNum' => $attached->loanerMaster?->manageNum,
+                'enduser_SN' => $attached->getAttribute('repairInstrument-SN'),
                 'order_type' => $attached->serviceRecord?->order_type,
                 'dealer' => $attached->serviceRecord?->dealer,
                 'dealer_depart' => $attached->serviceRecord?->dealer_depart,
@@ -1249,6 +1378,14 @@ class LoanerRecordController extends Controller
                 'zipcode' => $attached->serviceRecord?->zipcode,
                 'address1' => $attached->serviceRecord?->address1,
                 'address2' => $attached->serviceRecord?->address2,
+                'endUser' => $attached->serviceRecord?->endUser,
+                'endUser_depart' => $attached->serviceRecord?->endUser_depart,
+                'endUser_contactPerson' => $attached->serviceRecord?->endUser_contactPerson,
+                'endUser_phone' => $attached->serviceRecord?->endUser_phone,
+                'endUser_email' => $attached->serviceRecord?->endUser_email,
+                'endUser_zipcode' => $attached->serviceRecord?->endUser_zipcode,
+                'endUser_address1' => $attached->serviceRecord?->endUser_address1,
+                'endUser_address2' => $attached->serviceRecord?->endUser_address2,
                 'deliveryDestination_company' => $attached->serviceRecord?->deliveryDestination_company,
                 'deliveryDestination_depart' => $attached->serviceRecord?->deliveryDestination_depart,
                 'deliveryDestination_contactPerson' => $attached->serviceRecord?->deliveryDestination_contactPerson,
@@ -1269,7 +1406,9 @@ class LoanerRecordController extends Controller
                     ->orderBy('id')
                     ->get()
             ),
-            'statuses' => StatusLoaner::orderBy('processID_new')->get(['processID_new', 'status']),
+            'statuses' => StatusLoaner::mapForDisplay(
+                StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
+            ),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
             'dateFields' => [
                 'hasPlannedSent' => $hasPlannedSent,
@@ -1357,6 +1496,8 @@ class LoanerRecordController extends Controller
         $record = $attached->serviceRecord;
         $isLoaner = $record?->order_type === 'loaner';
 
+        $this->stringifyEnduserSn($request);
+
         $rules = [
             'sentDate' => 'nullable|date',
             'returnedDate' => 'nullable|date|after_or_equal:sentDate',
@@ -1370,6 +1511,14 @@ class LoanerRecordController extends Controller
             'zipcode' => 'nullable|string|max:20',
             'address1' => 'nullable|string|max:255',
             'address2' => 'nullable|string|max:255',
+            'endUser' => 'nullable|string|max:255',
+            'endUser_depart' => 'nullable|string|max:255',
+            'endUser_contactPerson' => 'nullable|string|max:255',
+            'endUser_phone' => 'nullable|string|max:255',
+            'endUser_email' => 'nullable|string|max:255',
+            'endUser_zipcode' => 'nullable|string|max:20',
+            'endUser_address1' => 'nullable|string|max:255',
+            'endUser_address2' => 'nullable|string|max:255',
             'deliveryDestination_company' => 'nullable|string|max:255',
             'deliveryDestination_depart' => 'nullable|string|max:255',
             'deliveryDestination_contactPerson' => 'nullable|string|max:255',
@@ -1378,6 +1527,7 @@ class LoanerRecordController extends Controller
             'deliveryDestination_zipcode' => 'nullable|string|max:20',
             'deliveryDestination_address1' => 'nullable|string|max:255',
             'deliveryDestination_address2' => 'nullable|string|max:255',
+            'enduser_SN' => 'nullable|string|max:255',
         ];
 
         if ($hasPlannedSent) {
@@ -1417,6 +1567,9 @@ class LoanerRecordController extends Controller
         if (array_key_exists('comment', $validated) && in_array('comment', $columns, true)) {
             $payload['comment'] = $validated['comment'];
         }
+        if (array_key_exists('enduser_SN', $validated) && in_array('repairInstrument-SN', $columns, true)) {
+            $payload['repairInstrument-SN'] = $validated['enduser_SN'] ?? null;
+        }
 
         $recordFields = [
             'dealer',
@@ -1427,6 +1580,14 @@ class LoanerRecordController extends Controller
             'zipcode',
             'address1',
             'address2',
+            'endUser',
+            'endUser_depart',
+            'endUser_contactPerson',
+            'endUser_phone',
+            'endUser_email',
+            'endUser_zipcode',
+            'endUser_address1',
+            'endUser_address2',
             'deliveryDestination_company',
             'deliveryDestination_depart',
             'deliveryDestination_contactPerson',
@@ -1475,6 +1636,7 @@ class LoanerRecordController extends Controller
                 'plannedReturnedDate' => optional($attached->plannedReturnedDate)->format('Y-m-d'),
                 'comment' => $attached->comment,
                 'status' => $record?->status,
+                'enduser_SN' => $attached->getAttribute('repairInstrument-SN'),
             ],
             'record' => $record?->only([
                 'dealer',
@@ -1485,6 +1647,14 @@ class LoanerRecordController extends Controller
                 'zipcode',
                 'address1',
                 'address2',
+                'endUser',
+                'endUser_depart',
+                'endUser_contactPerson',
+                'endUser_phone',
+                'endUser_email',
+                'endUser_zipcode',
+                'endUser_address1',
+                'endUser_address2',
                 'deliveryDestination_company',
                 'deliveryDestination_depart',
                 'deliveryDestination_contactPerson',
@@ -1497,6 +1667,21 @@ class LoanerRecordController extends Controller
         ]);
     }
 
+    private function stringifyEnduserSn(Request $request): void
+    {
+        if (!$request->exists('enduser_SN')) {
+            return;
+        }
+
+        $sn = $request->input('enduser_SN');
+        if ($sn === null || $sn === '') {
+            $request->merge(['enduser_SN' => null]);
+            return;
+        }
+
+        $request->merge(['enduser_SN' => trim((string) $sn)]);
+    }
+
     private function createAttachedLoanerReservation(
         ServiceRecord $record,
         ?LoanerMaster $available,
@@ -1504,6 +1689,7 @@ class LoanerRecordController extends Controller
         string $requestedProductName,
         ?string $plannedSentDate = null,
         ?string $plannedReturnedDate = null,
+        ?string $repairInstrumentSn = null,
     ): ?AttachedLoaner {
         $loanerId = $available?->loanerID;
 
@@ -1558,6 +1744,9 @@ class LoanerRecordController extends Controller
         }
         if (in_array('productName', $columns, true)) {
             $payload['productName'] = $available?->productName ?? $requestedProductName;
+        }
+        if (in_array('repairInstrument-SN', $columns, true) && $repairInstrumentSn !== null && $repairInstrumentSn !== '') {
+            $payload['repairInstrument-SN'] = $repairInstrumentSn;
         }
 
         return AttachedLoaner::create($payload);
@@ -1794,7 +1983,7 @@ class LoanerRecordController extends Controller
 
     /**
      * loanermaster.currentStatus を全版へ反映する。
-     * 0 = 在庫あり / 1 = アクティブ貸出案件に確保中
+     * statusmaster_loaner.processID_new の値を設定する（例: 0=確保済み, 20=案件未登録）。
      */
     private function setLoanerInventoryStatus(mixed $loanerId, int $status): void
     {
@@ -1829,7 +2018,7 @@ class LoanerRecordController extends Controller
     {
         // processID_new=20 は「案件未登録」（新規登録時の初期 status）。
         $provisional = StatusLoaner::query()
-            ->select(['processID_new', 'status'])
+            ->select(StatusLoaner::selectColumnsForDisplay())
             ->where('processID_new', 20)
             ->first();
         if ($provisional) {
@@ -1837,10 +2026,24 @@ class LoanerRecordController extends Controller
         }
 
         return StatusLoaner::query()
-            ->select(['processID_new', 'status'])
-            ->where('status', 'like', '%未登録%')
+            ->select(StatusLoaner::selectColumnsForDisplay())
+            ->where(function ($query) {
+                $query->where('status', 'like', '%未登録%');
+                if (Schema::hasColumn('statusmaster_loaner', 'status_new')) {
+                    $query->orWhere('status_new', 'like', '%未登録%');
+                }
+            })
             ->orderBy('processID_new')
             ->first();
+    }
+
+    private function resolveInitialLoanerStatusId(): int
+    {
+        $resolved = $this->resolveUnregisteredStatus()?->processID_new;
+
+        return $resolved !== null
+            ? (int) $resolved
+            : LoanerStatusFlow::UNREGISTERED;
     }
 
     /**

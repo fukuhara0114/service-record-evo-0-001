@@ -599,6 +599,7 @@
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ProductName</SortableTh>
                         <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
                         <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="enduser_SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">enduser_SN</SortableTh>
                         <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer</SortableTh>
                         <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer_depart</SortableTh>
                         <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">contactPerson</SortableTh>
@@ -755,6 +756,7 @@
                             <td>{{ r.productName }}</td>
                             <td>{{ r.item || '' }}</td>
                             <td>{{ r.SN }}</td>
+                            <td>{{ r.enduser_SN || '' }}</td>
                             <td>{{ r.dealer }}</td>
                             <td>{{ r.dealer_depart }}</td>
                             <td>{{ r.contactPerson }}</td>
@@ -1053,7 +1055,7 @@ import { router, usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
-import { redirectToLogin } from '@/utils/auth'
+import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
@@ -1978,6 +1980,7 @@ const filteredRecords = computed(() => {
                     r.productName,
                     r.item,
                     r.SN,
+                    r.enduser_SN,
                     r.returnCode,
                     r.return_code_master?.description,
                     r.labor_master?.laborName,
@@ -2500,7 +2503,7 @@ function statusLabel(record) {
         return ''
     }
     if (record?.order_type === 'loaner') {
-        return record.status_master_loaner?.status || ''
+        return loanerStatusLabel(record.status_master_loaner) || record.status_label || ''
     }
     return record.status_master?.status || ''
 }

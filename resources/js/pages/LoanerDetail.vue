@@ -36,6 +36,14 @@
                 </p>
             </div>
             <div class="promote-banner-actions">
+                <button
+                    type="button"
+                    class="btn btn-danger"
+                    :disabled="promoting || cancellingReservation"
+                    @click="showCancelReservationDialog = true"
+                >
+                    予約キャンセル
+                </button>
                 <label class="promote-unit-select">
                     <span>割当貸出機</span>
                     <select v-model="promoteLoanerId" :disabled="promoting || !availableUnits.length">
@@ -145,7 +153,7 @@
                                         type="button"
                                         class="btn btn-secondary application-form-issue-btn"
                                         :disabled="saving || applicationFormLoading"
-                                        @click="openApplicationForm"
+                                        @click="openApplicationFormSetup"
                                     >
                                         {{ applicationFormLoading ? '生成中...' : '申込書発行' }}
                                     </button>
@@ -175,7 +183,7 @@
                                         :key="status.processID_new"
                                         :value="String(status.processID_new)"
                                     >
-                                        {{ status.status }} ({{ status.processID_new }})
+                                        {{ loanerStatusOptionLabel(status) }}
                                     </option>
                                 </select>
                             </label>
@@ -226,6 +234,14 @@
                                 <span class="price-adjust-label">調整額</span>
                                 <strong>{{ formatSignedAmount(discountAmount) }}</strong>
                             </div>
+                            <label class="price-adjust-enduser-sn">
+                                <span class="price-adjust-label">enduser_SN</span>
+                                <input
+                                    v-model="form.enduser_SN"
+                                    type="text"
+                                    placeholder="enduser_SN"
+                                >
+                            </label>
                         </div>
                     </section>
 
@@ -302,6 +318,41 @@
                                         placeholder="address2"
                                         aria-label="address2"
                                     >
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel person-panel">
+                            <div class="panel-heading">
+                                <h2>endUser</h2>
+                                <button
+                                    type="button"
+                                    class="select-btn delivery-copy-btn"
+                                    @click="copyEndUserToDelivery"
+                                >
+                                    発送先Copy
+                                </button>
+                            </div>
+                            <div class="person-stack">
+                                <label><span>会社名</span><input v-model="form.endUser" type="text"></label>
+                                <label><span>部署名</span><input v-model="form.endUser_depart" type="text"></label>
+                                <label><span>担当者</span><input v-model="form.endUser_contactPerson" type="text"></label>
+                                <label><span>phone</span><input v-model="form.endUser_phone" type="text"></label>
+                                <label><span>email</span><input v-model="form.endUser_email" type="text"></label>
+                                <label class="zip-row">
+                                    <span class="zip-mark">〒</span>
+                                    <input
+                                        v-model="form.endUser_zipcode"
+                                        type="text"
+                                        class="zip-input"
+                                        placeholder="zipcode"
+                                        @change="lookupZip('endUser')"
+                                        @blur="lookupZip('endUser')"
+                                    >
+                                </label>
+                                <div class="address-pair">
+                                    <input v-model="form.endUser_address1" type="text" class="address1-input" placeholder="address1" aria-label="address1">
+                                    <input v-model="form.endUser_address2" type="text" class="address2-input" placeholder="address2" aria-label="address2">
                                 </div>
                             </div>
                         </section>
@@ -480,6 +531,36 @@
             @selected="onMasterSelected"
         />
 
+        <div
+            v-if="showCancelReservationDialog"
+            class="confirm-overlay"
+            @click.self="closeCancelReservationDialog"
+        >
+            <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="cancel-reservation-title">
+                <h3 id="cancel-reservation-title">予約キャンセル</h3>
+                <p>予約をキャンセルしますか？</p>
+                <p v-if="cancelReservationError" class="confirm-error">{{ cancelReservationError }}</p>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        :disabled="cancellingReservation"
+                        @click="closeCancelReservationDialog"
+                    >
+                        いいえ
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-danger"
+                        :disabled="cancellingReservation"
+                        @click="cancelReservation"
+                    >
+                        {{ cancellingReservation ? '処理中...' : 'はい' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="filePendingDelete" class="confirm-overlay" @click.self="filePendingDelete = null">
             <div class="confirm-panel">
                 <h3>ファイル削除</h3>
@@ -489,6 +570,83 @@
                     <button type="button" class="btn btn-secondary" :disabled="deleting" @click="filePendingDelete = null">キャンセル</button>
                     <button type="button" class="btn delete-btn" :disabled="deleting" @click="deleteFile">
                         {{ deleting ? '削除中...' : '削除' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showApplicationFormSetupDialog" class="confirm-overlay" @click.self="closeApplicationFormSetupDialog">
+            <div class="confirm-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>申込書発行</h3>
+                    <button type="button" class="close-btn" @click="closeApplicationFormSetupDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <fieldset class="application-form-charge-fieldset">
+                        <legend>機材名</legend>
+                        <label class="application-form-charge-option">
+                            <input
+                                v-model="applicationFormSetupForm.equipmentNameSource"
+                                type="radio"
+                                value="item"
+                            >
+                            item: {{ applicationFormItemPreview || '（未設定）' }}
+                        </label>
+                        <label class="application-form-charge-option">
+                            <input
+                                v-model="applicationFormSetupForm.equipmentNameSource"
+                                type="radio"
+                                value="productName"
+                            >
+                            productName: {{ displayProductNameLabel || '（未設定）' }}
+                        </label>
+                    </fieldset>
+                    <fieldset class="application-form-charge-fieldset">
+                        <legend>手数料</legend>
+                        <label class="application-form-charge-option">
+                            <input
+                                v-model="applicationFormSetupForm.chargeType"
+                                type="radio"
+                                value="paid"
+                            >
+                            有償（loanermaster.price: {{ formatPrice(masterPrice) }}）
+                        </label>
+                        <label class="application-form-charge-option">
+                            <input
+                                v-model="applicationFormSetupForm.chargeType"
+                                type="radio"
+                                value="free"
+                            >
+                            無償（￥0）
+                        </label>
+                    </fieldset>
+                    <label class="confirm-field">
+                        enduser_SN
+                        <input
+                            v-model="applicationFormSetupForm.enduser_SN"
+                            type="text"
+                            class="confirm-input"
+                            placeholder="修理機材のシリアルナンバー"
+                        >
+                    </label>
+                    <p v-if="applicationFormSetupError" class="confirm-error">{{ applicationFormSetupError }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        :disabled="applicationFormLoading"
+                        @click="closeApplicationFormSetupDialog"
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="applicationFormLoading"
+                        @click="confirmApplicationFormSetup"
+                    >
+                        {{ applicationFormLoading ? '生成中...' : '発行' }}
                     </button>
                 </div>
             </div>
@@ -504,14 +662,15 @@
                     <h3 id="application-form-title">代替機申込書プレビュー</h3>
                     <div class="application-form-header-actions">
                         <button type="button" class="btn btn-secondary application-form-btn" @click="closeApplicationFormDialog">閉じる</button>
-                        <a
+                        <button
                             v-if="applicationFormPdfUrl"
+                            type="button"
                             class="btn btn-primary application-form-btn"
-                            :href="applicationFormPdfUrl"
-                            :download="applicationFormFilename"
+                            :disabled="applicationFormDownloading"
+                            @click="downloadApplicationForm"
                         >
-                            ダウンロード
-                        </a>
+                            {{ applicationFormDownloading ? '保存中...' : 'ダウンロード' }}
+                        </button>
                         <button type="button" class="close-btn" @click="closeApplicationFormDialog">×</button>
                     </div>
                 </div>
@@ -716,6 +875,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
+import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
 import { pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
@@ -766,6 +926,9 @@ const success = ref('')
 const promotionFromCheck = ref(false)
 const promotionFromLending = ref(false)
 const promoting = ref(false)
+const cancellingReservation = ref(false)
+const cancelReservationError = ref('')
+const showCancelReservationDialog = ref(false)
 const promoteLoanerId = ref('')
 const calendarError = ref('')
 const calendarRef = ref(null)
@@ -799,11 +962,20 @@ const priceAdjustForm = reactive({
     reason: '',
 })
 const showApplicationFormDialog = ref(false)
+const showApplicationFormSetupDialog = ref(false)
+const applicationFormSetupError = ref('')
+const applicationFormSetupForm = reactive({
+    chargeType: 'paid',
+    enduser_SN: '',
+    equipmentNameSource: 'item',
+})
 const applicationFormLoading = ref(false)
 const applicationFormError = ref('')
 const applicationFormPreviewUrl = ref('')
 const applicationFormPdfUrl = ref('')
+const applicationFormPdfBlob = ref(null)
 const applicationFormFilename = ref('loaner_application.pdf')
+const applicationFormDownloading = ref(false)
 const showNoteDialog = ref(false)
 const noteDialogMode = ref('create')
 const noteSaving = ref(false)
@@ -928,6 +1100,17 @@ const form = reactive({
     deliveryDestination_zipcode: stringValue(props.record.deliveryDestination_zipcode),
     deliveryDestination_address1: stringValue(props.record.deliveryDestination_address1),
     deliveryDestination_address2: stringValue(props.record.deliveryDestination_address2),
+    endUser: stringValue(props.record.endUser),
+    endUser_depart: stringValue(props.record.endUser_depart),
+    endUser_contactPerson: stringValue(props.record.endUser_contactPerson),
+    endUser_email: stringValue(props.record.endUser_email),
+    endUser_phone: stringValue(props.record.endUser_phone),
+    endUser_zipcode: stringValue(props.record.endUser_zipcode),
+    endUser_address1: stringValue(props.record.endUser_address1),
+    endUser_address2: stringValue(props.record.endUser_address2),
+    enduser_SN: props.attached.enduser_SN != null && props.attached.enduser_SN !== ''
+        ? String(props.attached.enduser_SN)
+        : '',
 })
 
 const selectedUnit = computed(() => {
@@ -944,6 +1127,18 @@ const displayItemLabel = computed(() => {
     if (fromMaster) return fromMaster
     return ''
 })
+const displayProductNameLabel = computed(() => {
+    const fromUnit = String(selectedUnit.value?.productName ?? '').trim()
+    if (fromUnit) return fromUnit
+    const fromForm = String(form.productName ?? '').trim()
+    if (fromForm) return fromForm
+    const fromMaster = String(props.loanerMaster?.productName ?? '').trim()
+    if (fromMaster) return fromMaster
+    return ''
+})
+const applicationFormItemPreview = computed(() =>
+    String(displayItemLabel.value ?? '').replace(/【簿外】/g, '').trim(),
+)
 const sortedFiles = computed(() => {
     const list = [...(fileItems.value ?? [])]
     list.sort((a, b) => {
@@ -1011,8 +1206,8 @@ function parentStatusFromRecord(data) {
     const label = data.status_label
         ?? data.statusMaster?.status
         ?? data.status_master?.status
-        ?? data.statusMasterLoaner?.status
-        ?? data.status_master_loaner?.status
+        ?? loanerStatusLabel(data.statusMasterLoaner)
+        ?? loanerStatusLabel(data.status_master_loaner)
         ?? null
     const status = data.status
     if (label != null && String(label).trim() !== '' && status != null && status !== '') {
@@ -1031,8 +1226,8 @@ function normalizeParentInfo(data) {
         status_label: data.status_label
             ?? data.statusMaster?.status
             ?? data.status_master?.status
-            ?? data.statusMasterLoaner?.status
-            ?? data.status_master_loaner?.status
+            ?? loanerStatusLabel(data.statusMasterLoaner)
+            ?? loanerStatusLabel(data.status_master_loaner)
             ?? null,
         sentOut: toYmd(data.sentOut ?? data.sent_out) ?? null,
         returnCode: data.returnCode ?? data.return_code ?? null,
@@ -1082,7 +1277,7 @@ const currentStatusLabel = computed(() => {
     const id = form.status === '' ? null : Number(form.status)
     if (id == null || Number.isNaN(id)) return '未設定'
     const row = statuses.value.find(item => Number(item.processID_new) === id)
-    return row ? `${row.status} (${row.processID_new})` : `status ${id}`
+    return row ? loanerStatusOptionLabel(row) : `status ${id}`
 })
 
 const isLaborEditable = computed(() =>
@@ -1157,7 +1352,7 @@ const nextStatusOption = computed(() => {
     const row = statuses.value.find(item => Number(item.processID_new) === nextId)
     return {
         id: nextId,
-        label: row ? row.status : String(nextId),
+        label: row ? loanerStatusLabel(row) : String(nextId),
     }
 })
 
@@ -1591,7 +1786,11 @@ function normalizeZipcode(value) {
 }
 
 async function lookupZip(target) {
-    const raw = target === 'delivery' ? form.deliveryDestination_zipcode : form.zipcode
+    const raw = target === 'delivery'
+        ? form.deliveryDestination_zipcode
+        : target === 'endUser'
+            ? form.endUser_zipcode
+            : form.zipcode
     const zip = normalizeZipcode(raw)
     if (zip.length !== 7) return
 
@@ -1608,6 +1807,10 @@ async function lookupZip(target) {
             form.deliveryDestination_zipcode = zip
             form.deliveryDestination_address1 = pref
             form.deliveryDestination_address2 = cityTown
+        } else if (target === 'endUser') {
+            form.endUser_zipcode = zip
+            form.endUser_address1 = pref
+            form.endUser_address2 = cityTown
         } else {
             form.zipcode = zip
             form.address1 = pref
@@ -1627,6 +1830,17 @@ function copyDealerToDelivery() {
     form.deliveryDestination_zipcode = form.zipcode || ''
     form.deliveryDestination_address1 = form.address1 || ''
     form.deliveryDestination_address2 = form.address2 || ''
+}
+
+function copyEndUserToDelivery() {
+    form.deliveryDestination_company = form.endUser || ''
+    form.deliveryDestination_depart = form.endUser_depart || ''
+    form.deliveryDestination_contactPerson = form.endUser_contactPerson || ''
+    form.deliveryDestination_phone = form.endUser_phone || ''
+    form.deliveryDestination_email = form.endUser_email || ''
+    form.deliveryDestination_zipcode = form.endUser_zipcode || ''
+    form.deliveryDestination_address1 = form.endUser_address1 || ''
+    form.deliveryDestination_address2 = form.endUser_address2 || ''
 }
 
 function filesApiBase() {
@@ -1854,6 +2068,63 @@ function revokeApplicationFormUrl() {
         URL.revokeObjectURL(applicationFormPdfUrl.value)
         applicationFormPdfUrl.value = ''
     }
+    applicationFormPdfBlob.value = null
+}
+
+async function downloadApplicationForm() {
+    if (!applicationFormPdfBlob.value || applicationFormDownloading.value) return
+
+    applicationFormDownloading.value = true
+    applicationFormError.value = ''
+    fileError.value = ''
+    success.value = ''
+
+    const filename = applicationFormFilename.value || 'loaner_application.pdf'
+
+    try {
+        const url = applicationFormPdfUrl.value || URL.createObjectURL(applicationFormPdfBlob.value)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        link.rel = 'noopener'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+
+        const file = new File([applicationFormPdfBlob.value], filename, { type: 'application/pdf' })
+        const added = await uploadSingleFile(file, nextFileSortNum())
+        fileItems.value.push(added)
+        selectedFileId.value = added.id
+        success.value = '申込書をダウンロードし、ファイル一覧に追加しました。'
+    } catch (e) {
+        applicationFormError.value = e.message || '申込書のファイル保存に失敗しました。'
+    } finally {
+        applicationFormDownloading.value = false
+    }
+}
+
+function closeApplicationFormSetupDialog() {
+    if (applicationFormLoading.value) return
+    showApplicationFormSetupDialog.value = false
+    applicationFormSetupError.value = ''
+}
+
+function openApplicationFormSetup() {
+    if (applicationFormLoading.value) return
+    applicationFormSetupError.value = ''
+    applicationFormSetupForm.chargeType = 'paid'
+    applicationFormSetupForm.enduser_SN = form.enduser_SN || ''
+    applicationFormSetupForm.equipmentNameSource = 'item'
+    showApplicationFormSetupDialog.value = true
+}
+
+function confirmApplicationFormSetup() {
+    applicationFormSetupError.value = ''
+    generateApplicationForm({
+        chargeType: applicationFormSetupForm.chargeType,
+        enduser_SN: applicationFormSetupForm.enduser_SN,
+        equipmentNameSource: applicationFormSetupForm.equipmentNameSource,
+    })
 }
 
 function closeApplicationFormDialog() {
@@ -1862,7 +2133,7 @@ function closeApplicationFormDialog() {
     revokeApplicationFormUrl()
 }
 
-async function openApplicationForm() {
+async function generateApplicationForm({ chargeType, enduser_SN, equipmentNameSource = 'item' }) {
     if (applicationFormLoading.value) return
     applicationFormLoading.value = true
     applicationFormError.value = ''
@@ -1870,15 +2141,21 @@ async function openApplicationForm() {
     revokeApplicationFormUrl()
 
     const manageNum = String(selectedUnit.value?.manageNum || props.loanerMaster?.manageNum || '').trim()
+    const equipmentName = equipmentNameSource === 'productName'
+        ? displayProductNameLabel.value
+        : displayItemLabel.value
     const payload = {
+        chargeType,
+        enduser_SN: enduser_SN === '' || enduser_SN == null ? null : String(enduser_SN).trim(),
+        price: chargeType === 'paid' ? masterPrice.value : 0,
+        orderDate: form.orderDate || null,
         contactPerson: form.contactPerson,
         phone: form.phone,
         fax: form.fax,
         manageNum,
-        item: displayItemLabel.value,
+        item: equipmentName,
         loanerID: form.loanerID,
         SN: form.SN,
-        price: displayPrice.value,
         sentDate: form.sentDate || form.plannedSentDate,
         plannedReturnedDate: form.plannedReturnedDate,
         returnedDate: form.returnedDate,
@@ -1895,7 +2172,6 @@ async function openApplicationForm() {
         deliveryDestination_address2: form.deliveryDestination_address2,
         deliveryDestination_phone: form.deliveryDestination_phone,
         parentID: form.parentID ? Number(form.parentID) : null,
-        repairSN: parentInfo.value?.SN || '',
         senderName: authUserName.value,
     }
 
@@ -1935,12 +2211,14 @@ async function openApplicationForm() {
         const pdfBlob = await pdfResponse.blob()
         applicationFormPreviewUrl.value = URL.createObjectURL(pngBlob)
         applicationFormPdfUrl.value = URL.createObjectURL(pdfBlob)
+        applicationFormPdfBlob.value = pdfBlob
         applicationFormFilename.value = `loaner_application_${props.record.orderID || props.attached.id}.pdf`
+        showApplicationFormSetupDialog.value = false
         showApplicationFormDialog.value = true
     } catch (e) {
-        applicationFormError.value = e.message || '申込書の生成に失敗しました。'
-        error.value = applicationFormError.value
-        showApplicationFormDialog.value = true
+        applicationFormSetupError.value = e.message || '申込書の生成に失敗しました。'
+        applicationFormError.value = applicationFormSetupError.value
+        error.value = applicationFormSetupError.value
     } finally {
         applicationFormLoading.value = false
     }
@@ -2111,6 +2389,43 @@ function openPromotionCandidate(candidate) {
     window.location.href = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${candidate.orderID}${params}`
 }
 
+function closeCancelReservationDialog() {
+    if (cancellingReservation.value) return
+    showCancelReservationDialog.value = false
+    cancelReservationError.value = ''
+}
+
+async function cancelReservation() {
+    if (!isWaitingList.value || cancellingReservation.value) return
+    error.value = ''
+    success.value = ''
+    cancelReservationError.value = ''
+    cancellingReservation.value = true
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/detail/${props.attached.id}/cancel-reservation`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                body: JSON.stringify({}),
+            },
+        )
+        if (!result) {
+            cancelReservationError.value = '認証が必要です。再ログインしてください。'
+            return
+        }
+        const { response, data } = result
+        if (!response.ok) throw new Error(validationError(data, `予約キャンセルに失敗しました。（HTTP ${response.status}）`))
+        showCancelReservationDialog.value = false
+        returnToWaitingListList()
+    } catch (e) {
+        cancelReservationError.value = e.message || '予約キャンセルに失敗しました。'
+        error.value = cancelReservationError.value
+    } finally {
+        cancellingReservation.value = false
+    }
+}
+
 async function promoteToLoaner() {
     if (!isWaitingList.value || promoting.value) return
     error.value = ''
@@ -2156,6 +2471,11 @@ function syncCurrentDates(attached, record = null) {
         form.plannedSentDate = attached.plannedSentDate || attached.sentDate || ''
         form.plannedReturnedDate = attached.plannedReturnedDate || attached.returnedDate || ''
         form.assignStatus = attached.assignStatus || ''
+        if (Object.prototype.hasOwnProperty.call(attached, 'enduser_SN')) {
+            form.enduser_SN = attached.enduser_SN != null && attached.enduser_SN !== ''
+                ? String(attached.enduser_SN)
+                : ''
+        }
     }
     if (record) {
         form.quoteNum = stringValue(record.quoteNum)
@@ -2301,6 +2621,31 @@ function buildListReturnUrl(orderType) {
     }
 }
 
+function returnToWaitingListList() {
+    if (window.opener && !window.opener.closed) {
+        window.close()
+        return
+    }
+
+    const returnUrl = safeReturnUrl()
+    if (returnUrl) {
+        try {
+            const url = new URL(returnUrl)
+            if (/\/servicerecord\/(administrator|engineer)\/?$/.test(url.pathname) || url.pathname.includes('/servicerecord/administrator')) {
+                url.searchParams.set('orderType', 'waiting_list')
+                window.location.href = url.href
+                return
+            }
+            window.location.href = url.href
+            return
+        } catch {
+            // fall through
+        }
+    }
+
+    window.location.href = buildListReturnUrl('waiting_list')
+}
+
 function openParentServiceDetail() {
     const parentId = String(form.parentID ?? '').trim()
     if (!parentId) return
@@ -2432,6 +2777,7 @@ onBeforeUnmount(() => {
 }
 .btn:disabled { opacity: .6; cursor: wait; }
 .btn-primary { background: #2563eb; color: #fff; }
+.btn-danger { background: #dc2626; color: #fff; }
 a.btn {
     display: inline-flex;
     align-items: center;
@@ -2458,7 +2804,7 @@ a.btn {
 .panel h3 { margin: 7px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #cbd5e1; font-size: 11px; color: #475569; }
 
 .loaner-panel { flex: 0 0 auto; }
-.people-row { flex: 0 0 auto; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.people-row { flex: 0 0 auto; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .person-panel { height: max-content; }
 .period-panel { flex: 0 0 auto; min-height: 45px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .period-panel h2 { margin-right: 5px; white-space: nowrap; }
@@ -2918,6 +3264,24 @@ a.btn {
 .price-adjust-value { font-size: 13px; color: #0f172a; }
 .price-adjust-btn { min-height: 24px; padding: 2px 10px; font-size: 11px; }
 .price-adjust-delta strong { font-size: 12px; color: #0f172a; }
+.price-adjust-enduser-sn {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.price-adjust-enduser-sn input {
+    width: 140px;
+    min-width: 0;
+    height: 25px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 11px;
+}
 
 .files-panel { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .file-actions { display: flex; align-items: center; gap: 5px; }
@@ -3018,6 +3382,26 @@ a.btn {
     width: auto;
     height: auto;
     object-fit: contain;
+}
+.application-form-charge-fieldset {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+.application-form-charge-fieldset legend {
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #334155;
+}
+.application-form-charge-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 13px;
+    color: #0f172a;
 }
 .confirm-panel h3 { margin: 0 0 10px; font-size: 15px; }
 .confirm-panel p { overflow-wrap: anywhere; }

@@ -170,7 +170,7 @@
                                     :key="status.processID_new"
                                     :value="String(status.processID_new)"
                                 >
-                                    {{ status.status }} ({{ status.processID_new }})
+                                    {{ loanerStatusOptionLabel(status) }}
                                 </option>
                             </select>
                         </label>
@@ -191,6 +191,7 @@ import { usePage } from '@inertiajs/vue3'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     records: {
@@ -268,9 +269,9 @@ function formatRecordStatus(record) {
     const label = record.status_label
         ?? record.statusMaster?.status
         ?? record.status_master?.status
-        ?? record.statusMasterLoaner?.status
-        ?? record.status_master_loaner?.status
-        ?? props.statuses?.find(s => String(s.processID_new) === String(id))?.status
+        ?? loanerStatusLabel(record.statusMasterLoaner)
+        ?? loanerStatusLabel(record.status_master_loaner)
+        ?? loanerStatusLabel(props.statuses?.find(s => String(s.processID_new) === String(id)))
         ?? null
     if (label != null && label !== '' && id != null && id !== '') {
         return `${label} (${id})`

@@ -132,7 +132,11 @@ class RemandNotificationMailer
         $id = (int) $statusId;
         $name = '';
         if (in_array($record->order_type, ['loaner'], true)) {
-            $name = (string) (StatusLoaner::query()->where('processID_new', $id)->value('status') ?? '');
+            $name = (string) (StatusLoaner::resolveLabel(
+                StatusLoaner::query()
+                    ->where('processID_new', $id)
+                    ->first(StatusLoaner::selectColumnsForDisplay()),
+            ) ?? '');
         } else {
             $name = (string) (Status::query()->where('processID_new', $id)->value('status') ?? '');
         }

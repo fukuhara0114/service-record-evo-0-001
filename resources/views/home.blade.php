@@ -138,7 +138,7 @@
         <a href="{{ url('/servicerecord/engineer') }}" class="btn">Engineer</a>
         <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">Invoice</a>
         <a href="{{ url('/servicerecord/logistics') }}" class="btn">Logistics</a>
-        <a href="{{ url('/servicerecord/loaner/calendar') }}" class="btn">Loaner</a>
+        <a href="{{ url('/servicerecord/loaner/master') }}" class="btn">Loaner</a>
         <a href="{{ url('/servicerecord/maintenance-contracts') }}" class="btn">Contract</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
         @if ($showUsers)

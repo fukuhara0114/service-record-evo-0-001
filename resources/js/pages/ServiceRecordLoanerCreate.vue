@@ -337,6 +337,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 
@@ -464,7 +465,7 @@ const adminUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/administ
 const unregisteredStatusLabel = computed(() => {
     const row = props.unregisteredStatus
     if (!row) return '案件未登録'
-    return `${row.status} (${row.processID_new})`
+    return loanerStatusOptionLabel(row)
 })
 
 const parentSearchQuerySummary = computed(() => parentSearchQuery.value.trim() || '検索キーワードなし')
