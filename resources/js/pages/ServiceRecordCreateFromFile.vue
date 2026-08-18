@@ -205,6 +205,13 @@
                                 </button>
                                 <button
                                     type="button"
+                                    class="tab-btn tab-btn-action btn-parent-case"
+                                    @click="openParentCaseDialog"
+                                >
+                                    親案件
+                                </button>
+                                <button
+                                    type="button"
                                     class="btn btn-primary btn-stock-list"
                                     :disabled="!form.productName"
                                     @click="openLoanerStockDialog"
@@ -858,6 +865,99 @@
             </div>
         </div>
 
+        <div v-if="showParentCaseDialog" class="confirm-overlay" @click.self="closeParentCaseDialog">
+            <div class="confirm-panel parent-case-panel" @click.stop>
+                <div class="confirm-header">
+                    <h3>親案件検索</h3>
+                    <button type="button" class="close-btn" @click="closeParentCaseDialog">×</button>
+                </div>
+                <div class="confirm-body parent-case-body">
+                    <div class="parent-case-search-row">
+                        <label class="parent-case-search-field">
+                            <span>parentID</span>
+                            <input
+                                v-model="parentCaseSearchId"
+                                type="number"
+                                min="1"
+                                class="parent-case-search-input"
+                                placeholder="orderID"
+                                @keydown.enter.prevent="searchParentCase"
+                            >
+                        </label>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            :disabled="parentCaseLoading"
+                            @click="searchParentCase"
+                        >
+                            {{ parentCaseLoading ? '検索中...' : '検索' }}
+                        </button>
+                    </div>
+                    <p v-if="parentCaseError" class="parent-case-error">{{ parentCaseError }}</p>
+                    <div v-else-if="parentCaseRecord" class="parent-case-result">
+                        <p class="parent-case-result-meta">
+                            orderID: {{ parentCaseRecord.orderID }}
+                            <template v-if="parentCaseRecord.order_type"> / {{ parentCaseRecord.order_type }}</template>
+                            <template v-if="parentCaseRecord.productName"> / {{ parentCaseRecord.productName }}</template>
+                            <template v-if="parentCaseRecord.SN"> / SN {{ parentCaseRecord.SN }}</template>
+                        </p>
+                        <div class="parent-case-stakeholder-grid">
+                            <section class="parent-case-stakeholder">
+                                <h4>dealer</h4>
+                                <dl>
+                                    <div><dt>dealer</dt><dd>{{ displayText(parentCaseRecord.dealer) }}</dd></div>
+                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.dealer_depart) }}</dd></div>
+                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.contactPerson) }}</dd></div>
+                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.phone) }}</dd></div>
+                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.email) }}</dd></div>
+                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.zipcode) }}</dd></div>
+                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.address1) }}</dd></div>
+                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.address2) }}</dd></div>
+                                </dl>
+                            </section>
+                            <section class="parent-case-stakeholder">
+                                <h4>endUser</h4>
+                                <dl>
+                                    <div><dt>endUser</dt><dd>{{ displayText(parentCaseRecord.endUser) }}</dd></div>
+                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.endUser_depart) }}</dd></div>
+                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.endUser_contactPerson) }}</dd></div>
+                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.endUser_phone) }}</dd></div>
+                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.endUser_email) }}</dd></div>
+                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.endUser_zipcode) }}</dd></div>
+                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.endUser_address1) }}</dd></div>
+                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.endUser_address2) }}</dd></div>
+                                </dl>
+                            </section>
+                            <section class="parent-case-stakeholder">
+                                <h4>delivery</h4>
+                                <dl>
+                                    <div><dt>delivery</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_company) }}</dd></div>
+                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_depart) }}</dd></div>
+                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_contactPerson) }}</dd></div>
+                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_phone) }}</dd></div>
+                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_email) }}</dd></div>
+                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_zipcode) }}</dd></div>
+                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address1) }}</dd></div>
+                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address2) }}</dd></div>
+                                </dl>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" @click="closeParentCaseDialog">閉じる</button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="!parentCaseRecord"
+                        @click="adoptParentCase"
+                    >
+                        採用
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="showLoanerStockDialog" class="confirm-overlay" @click.self="closeLoanerStockDialog">
             <div class="confirm-panel stock-list-panel">
                 <div class="confirm-header">
@@ -1084,6 +1184,11 @@ const loanerAvailabilityChecking = ref(false)
 const waitingListAccepted = ref(false)
 const showWaitingConfirm = ref(false)
 const showLoanerStockDialog = ref(false)
+const showParentCaseDialog = ref(false)
+const parentCaseSearchId = ref('')
+const parentCaseRecord = ref(null)
+const parentCaseLoading = ref(false)
+const parentCaseError = ref('')
 const maintenanceContracts = ref([])
 const selectedMaintenanceContractId = ref(null)
 const maintenanceSearchLoading = ref(false)
@@ -1241,6 +1346,66 @@ function openLoanerStockDialog() {
 
 function closeLoanerStockDialog() {
     showLoanerStockDialog.value = false
+}
+
+function displayText(value) {
+    const text = value == null ? '' : String(value).trim()
+    return text === '' ? '—' : text
+}
+
+function openParentCaseDialog() {
+    parentCaseError.value = ''
+    showParentCaseDialog.value = true
+}
+
+function closeParentCaseDialog() {
+    if (parentCaseLoading.value) return
+    showParentCaseDialog.value = false
+    parentCaseError.value = ''
+}
+
+async function searchParentCase() {
+    const orderId = String(parentCaseSearchId.value ?? '').trim()
+    if (!orderId) {
+        parentCaseError.value = 'parentID を入力してください。'
+        parentCaseRecord.value = null
+        return
+    }
+
+    parentCaseLoading.value = true
+    parentCaseError.value = ''
+    parentCaseRecord.value = null
+
+    try {
+        const url = `${page.props.appBaseUrl}/servicerecord/record/${encodeURIComponent(orderId)}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (response.status === 404) {
+            throw new Error(`parentID ${orderId} の案件は見つかりません。`)
+        }
+        if (!response.ok) {
+            throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
+        }
+        parentCaseRecord.value = data
+    } catch (e) {
+        parentCaseError.value = e.message || '親案件の検索に失敗しました。'
+    } finally {
+        parentCaseLoading.value = false
+    }
+}
+
+function adoptParentCase() {
+    const record = parentCaseRecord.value
+    if (!record) return
+
+    Object.values(STAKEHOLDER_FIELDS).flat().forEach((field) => {
+        form[field] = record[field] == null ? '' : String(record[field])
+    })
+
+    showParentCaseDialog.value = false
+    parentCaseError.value = ''
 }
 
 function autoSelectFirstAvailableUnit() {
@@ -2757,7 +2922,8 @@ async function save() {
     flex: 0 1 180px;
 }
 
-.btn-loaner-maintenance {
+.btn-loaner-maintenance,
+.btn-parent-case {
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -2795,6 +2961,105 @@ async function save() {
 .stock-list-panel {
     width: min(1280px, 96vw);
     max-width: 96vw;
+}
+
+.parent-case-panel {
+    width: min(1080px, 96vw);
+    max-width: 96vw;
+}
+
+.parent-case-body {
+    padding-top: 12px;
+}
+
+.parent-case-search-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.parent-case-search-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+
+.parent-case-search-field span {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.parent-case-search-input {
+    width: 180px;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.parent-case-error {
+    margin: 0 0 10px;
+    color: #b91c1c;
+    font-weight: 700;
+}
+
+.parent-case-result-meta {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.parent-case-stakeholder-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.parent-case-stakeholder {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    padding: 10px;
+    min-width: 0;
+}
+
+.parent-case-stakeholder h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #1e40af;
+}
+
+.parent-case-stakeholder dl {
+    margin: 0;
+}
+
+.parent-case-stakeholder dl > div {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.parent-case-stakeholder dt {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.parent-case-stakeholder dd {
+    margin: 0;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    color: #0f172a;
+}
+
+@media (max-width: 900px) {
+    .parent-case-stakeholder-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .stock-list-body {
