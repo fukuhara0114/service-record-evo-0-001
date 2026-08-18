@@ -209,6 +209,7 @@
                                     @click="openParentCaseDialog"
                                 >
                                     親案件
+                                    <template v-if="form.parentID">（{{ form.parentID }}）</template>
                                 </button>
                                 <button
                                     type="button"
@@ -1176,6 +1177,7 @@ const form = reactive({
     deliveryDestination_zipcode: '',
     deliveryDestination_address1: '',
     deliveryDestination_address2: '',
+    parentID: '',
     additionalFileIds: [],
 })
 
@@ -1403,6 +1405,7 @@ function adoptParentCase() {
     Object.values(STAKEHOLDER_FIELDS).flat().forEach((field) => {
         form[field] = record[field] == null ? '' : String(record[field])
     })
+    form.parentID = record.orderID == null ? '' : String(record.orderID)
 
     showParentCaseDialog.value = false
     parentCaseError.value = ''
@@ -2209,8 +2212,8 @@ async function saveLoanerCase() {
             body: JSON.stringify({
                 productName: form.productName,
                 receivedDate: null,
-                linkMode: 'none',
-                parentID: null,
+                linkMode: form.parentID ? 'parent' : 'none',
+                parentID: form.parentID === '' ? null : Number(form.parentID),
                 status: null,
                 returnCode: null,
                 SN: form.SN || null,
