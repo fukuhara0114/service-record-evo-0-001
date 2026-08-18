@@ -381,11 +381,13 @@ class MasterPriceRevisionService
 
     private function closeAndInsertLoaner(array $current, array $input, string $closeDate, string $openDate, string $openEnd): void
     {
-        $this->assertCanOpenOn($openDate, 'loanermaster', 'loanerID', $current['loanerID']);
-        $this->closeCurrentRows('loanermaster', 'loanerID', $current['loanerID'], $closeDate, $current['id'] ?? null);
+        $table = (new LoanerMaster)->getTable();
+        $this->assertCanOpenOn($openDate, $table, 'loanerID', $current['loanerID']);
+        $this->closeCurrentRows($table, 'loanerID', $current['loanerID'], $closeDate, $current['id'] ?? null);
 
         // Eloquent の date cast だと 0000-00-00 が -0001-11-30 になり INSERT が失敗するため raw を使う
-        $base = DB::table('loanermaster')->where('id', $current['id'])->first();
+        $base = DB::table($table)->where('id', $current['id'])->first();
+        $canonicalStatus = LoanerMaster::canonicalCurrentStatus($current['loanerID']);
         $payload = [
             'loanerID' => $current['loanerID'],
             'item' => $base->item ?? $current['item'],
@@ -394,7 +396,7 @@ class MasterPriceRevisionService
             'manageNum' => $current['manageNum'],
             'SN' => $current['SN'],
             'certificatedDate' => $this->sanitizeSqlDate($base->certificatedDate ?? null),
-            'currentStatus' => $base->currentStatus ?? '0',
+            'currentStatus' => $canonicalStatus ?? $base->currentStatus ?? '0',
             'note1' => $base->note1 ?? null,
             'note2' => $base->note2 ?? null,
             'note3' => $base->note3 ?? null,
@@ -411,11 +413,11 @@ class MasterPriceRevisionService
             'validDateMax' => $openEnd,
         ];
 
-        DB::table('loanermaster')->insert($this->filterExistingColumns('loanermaster', $payload));
+        DB::table($table)->insert($this->filterExistingColumns($table, $payload));
 
         // 共有項目（状態・ノート・日付など）は全版で同一にする
+        LoanerMaster::unifyCurrentStatus($current['loanerID'], $payload['currentStatus'] ?? null);
         LoanerMaster::syncSharedFieldsAcrossVersions($current['loanerID'], [
-            'currentStatus' => $payload['currentStatus'] ?? null,
             'note1' => $payload['note1'] ?? null,
             'note2' => $payload['note2'] ?? null,
             'note3' => $payload['note3'] ?? null,
@@ -540,7 +542,7 @@ class MasterPriceRevisionService
             'validDateMax' => $openEnd,
         ];
 
-        DB::table('loanermaster')->insert($this->filterExistingColumns('loanermaster', $payload));
+        DB::table((new LoanerMaster)->getTable())->insert($this->filterExistingColumns((new LoanerMaster)->getTable(), $payload));
     }
 
     private function closeCurrentRows(

@@ -81,6 +81,18 @@ class LoanerMaster extends Model
 
     protected static function booted(): void
     {
+        // 新規版は既存版の currentStatus を継承する（有効期間切替で状態が割れないようにする）
+        static::creating(function (LoanerMaster $master) {
+            if ($master->loanerID === null || $master->loanerID === '') {
+                return;
+            }
+
+            $existing = static::canonicalCurrentStatus($master->loanerID);
+            if ($existing !== null && $existing !== '') {
+                $master->setAttribute('currentStatus', $existing);
+            }
+        });
+
         static::saved(function (LoanerMaster $master) {
             if (static::$syncingSharedFields) {
                 return;
@@ -97,6 +109,18 @@ class LoanerMaster extends Model
                 }
             }
 
+            if ($master->wasChanged('currentStatus')) {
+                static::unifyCurrentStatus($master->loanerID, $master->getAttribute('currentStatus'));
+                unset($changed['currentStatus']);
+            } elseif (
+                $master->wasRecentlyCreated
+                && $master->getAttribute('currentStatus') !== null
+                && $master->getAttribute('currentStatus') !== ''
+            ) {
+                static::unifyCurrentStatus($master->loanerID, $master->getAttribute('currentStatus'));
+                unset($changed['currentStatus']);
+            }
+
             if ($changed === []) {
                 return;
             }
@@ -107,6 +131,43 @@ class LoanerMaster extends Model
                 $master->getKey(),
             );
         });
+    }
+
+    /**
+     * 同じ loanerID の全版の currentStatus を同一値にする。
+     */
+    public static function unifyCurrentStatus(mixed $loanerId, mixed $status): int
+    {
+        if ($loanerId === null || $loanerId === '') {
+            return 0;
+        }
+
+        if (!Schema::hasColumn((new static)->getTable(), 'currentStatus')) {
+            return 0;
+        }
+
+        static::$syncingSharedFields = true;
+
+        try {
+            return static::query()
+                ->where('loanerID', $loanerId)
+                ->update(['currentStatus' => $status]);
+        } finally {
+            static::$syncingSharedFields = false;
+        }
+    }
+
+    public static function canonicalCurrentStatus(mixed $loanerId): mixed
+    {
+        if ($loanerId === null || $loanerId === '') {
+            return null;
+        }
+
+        return static::query()
+            ->where('loanerID', $loanerId)
+            ->orderByDesc('lastEditDate')
+            ->orderByDesc('id')
+            ->value('currentStatus');
     }
 
     /**

@@ -16,8 +16,37 @@ class LoanerMasterController extends Controller
         $columns = Schema::getColumnListing($table);
         $statusColumn = $this->resolveStatusColumn();
         $statusLabels = $this->buildStatusLabelMap();
+        $sort = (string) $request->query('sort', 'item');
+        $direction = strtolower((string) $request->query('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $scope = $this->normalizeScope((string) $request->query('scope', 'all'));
 
-        $masters = LoanerMaster::query()
+        if (!in_array($sort, $columns, true)) {
+            $sort = 'item';
+        }
+
+        $query = LoanerMaster::query()
+            ->whereIn('id', $this->latestVersionIdQuery($table))
+            ->where(function ($builder) {
+                $builder
+                    ->whereNull('item')
+                    ->orWhere(function ($inner) {
+                        $inner
+                            ->where('item', 'not like', '%【使用不可】%')
+                            ->where('item', 'not like', '%【サービス終了】%');
+                    });
+            });
+
+        $this->applyStatusScope($query, $statusColumn, $scope);
+
+        if ($sort === 'item') {
+            $query
+                ->orderByRaw("TRIM(REGEXP_REPLACE(COALESCE(item, ''), '【[^】]*】', '')) {$direction}")
+                ->orderBy('item', $direction);
+        } else {
+            $query->orderBy($sort, $direction);
+        }
+
+        $masters = $query
             ->orderBy('loanerID')
             ->orderByDesc('id')
             ->paginate(100)
@@ -28,7 +57,35 @@ class LoanerMasterController extends Controller
             'columns' => $columns,
             'masters' => $masters,
             'statusColumn' => $statusColumn,
+            'statusOptions' => $this->statusOptions($statusLabels),
+            'sort' => $sort,
+            'direction' => $direction,
+            'scope' => $scope,
         ]);
+    }
+
+    public function updateCurrentStatus(Request $request, int $id)
+    {
+        $row = LoanerMaster::query()->findOrFail($id);
+        if ($row->loanerID === null || $row->loanerID === '') {
+            return back()->withErrors(['currentStatus' => 'loanerID が無い行は一括更新できません。']);
+        }
+
+        $validated = $request->validate([
+            'currentStatus' => 'nullable',
+        ]);
+
+        LoanerMaster::unifyCurrentStatus($row->loanerID, $validated['currentStatus'] ?? null);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => '同じ loanerID の currentStatus を更新しました。',
+                'loanerID' => $row->loanerID,
+                'currentStatus' => $validated['currentStatus'] ?? null,
+            ]);
+        }
+
+        return back();
     }
 
     /**
@@ -43,8 +100,8 @@ class LoanerMasterController extends Controller
 
         $map = [];
         foreach (StatusLoaner::query()->get(array_values(array_unique($select))) as $row) {
-            $label = StatusLoaner::resolveLabel($row);
-            if ($label === null || $label === '') {
+            $label = trim((string) ($row->status ?? ''));
+            if ($label === '') {
                 continue;
             }
 
@@ -55,6 +112,25 @@ class LoanerMasterController extends Controller
         }
 
         return $map;
+    }
+
+    /**
+     * @param  array<string, string>  $statusLabels
+     * @return array<int, array{id: string, label: string}>
+     */
+    private function statusOptions(array $statusLabels): array
+    {
+        $options = [];
+        foreach ($statusLabels as $id => $label) {
+            $options[] = [
+                'id' => (string) $id,
+                'label' => $label,
+            ];
+        }
+
+        usort($options, fn ($a, $b) => ((int) $a['id']) <=> ((int) $b['id']));
+
+        return array_values(array_unique($options, SORT_REGULAR));
     }
 
     private function resolveStatusColumn(): string
@@ -79,6 +155,63 @@ class LoanerMasterController extends Controller
     }
 
     /**
+     * loanerID ごとに最新版（validDateMin → id）の id を返すサブクエリ。
+     */
+    private function latestVersionIdQuery(string $table)
+    {
+        return function ($sub) use ($table) {
+            $sub->fromSub(function ($inner) use ($table) {
+                $inner->from($table)
+                    ->select('id')
+                    ->selectRaw(
+                        "ROW_NUMBER() OVER (
+                            PARTITION BY IFNULL(NULLIF(loanerID, ''), CONCAT('id:', id))
+                            ORDER BY validDateMin DESC, id DESC
+                        ) as version_rank"
+                    );
+            }, 'loaner_latest')
+                ->select('id')
+                ->where('version_rank', 1);
+        };
+    }
+
+    private function normalizeScope(string $scope): string
+    {
+        $allowed = ['all', 'stock', 'unregistered', 'reserved', 'lending', 'returning', 'other'];
+
+        return in_array($scope, $allowed, true) ? $scope : 'all';
+    }
+
+    /**
+     * currentStatus（statusmaster_loaner.processID_new）で絞り込み。
+     */
+    private function applyStatusScope($query, string $statusColumn, string $scope): void
+    {
+        if ($scope === 'all' || $statusColumn === '') {
+            return;
+        }
+
+        $statusExpr = 'CAST('.$statusColumn.' AS SIGNED)';
+        $associatedExpr = Schema::hasColumn((new LoanerMaster)->getTable(), 'associatedID')
+            ? 'CAST(COALESCE(associatedID, 0) AS SIGNED)'
+            : null;
+
+        match ($scope) {
+            'stock' => $query->whereRaw("{$statusExpr} = 0"),
+            'unregistered' => $query
+                ->whereRaw("{$statusExpr} > 0 AND {$statusExpr} < 388")
+                ->when($associatedExpr, fn ($q) => $q->whereRaw("{$associatedExpr} = 0")),
+            'reserved' => $query
+                ->whereRaw("{$statusExpr} > 0 AND {$statusExpr} < 388")
+                ->when($associatedExpr, fn ($q) => $q->whereRaw("{$associatedExpr} > 0")),
+            'lending' => $query->whereRaw("{$statusExpr} = 388"),
+            'returning' => $query->whereRaw("{$statusExpr} > 388 AND {$statusExpr} < 400"),
+            'other' => $query->whereRaw("{$statusExpr} > 400"),
+            default => null,
+        };
+    }
+
+    /**
      * @param  array<int, string>  $columns
      * @param  array<string, string>  $statusLabels
      * @return array<string, mixed>
@@ -95,7 +228,7 @@ class LoanerMasterController extends Controller
             $value = $row->getAttribute($column);
 
             if ($column === $statusColumn) {
-                $out[$column] = $this->formatStatusCell($value, $statusLabels);
+                $out[$column] = $value;
                 continue;
             }
 

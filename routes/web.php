@@ -96,6 +96,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'updatePeriod'])->name('servicerecord.loaner.period.update');
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');
     Route::get('/servicerecord/loaner/master', [LoanerMasterController::class, 'index'])->name('servicerecord.loaner.master');
+    Route::put('/servicerecord/loaner/master/{id}/current-status', [LoanerMasterController::class, 'updateCurrentStatus'])->name('servicerecord.loaner.master.current-status');
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
     Route::get('/servicerecord/maintenance-contracts', [MaintenanceContractController::class, 'index'])->name('servicerecord.maintenance-contracts');

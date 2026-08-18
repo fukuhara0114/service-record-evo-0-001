@@ -1,9 +1,22 @@
 <template>
     <div class="loaner-master-page">
         <header class="page-header">
-            <div>
+            <div class="header-title">
                 <h1>LoanerMaster 一覧</h1>
                 <p class="subtitle">loanermaster008 全カラム（{{ totalCount }}件）</p>
+            </div>
+            <div class="scope-bar">
+                <button
+                    v-for="item in scopeButtons"
+                    :key="item.id"
+                    type="button"
+                    class="scope-btn"
+                    :class="{ active: currentScope === item.id }"
+                    :disabled="loading"
+                    @click="setScope(item.id)"
+                >
+                    {{ item.label }}
+                </button>
             </div>
             <div class="header-actions">
                 <CloseToHomeButton :href="homeUrl" />
@@ -34,7 +47,16 @@
                 <table>
                     <thead>
                         <tr>
-                            <th v-for="column in columns" :key="column">{{ column }}</th>
+                            <th v-for="column in columns" :key="column">
+                                <button
+                                    type="button"
+                                    class="sort-button"
+                                    :disabled="loading"
+                                    @click="toggleSort(column)"
+                                >
+                                    {{ column }}{{ sortIndicator(column) }}
+                                </button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -49,7 +71,31 @@
                             @click="selectRow(row)"
                         >
                             <td v-for="column in columns" :key="`${row.id}-${column}`">
-                                {{ displayCell(row[column]) }}
+                                <select
+                                    v-if="column === statusColumn"
+                                    class="status-select"
+                                    :value="statusSelectValue(row[column])"
+                                    :disabled="savingStatus"
+                                    @click.stop
+                                    @change="changeCurrentStatus(row, $event.target.value)"
+                                >
+                                    <option
+                                        v-if="!hasStatusOption(row[column])"
+                                        :value="statusSelectValue(row[column])"
+                                    >
+                                        {{ displayCell(row[column]) }}
+                                    </option>
+                                    <option
+                                        v-for="opt in uniqueStatusOptions"
+                                        :key="opt.id"
+                                        :value="opt.id"
+                                    >
+                                        {{ opt.label }} ({{ opt.id }})
+                                    </option>
+                                </select>
+                                <template v-else>
+                                    {{ displayCell(row[column]) }}
+                                </template>
                             </td>
                         </tr>
                     </tbody>
@@ -73,22 +119,129 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    sort: {
+        type: String,
+        default: 'item',
+    },
+    direction: {
+        type: String,
+        default: 'asc',
+    },
+    statusColumn: {
+        type: String,
+        default: 'currentStatus',
+    },
+    statusOptions: {
+        type: Array,
+        default: () => [],
+    },
+    scope: {
+        type: String,
+        default: 'all',
+    },
 })
 
 const page = usePage()
 const loading = ref(false)
+const savingStatus = ref(false)
 const selectedId = ref(null)
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const rows = computed(() => props.masters?.data ?? [])
 const totalCount = computed(() => props.masters?.total ?? rows.value.length)
+const currentSort = computed(() => props.sort || 'item')
+const currentDirection = computed(() => props.direction === 'desc' ? 'desc' : 'asc')
+const currentScope = computed(() => props.scope || 'all')
+const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/master`)
+const scopeButtons = [
+    { id: 'all', label: '全件' },
+    { id: 'stock', label: '在庫' },
+    { id: 'unregistered', label: '未登録' },
+    { id: 'reserved', label: '確保済み' },
+    { id: 'lending', label: '貸出中' },
+    { id: 'returning', label: '返却処理中' },
+    { id: 'other', label: 'その他' },
+]
+const uniqueStatusOptions = computed(() => {
+    const seen = new Set()
+    return (props.statusOptions ?? []).filter((opt) => {
+        const id = String(opt?.id ?? '')
+        if (seen.has(id)) return false
+        seen.add(id)
+        return true
+    })
+})
 
 function displayCell(value) {
     if (value == null || value === '') return '—'
     return String(value)
 }
 
-function selectRow(row) {
-    selectedId.value = row?.id ?? null
+function statusSelectValue(value) {
+    return value == null ? '' : String(value)
+}
+
+function hasStatusOption(value) {
+    const id = statusSelectValue(value)
+    return uniqueStatusOptions.value.some(opt => String(opt.id) === id)
+}
+
+function changeCurrentStatus(row, value) {
+    if (!row?.id || savingStatus.value) return
+
+    savingStatus.value = true
+    router.put(`${page.props.appBaseUrl}/servicerecord/loaner/master/${row.id}/current-status`, {
+        currentStatus: value === '' ? null : value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+        onFinish: () => {
+            savingStatus.value = false
+        },
+    })
+}
+
+function sortIndicator(column) {
+    if (currentSort.value !== column) return ''
+    return currentDirection.value === 'desc' ? ' ▼' : ' ▲'
+}
+
+function listQuery(extra = {}) {
+    return {
+        sort: currentSort.value,
+        direction: currentDirection.value,
+        scope: currentScope.value,
+        ...extra,
+    }
+}
+
+function runListQuery(query) {
+    loading.value = true
+    router.get(listUrl.value, query, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+        onFinish: () => {
+            loading.value = false
+        },
+    })
+}
+
+function setScope(scope) {
+    if (!scope || loading.value) return
+    runListQuery(listQuery({ scope }))
+}
+
+function toggleSort(column) {
+    if (!column || loading.value) return
+
+    const nextDirection = currentSort.value === column && currentDirection.value === 'asc'
+        ? 'desc'
+        : 'asc'
+
+    runListQuery(listQuery({
+        sort: column,
+        direction: nextDirection,
+    }))
 }
 
 function goToPage(url) {
@@ -114,12 +267,54 @@ function goToPage(url) {
     font-weight: 700;
 }
 
-.page-header {
+.scope-bar {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.page-header {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+    align-items: center;
+    gap: 12px;
     margin-bottom: 12px;
+}
+
+.header-title {
+    min-width: 0;
+}
+
+.header-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.scope-btn {
+    min-width: 96px;
+    padding: 8px 14px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.scope-btn.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+
+.scope-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .page-header h1 {
@@ -131,11 +326,6 @@ function goToPage(url) {
     margin: 0;
     color: #64748b;
     font-size: 13px;
-}
-
-.header-actions {
-    display: flex;
-    gap: 8px;
 }
 
 .list-card {
@@ -205,6 +395,23 @@ th {
     color: #334155;
 }
 
+.sort-button {
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sort-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .data-row {
     cursor: pointer;
 }
@@ -215,6 +422,17 @@ th {
 
 .data-row.selected {
     background: #dbeafe;
+}
+
+.status-select {
+    min-width: 160px;
+    max-width: 240px;
+    padding: 2px 4px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    font: inherit;
+    font-weight: 700;
 }
 
 .empty {

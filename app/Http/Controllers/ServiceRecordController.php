@@ -882,13 +882,22 @@ class ServiceRecordController extends Controller
                 );
             }
             if ($sn !== '') {
-                $query->where('SN', 'like', $this->likeContains($sn));
+                $query->whereRaw(
+                    'LOWER(SN) LIKE ?',
+                    [$this->likeContains(mb_strtolower($sn, 'UTF-8'))]
+                );
             }
             if ($dealer !== '') {
-                $query->where('dealer', 'like', $this->likeContains($dealer));
+                $query->whereRaw(
+                    'LOWER(dealer) LIKE ?',
+                    [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
+                );
             }
             if ($contactPerson !== '') {
-                $query->where('contactPerson', 'like', $this->likeContains($contactPerson));
+                $query->whereRaw(
+                    'LOWER(contactPerson) LIKE ?',
+                    [$this->likeContains(mb_strtolower($contactPerson, 'UTF-8'))]
+                );
             }
         }
 

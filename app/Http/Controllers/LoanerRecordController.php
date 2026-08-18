@@ -1996,15 +1996,15 @@ class LoanerRecordController extends Controller
             return;
         }
 
-        // 共有項目同期（全版）
+        if ($statusColumn === 'currentStatus') {
+            LoanerMaster::unifyCurrentStatus($loanerId, $status);
+
+            return;
+        }
+
         LoanerMaster::syncSharedFieldsAcrossVersions($loanerId, [
             $statusColumn => $status,
         ]);
-
-        // sync 対象外だった場合（列名不一致など）のフォールバック
-        if ($statusColumn === 'currentStatus') {
-            return;
-        }
 
         LoanerMaster::query()
             ->where(function ($query) use ($loanerId) {

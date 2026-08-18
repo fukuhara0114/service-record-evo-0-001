@@ -866,15 +866,26 @@
             </div>
         </div>
 
-        <div v-if="showParentCaseDialog" class="confirm-overlay" @click.self="closeParentCaseDialog">
+        <div v-if="showParentCaseDialog" class="confirm-overlay parent-case-overlay" @click.self="closeParentCaseDialog">
             <div class="confirm-panel parent-case-panel" @click.stop>
-                <div class="confirm-header">
+                <div class="confirm-header parent-case-header">
                     <h3>親案件検索</h3>
-                    <button type="button" class="close-btn" @click="closeParentCaseDialog">×</button>
+                    <div class="parent-case-header-actions">
+                        <button type="button" class="btn btn-secondary" @click="closeParentCaseDialog">閉じる</button>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            :disabled="!parentCaseRecord"
+                            @click="adoptParentCase"
+                        >
+                            採用
+                        </button>
+                        <button type="button" class="close-btn" @click="closeParentCaseDialog">×</button>
+                    </div>
                 </div>
                 <div class="confirm-body parent-case-body">
                     <div class="parent-case-search-row">
-                        <label class="parent-case-search-field">
+                        <label class="parent-case-search-field parent-case-search-id">
                             <span>parentID</span>
                             <input
                                 v-model="parentCaseSearchId"
@@ -893,68 +904,145 @@
                         >
                             {{ parentCaseLoading ? '検索中...' : '検索' }}
                         </button>
+                        <label class="parent-case-search-field">
+                            <span>機種名</span>
+                            <input
+                                v-model="parentCaseSearchProductName"
+                                type="text"
+                                class="parent-case-search-input"
+                                placeholder="機種名"
+                                @keydown.enter.prevent="searchParentCaseByFields"
+                            >
+                        </label>
+                        <label class="parent-case-search-field">
+                            <span>SN</span>
+                            <input
+                                v-model="parentCaseSearchSn"
+                                type="text"
+                                class="parent-case-search-input"
+                                placeholder="SN"
+                                @keydown.enter.prevent="searchParentCaseByFields"
+                            >
+                        </label>
+                        <label class="parent-case-search-field">
+                            <span>dealer</span>
+                            <input
+                                v-model="parentCaseSearchDealer"
+                                type="text"
+                                class="parent-case-search-input"
+                                placeholder="dealer"
+                                @keydown.enter.prevent="searchParentCaseByFields"
+                            >
+                        </label>
+                        <label class="parent-case-search-field">
+                            <span>担当者</span>
+                            <input
+                                v-model="parentCaseSearchContact"
+                                type="text"
+                                class="parent-case-search-input"
+                                placeholder="担当者"
+                                @keydown.enter.prevent="searchParentCaseByFields"
+                            >
+                        </label>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            :disabled="parentCaseLoading"
+                            @click="searchParentCaseByFields"
+                        >
+                            {{ parentCaseLoading ? '検索中...' : '検索' }}
+                        </button>
                     </div>
                     <p v-if="parentCaseError" class="parent-case-error">{{ parentCaseError }}</p>
-                    <div v-else-if="parentCaseRecord" class="parent-case-result">
-                        <p class="parent-case-result-meta">
-                            orderID: {{ parentCaseRecord.orderID }}
-                            <template v-if="parentCaseRecord.order_type"> / {{ parentCaseRecord.order_type }}</template>
-                            <template v-if="parentCaseRecord.productName"> / {{ parentCaseRecord.productName }}</template>
-                            <template v-if="parentCaseRecord.SN"> / SN {{ parentCaseRecord.SN }}</template>
-                        </p>
-                        <div class="parent-case-stakeholder-grid">
-                            <section class="parent-case-stakeholder">
-                                <h4>dealer</h4>
-                                <dl>
-                                    <div><dt>dealer</dt><dd>{{ displayText(parentCaseRecord.dealer) }}</dd></div>
-                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.dealer_depart) }}</dd></div>
-                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.contactPerson) }}</dd></div>
-                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.phone) }}</dd></div>
-                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.email) }}</dd></div>
-                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.zipcode) }}</dd></div>
-                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.address1) }}</dd></div>
-                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.address2) }}</dd></div>
-                                </dl>
-                            </section>
-                            <section class="parent-case-stakeholder">
-                                <h4>endUser</h4>
-                                <dl>
-                                    <div><dt>endUser</dt><dd>{{ displayText(parentCaseRecord.endUser) }}</dd></div>
-                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.endUser_depart) }}</dd></div>
-                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.endUser_contactPerson) }}</dd></div>
-                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.endUser_phone) }}</dd></div>
-                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.endUser_email) }}</dd></div>
-                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.endUser_zipcode) }}</dd></div>
-                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.endUser_address1) }}</dd></div>
-                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.endUser_address2) }}</dd></div>
-                                </dl>
-                            </section>
-                            <section class="parent-case-stakeholder">
-                                <h4>delivery</h4>
-                                <dl>
-                                    <div><dt>delivery</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_company) }}</dd></div>
-                                    <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_depart) }}</dd></div>
-                                    <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_contactPerson) }}</dd></div>
-                                    <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_phone) }}</dd></div>
-                                    <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_email) }}</dd></div>
-                                    <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_zipcode) }}</dd></div>
-                                    <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address1) }}</dd></div>
-                                    <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address2) }}</dd></div>
-                                </dl>
-                            </section>
-                        </div>
+                    <div v-if="parentCaseRecords.length" class="parent-case-hits">
+                        <button
+                            v-for="record in parentCaseRecords"
+                            :key="record.orderID"
+                            type="button"
+                            class="parent-case-hit"
+                            :class="{ active: Number(parentCaseRecord?.orderID) === Number(record.orderID) }"
+                            @click="selectParentCaseRecord(record)"
+                        >
+                            <span>orderID: {{ record.orderID }}</span>
+                            <span>{{ record.productName || '—' }}</span>
+                            <span>SN: {{ record.SN || '—' }}</span>
+                            <span>{{ record.dealer || '—' }}</span>
+                            <span>{{ record.contactPerson || '—' }}</span>
+                        </button>
                     </div>
-                </div>
-                <div class="confirm-actions">
-                    <button type="button" class="btn btn-secondary" @click="closeParentCaseDialog">閉じる</button>
-                    <button
-                        type="button"
-                        class="btn btn-primary"
-                        :disabled="!parentCaseRecord"
-                        @click="adoptParentCase"
-                    >
-                        採用
-                    </button>
+                    <div v-if="parentCaseRecord" class="parent-case-split">
+                        <div class="parent-case-result">
+                            <p class="parent-case-result-meta">
+                                orderID: {{ parentCaseRecord.orderID }}
+                                <template v-if="parentCaseRecord.order_type"> / {{ parentCaseRecord.order_type }}</template>
+                                <template v-if="parentCaseRecord.productName"> / {{ parentCaseRecord.productName }}</template>
+                                <template v-if="parentCaseRecord.SN"> / SN {{ parentCaseRecord.SN }}</template>
+                            </p>
+                            <div class="parent-case-stakeholder-grid">
+                                <section class="parent-case-stakeholder">
+                                    <h4>dealer</h4>
+                                    <dl>
+                                        <div><dt>dealer</dt><dd>{{ displayText(parentCaseRecord.dealer) }}</dd></div>
+                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.dealer_depart) }}</dd></div>
+                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.contactPerson) }}</dd></div>
+                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.phone) }}</dd></div>
+                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.email) }}</dd></div>
+                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.zipcode) }}</dd></div>
+                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.address1) }}</dd></div>
+                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.address2) }}</dd></div>
+                                    </dl>
+                                </section>
+                                <section class="parent-case-stakeholder">
+                                    <h4>endUser</h4>
+                                    <dl>
+                                        <div><dt>endUser</dt><dd>{{ displayText(parentCaseRecord.endUser) }}</dd></div>
+                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.endUser_depart) }}</dd></div>
+                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.endUser_contactPerson) }}</dd></div>
+                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.endUser_phone) }}</dd></div>
+                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.endUser_email) }}</dd></div>
+                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.endUser_zipcode) }}</dd></div>
+                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.endUser_address1) }}</dd></div>
+                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.endUser_address2) }}</dd></div>
+                                    </dl>
+                                </section>
+                                <section class="parent-case-stakeholder">
+                                    <h4>delivery</h4>
+                                    <dl>
+                                        <div><dt>delivery</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_company) }}</dd></div>
+                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_depart) }}</dd></div>
+                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_contactPerson) }}</dd></div>
+                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_phone) }}</dd></div>
+                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_email) }}</dd></div>
+                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_zipcode) }}</dd></div>
+                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address1) }}</dd></div>
+                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address2) }}</dd></div>
+                                    </dl>
+                                </section>
+                            </div>
+                        </div>
+                        <section class="parent-case-files">
+                            <h4>Files（{{ parentCaseFilesSorted.length }}件）</h4>
+                            <p v-if="parentCaseFilesLoading" class="parent-case-files-status">Files を読み込み中...</p>
+                            <p v-else-if="parentCaseFilesError" class="parent-case-files-status error">{{ parentCaseFilesError }}</p>
+                            <div v-else class="parent-case-files-list">
+                                <AttachedFileItem
+                                    v-for="file in parentCaseFilesSorted"
+                                    :key="file.id"
+                                    :file="file"
+                                    :order-id="parentCaseRecord.orderID"
+                                    :file-base-url="parentCaseFilesBaseUrl"
+                                    :selected="parentCaseSelectedFileId === file.id"
+                                    :can-move-up="false"
+                                    :can-move-down="false"
+                                    :sorting="false"
+                                    @select="parentCaseSelectedFileId = file.id"
+                                />
+                                <p v-if="!parentCaseFilesSorted.length" class="parent-case-files-status">
+                                    書類ファイルがありません。
+                                </p>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1046,6 +1134,7 @@ import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
+import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 
 const props = defineProps({
     sourceFile: {
@@ -1188,9 +1277,28 @@ const showWaitingConfirm = ref(false)
 const showLoanerStockDialog = ref(false)
 const showParentCaseDialog = ref(false)
 const parentCaseSearchId = ref('')
+const parentCaseSearchProductName = ref('')
+const parentCaseSearchSn = ref('')
+const parentCaseSearchDealer = ref('')
+const parentCaseSearchContact = ref('')
+const parentCaseRecords = ref([])
 const parentCaseRecord = ref(null)
 const parentCaseLoading = ref(false)
 const parentCaseError = ref('')
+const parentCaseFiles = ref([])
+const parentCaseFilesLoading = ref(false)
+const parentCaseFilesError = ref('')
+const parentCaseSelectedFileId = ref(null)
+let parentCaseFilesRequestSeq = 0
+const parentCaseFilesBaseUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/files`)
+const parentCaseFilesSorted = computed(() =>
+    [...(parentCaseFiles.value ?? [])].sort((a, b) => {
+        const aSort = Number(a?.sortNum ?? Number.MAX_SAFE_INTEGER)
+        const bSort = Number(b?.sortNum ?? Number.MAX_SAFE_INTEGER)
+        if (aSort !== bSort) return aSort - bSort
+        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+    }),
+)
 const maintenanceContracts = ref([])
 const selectedMaintenanceContractId = ref(null)
 const maintenanceSearchLoading = ref(false)
@@ -1366,17 +1474,62 @@ function closeParentCaseDialog() {
     parentCaseError.value = ''
 }
 
+function selectParentCaseRecord(record) {
+    parentCaseRecord.value = record
+    parentCaseError.value = ''
+}
+
+async function loadParentCaseFiles(orderID) {
+    const requestSeq = ++parentCaseFilesRequestSeq
+    parentCaseFiles.value = []
+    parentCaseFilesError.value = ''
+    parentCaseSelectedFileId.value = null
+
+    if (!orderID) {
+        parentCaseFilesLoading.value = false
+        return
+    }
+
+    parentCaseFilesLoading.value = true
+    try {
+        const url = `${page.props.appBaseUrl}/servicerecord/attachments/${encodeURIComponent(orderID)}`
+        const result = await apiFetch(url)
+        if (requestSeq !== parentCaseFilesRequestSeq) return
+        if (!result?.response?.ok) {
+            throw new Error(result?.data?.message || 'Files の取得に失敗しました。')
+        }
+        parentCaseFiles.value = result.data?.files ?? []
+        parentCaseSelectedFileId.value = parentCaseFiles.value[0]?.id ?? null
+    } catch (e) {
+        if (requestSeq !== parentCaseFilesRequestSeq) return
+        parentCaseFilesError.value = e.message || 'Files の取得に失敗しました。'
+    } finally {
+        if (requestSeq === parentCaseFilesRequestSeq) {
+            parentCaseFilesLoading.value = false
+        }
+    }
+}
+
+watch(
+    () => parentCaseRecord.value?.orderID,
+    (orderID) => {
+        loadParentCaseFiles(orderID)
+    },
+)
+
 async function searchParentCase() {
     const orderId = String(parentCaseSearchId.value ?? '').trim()
     if (!orderId) {
         parentCaseError.value = 'parentID を入力してください。'
         parentCaseRecord.value = null
+        parentCaseRecords.value = []
         return
     }
 
     parentCaseLoading.value = true
     parentCaseError.value = ''
     parentCaseRecord.value = null
+    parentCaseRecords.value = []
 
     try {
         const url = `${page.props.appBaseUrl}/servicerecord/record/${encodeURIComponent(orderId)}`
@@ -1391,6 +1544,54 @@ async function searchParentCase() {
             throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
         }
         parentCaseRecord.value = data
+        parentCaseRecords.value = data ? [data] : []
+    } catch (e) {
+        parentCaseError.value = e.message || '親案件の検索に失敗しました。'
+    } finally {
+        parentCaseLoading.value = false
+    }
+}
+
+async function searchParentCaseByFields() {
+    const productName = String(parentCaseSearchProductName.value ?? '').trim()
+    const sn = String(parentCaseSearchSn.value ?? '').trim()
+    const dealer = String(parentCaseSearchDealer.value ?? '').trim()
+    const contactPerson = String(parentCaseSearchContact.value ?? '').trim()
+
+    if (!productName && !sn && !dealer && !contactPerson) {
+        parentCaseError.value = '機種名 / SN / dealer / 担当者のいずれかを入力してください。'
+        parentCaseRecord.value = null
+        parentCaseRecords.value = []
+        return
+    }
+
+    parentCaseLoading.value = true
+    parentCaseError.value = ''
+    parentCaseRecord.value = null
+    parentCaseRecords.value = []
+
+    try {
+        const params = new URLSearchParams({ order_type: 'service' })
+        if (productName) params.set('productName', productName)
+        if (sn) params.set('SN', sn)
+        if (dealer) params.set('dealer', dealer)
+        if (contactPerson) params.set('contactPerson', contactPerson)
+
+        const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        const records = data.records ?? []
+        parentCaseRecords.value = records
+        if (records.length === 0) {
+            throw new Error('該当する親案件はありません。')
+        }
+        parentCaseRecord.value = records[0]
     } catch (e) {
         parentCaseError.value = e.message || '親案件の検索に失敗しました。'
     } finally {
@@ -2966,20 +3167,52 @@ async function save() {
     max-width: 96vw;
 }
 
+.parent-case-overlay {
+    align-items: stretch;
+    padding: 8px;
+}
+
 .parent-case-panel {
-    width: min(1080px, 96vw);
-    max-width: 96vw;
+    width: min(1680px, 100%);
+    max-width: 100%;
+    height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.parent-case-header {
+    flex: 0 0 auto;
+}
+
+.parent-case-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .parent-case-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding-top: 12px;
+    padding-bottom: 12px;
 }
 
 .parent-case-search-row {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 12px;
+    flex: 0 0 auto;
+}
+
+.parent-case-search-row > .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .parent-case-search-field {
@@ -2987,6 +3220,12 @@ async function save() {
     flex-direction: column;
     gap: 4px;
     margin: 0;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.parent-case-search-id {
+    flex: 0 0 120px;
 }
 
 .parent-case-search-field span {
@@ -2996,11 +3235,122 @@ async function save() {
 }
 
 .parent-case-search-input {
-    width: 180px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 6px 8px;
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     font-size: 14px;
+}
+
+.parent-case-hits {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-height: 150px;
+    overflow: auto;
+    margin-bottom: 12px;
+}
+
+.parent-case-hit {
+    display: grid;
+    grid-template-columns: 120px 1.4fr 1fr 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.parent-case-hit.active {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.parent-case-hit span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.parent-case-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
+    gap: 12px;
+    overflow: hidden;
+}
+
+.parent-case-result {
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.parent-case-files {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    padding: 10px;
+}
+
+.parent-case-files h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #1e40af;
+    flex: 0 0 auto;
+}
+
+.parent-case-files-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: auto;
+}
+
+.parent-case-files-list :deep(.file-item) {
+    flex: 0 0 auto;
+}
+
+.parent-case-files-list :deep(.file-preview) {
+    width: 100%;
+    aspect-ratio: 210 / 297;
+    max-height: none;
+    height: auto;
+}
+
+.parent-case-files-list :deep(.pdf-frame),
+.parent-case-files-list :deep(.image-preview) {
+    width: 100%;
+    height: 100%;
+}
+
+.parent-case-files-status {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.parent-case-files-status.error {
+    color: #b91c1c;
+    font-weight: 700;
 }
 
 .parent-case-error {
@@ -3017,8 +3367,8 @@ async function save() {
 }
 
 .parent-case-stakeholder-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 10px;
 }
 
@@ -3057,12 +3407,6 @@ async function save() {
     font-size: 12px;
     overflow-wrap: anywhere;
     color: #0f172a;
-}
-
-@media (max-width: 900px) {
-    .parent-case-stakeholder-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 .stock-list-body {
