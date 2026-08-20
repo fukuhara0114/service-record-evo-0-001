@@ -1,5 +1,6 @@
 <template>
     <div
+        ref="rootEl"
         class="file-item"
         :class="{ 'file-item-selected': selected }"
         @click="$emit('select', file.id)"
@@ -26,13 +27,36 @@
                 <a :href="fileUrl" target="_blank" rel="noopener" class="open-link" @click.stop>別タブで開く</a>
             </div>
 
+            <div class="file-scroll-nav" @click.stop>
+                <button
+                    type="button"
+                    class="file-scroll-nav-btn"
+                    :disabled="!canMoveUp"
+                    title="前のファイルへ"
+                    aria-label="前のファイルへ"
+                    @click="scrollToAdjacent('up')"
+                >
+                    ↑
+                </button>
+                <button
+                    type="button"
+                    class="file-scroll-nav-btn"
+                    :disabled="!canMoveDown"
+                    title="次のファイルへ"
+                    aria-label="次のファイルへ"
+                    @click="scrollToAdjacent('down')"
+                >
+                    ↓
+                </button>
+            </div>
+
             <div class="sort-control" @click.stop>
                 <span class="sort-label">順序</span>
                 <button
                     type="button"
                     class="sort-btn"
                     :disabled="!canMoveUp || sorting"
-                    title="上へ"
+                    title="順序を上へ"
                     @click="$emit('move', 'up')"
                 >
                     ↑
@@ -49,7 +73,7 @@
                     type="button"
                     class="sort-btn"
                     :disabled="!canMoveDown || sorting"
-                    title="下へ"
+                    title="順序を下へ"
                     @click="$emit('move', 'down')"
                 >
                     ↓
@@ -181,6 +205,49 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select', 'move', 'sort-num-change'])
+
+const rootEl = ref(null)
+
+function findScrollParent(el) {
+    let node = el?.parentElement
+    while (node && node !== document.body) {
+        const style = getComputedStyle(node)
+        const overflowY = style.overflowY
+        if (
+            (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+            && node.scrollHeight > node.clientHeight + 1
+        ) {
+            return node
+        }
+        node = node.parentElement
+    }
+    return null
+}
+
+function scrollToAdjacent(direction) {
+    const el = rootEl.value
+    if (!el?.parentElement) return
+
+    const siblings = Array.from(el.parentElement.children).filter((child) => (
+        child.classList?.contains('file-item')
+    ))
+    const index = siblings.indexOf(el)
+    if (index < 0) return
+
+    const target = direction === 'up' ? siblings[index - 1] : siblings[index + 1]
+    if (!target) return
+
+    const scrollParent = findScrollParent(el)
+    if (scrollParent) {
+        const parentRect = scrollParent.getBoundingClientRect()
+        const targetRect = target.getBoundingClientRect()
+        const nextTop = scrollParent.scrollTop + (targetRect.top - parentRect.top)
+        scrollParent.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' })
+        return
+    }
+
+    target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+}
 
 const isPdf = computed(() => props.file.fileType === 'application/pdf')
 const isImage = computed(() => (props.file.fileType || '').startsWith('image/'))
@@ -409,12 +476,50 @@ function commitSortNum() {
 }
 
 .file-toolbar {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 6px;
     flex-wrap: nowrap;
+}
+
+.file-scroll-nav {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    z-index: 1;
+}
+
+.file-scroll-nav-btn {
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #64748b;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.file-scroll-nav-btn:hover:not(:disabled) {
+    background: #e2e8f0;
+    border-color: #475569;
+}
+
+.file-scroll-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 .file-actions {

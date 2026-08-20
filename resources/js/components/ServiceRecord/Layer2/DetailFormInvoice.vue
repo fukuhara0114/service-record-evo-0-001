@@ -2,14 +2,11 @@
     <div class="invoice-form">
         <header class="invoice-topbar">
             <span class="invoice-badge">起伝</span>
-            <span class="invoice-meta">{{ draftRecord?.productName || record?.productName || '—' }}</span>
-            <span class="invoice-meta">S/N: {{ draftRecord?.SN || record?.SN || '—' }}</span>
             <span class="invoice-id-item">RMA#: {{ draftRecord?.RMA || record?.RMA || '—' }}</span>
             <span class="invoice-id-item">Loaner: {{ loanerLabel }}</span>
             <span class="invoice-id-item">受注#: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
             <span class="invoice-id-item">注文#: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
             <span class="invoice-id-item">Col: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
-            <span class="invoice-meta invoice-meta-right">{{ returnCodeLabel }}</span>
         </header>
 
         <section class="invoice-toolbar">
@@ -53,9 +50,6 @@
                 >
             </label>
             <div class="invoice-toolbar-actions">
-                <button type="button" class="action-btn action-btn-wide" :disabled="statusActionSaving" @click="showGalleryDialog = true">
-                    Gallery
-                </button>
                 <button type="button" class="action-btn action-btn-primary action-btn-wide" :disabled="statusActionSaving" @click="$emit('save')">
                     保存
                 </button>
@@ -76,13 +70,6 @@
                     差戻
                 </button>
             </div>
-            <span class="files-count">
-                {{ sortedFiles.length }} File(s)
-                ／ 撮影画像 {{ capturedImages.length }}件
-            </span>
-            <button type="button" class="action-btn" :disabled="statusActionSaving" @click="onBack">
-                戻る
-            </button>
         </section>
         <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
 
@@ -103,7 +90,13 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>{{ returnCodeLabel }}</td>
+                                    <td>
+                                        <span
+                                            v-if="isLoanerRecord"
+                                            class="loaner-case-badge"
+                                        >貸出機案件</span>
+                                        <template v-else>{{ returnCodeLabel }}</template>
+                                    </td>
                                     <td class="col-amount">{{ formatPrice(workPrice) }}</td>
                                     <td>作業内容</td>
                                 </tr>
@@ -302,15 +295,6 @@
                 </div>
             </Pane>
         </Splitpanes>
-
-        <CapturedImageGalleryDialog
-            v-if="showGalleryDialog"
-            title="Gallery"
-            :associatedID="galleryAssociatedId"
-            :associated-id="galleryAssociatedId"
-            @close="showGalleryDialog = false"
-            @associated="emit('reload-attachments')"
-        />
     </div>
 </template>
 
@@ -321,7 +305,6 @@ import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
-import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
@@ -348,8 +331,6 @@ const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
-const showGalleryDialog = ref(false)
-const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const fileSortSaving = ref(false)
 const fileDropInputEl = ref(null)
 const showFileDropzone = ref(false)
@@ -404,6 +385,11 @@ const sortedFiles = computed(() =>
 )
 
 const canDropFiles = computed(() => Boolean(props.record?.orderID))
+
+const isLoanerRecord = computed(() => {
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type
+    return orderType === 'loaner'
+})
 
 const returnCodeLabel = computed(() => {
     const id = props.draftRecord?.returnCode ?? props.record?.returnCode
@@ -881,11 +867,6 @@ function onRemand() {
     })
 }
 
-function onBack() {
-    if (statusActionSaving.value) return
-    emit('workflow-done', { action: 'back' })
-}
-
 watch(() => props.files, (newFiles) => {
     if (selectedFileId.value && !newFiles.some(f => f.id === selectedFileId.value)) {
         selectedFileId.value = null
@@ -945,13 +926,9 @@ watch(
 }
 
 .invoice-id-item {
-    font-size: 13px;
+    font-size: 19px;
     font-weight: 700;
     color: #1e3a8a;
-}
-
-.invoice-meta-right {
-    margin-left: auto;
 }
 
 .invoice-toolbar {
@@ -996,16 +973,14 @@ watch(
 
 .invoice-toolbar-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 50px;
-}
-
-.files-count {
-    font-size: 12px;
-    color: #64748b;
+    justify-content: space-evenly;
     margin-left: auto;
-    margin-right: 8px;
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
+    box-sizing: border-box;
 }
 
 .action-btn-mapics {
@@ -1116,8 +1091,20 @@ watch(
 }
 
 .panel-price .price-table {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
+}
+
+.loaner-case-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 .price-table th,
@@ -1156,16 +1143,16 @@ watch(
     gap: 10px;
 }
 
-.info-grid h4 {
+.panel-info .info-grid h4 {
     margin: 0 0 6px;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     color: #334155;
 }
 
-.info-grid p {
+.panel-info .info-grid p {
     margin: 0 0 2px;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     color: #1e293b;
     word-break: break-word;

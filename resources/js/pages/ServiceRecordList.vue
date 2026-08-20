@@ -718,7 +718,7 @@
                                     @blur="onEntityIdBlur(r, $event)"
                                 >
                             </td>
-                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ smReturnCodeLabel(r.returnCode) || r.return_code_master?.description || '' }}</td>
                             <td>{{ r.incident }}</td>
                             <td style="text-align: center;">{{ symptomsNumForRecord(r) }}</td>
                             <td>{{ r.symptoms }}</td>
@@ -1393,7 +1393,6 @@ function resolveCallerReturnUrl() {
 }
 
 const callerReturnUrl = ref(resolveCallerReturnUrl())
-const SYMPTOMS_NUM_RECAL_DESCRIPTIONS = new Set(['再校正', '保守内再校正', '新台再校正'])
 const abroadExcelHeaders = [
     'Product Name',
     'S/N',
@@ -1410,9 +1409,23 @@ const ABROAD_RMA_HEADER_INDEX = 3
 const ABROAD_PRETEST_HEADER_INDEX = 6
 const ABROAD_POSTTEST_HEADER_INDEX = 7
 
+/** symptomsNum: returnCode が 1 のとき 3、それ以外は 0 */
 function symptomsNumForRecord(record) {
-    const description = String(record?.return_code_master?.description ?? '').trim()
-    return SYMPTOMS_NUM_RECAL_DESCRIPTIONS.has(description) ? 3 : 0
+    return Number(record?.returnCode) === 1 ? 3 : 0
+}
+
+/** 旧システムと同様: servicerecord.returnCode → SM 連携用 returnCode 文字列 */
+function smReturnCodeValue(returnCode) {
+    const code = Number(returnCode)
+    if ([1, 5].includes(code)) return 'CERTIFICATION'
+    if ([2, 4].includes(code)) return 'FLAT RATE REPAIR'
+    if (code === 3) return 'WARRANTY REPAIR'
+    if (code === 12) return 'FIELD SERVICE REGIONAL'
+    return ''
+}
+
+function smReturnCodeLabel(returnCode) {
+    return smReturnCodeValue(returnCode)
 }
 
 function onEntityIdFocus(record, event) {
@@ -1483,7 +1496,7 @@ function exportIncidentParamJson(theUserNameKanji) {
         const symptoms = String(r.symptoms ?? '').trim()
         const poNum = String(r.poNum ?? r.RMA ?? '').trim()
         const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
-        const returnCode = String(r.return_code_master?.description ?? '').trim()
+        const returnCode = smReturnCodeValue(r.returnCode)
 
         if (!entityID || !symptoms || !symptomNum || !returnCode || !incident) {
             alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
@@ -1543,7 +1556,7 @@ function exportUpdatePoParamJson(theUserNameKanji) {
         const symptoms = String(r.symptoms ?? '').trim()
         const poNum = String(r.poNum ?? '').trim()
         const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
-        const returnCode = String(r.return_code_master?.description ?? '').trim()
+        const returnCode = smReturnCodeValue(r.returnCode)
 
         if (!entityID || !symptoms || !symptomNum || !returnCode || !RMA || !WO || !poNum) {
             alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
@@ -2694,10 +2707,16 @@ async function openSecondLayer(record) {
 
     // 貸出詳細へ行くのは、実データの order_type が loaner/waiting_list のときだけ。
     // Engineer では orderTypeFilter が session に残っていても service は通常詳細を開く。
+    // Invoice / Closing / ShippingPrep / Logistics では loaner でも画面内の詳細（invoice 等）を開く。
     const isLoanerLike =
         record.order_type === 'loaner'
         || record.order_type === 'waiting_list'
-    const openAsLoanerDetail = isLoanerLike && (
+    const preferInPanelDetail =
+        props.mode === 'shippingPrep'
+        || props.mode === 'logistics'
+        || orderTypeFilter.value === 'invoice'
+        || orderTypeFilter.value === 'closing'
+    const openAsLoanerDetail = isLoanerLike && !preferInPanelDetail && (
         orderTypeFilter.value === 'loaner'
         || orderTypeFilter.value === 'waiting_list'
         || props.mode === 'engineer'

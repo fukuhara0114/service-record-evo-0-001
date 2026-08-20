@@ -11,29 +11,27 @@
                             Files（書類 {{ sortedFiles.length }}件
                             ／ 撮影画像 {{ capturedImages.length }}件）
                         </h3>
+                        <button
+                            type="button"
+                            class="captured-toggle"
+                            :class="{ 'has-images': capturedImages.length > 0 }"
+                            @click="capturedImagesOpen = !capturedImagesOpen"
+                        >
+                            <span>撮影画像（{{ capturedImages.length }}件）</span>
+                            <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
+                        </button>
                         <div class="panel-actions">
                             <button type="button" class="action-btn" :disabled="!selectedFileId" @click="openFileDelete">削除</button>
                             <button type="button" class="action-btn action-btn-primary" @click="openFileCreate">新規追加</button>
                         </div>
                     </div>
 
-                    <div class="captured-images-panel">
-                            <button
-                                type="button"
-                                class="captured-toggle"
-                                :class="{ 'has-images': capturedImages.length > 0 }"
-                                @click="capturedImagesOpen = !capturedImagesOpen"
-                            >
-                                <span>撮影画像（{{ capturedImages.length }}件）</span>
-                                <span class="captured-toggle-icon">{{ capturedImagesOpen ? '▲' : '▼' }}</span>
-                            </button>
-                        <div v-show="capturedImagesOpen" class="captured-images-body">
-                            <AssociatedCapturedImages
-                                :images="capturedImages"
-                                @changed="emit('reload-attachments')"
-                            />
-                            <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
-                        </div>
+                    <div v-show="capturedImagesOpen" class="captured-images-body">
+                        <AssociatedCapturedImages
+                            :images="capturedImages"
+                            @changed="emit('reload-attachments')"
+                        />
+                        <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
                     </div>
 
                     <div class="files-list">
@@ -120,126 +118,145 @@
                             </button>
                         </div>
                     </div>
-                    
-                    <section class="panel panel-block panel-stocked">
-                        <aside class="card-side">
-                            <h3>stocked Parts（{{ stockedParts.length }}件）</h3>
-                            <div class="card-side-actions">
-                                <button type="button" class="action-btn action-btn-primary" @click="openStockedPartCreate">新規追加</button>
-                                <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartEdit">数量編集</button>
-                                <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartDelete">削除</button>
-                            </div>
-                        </aside>
-                        <div class="card-main">
-                            <div v-if="stockedParts.length" class="table-wrap">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Part ID</th>
-                                            <th>部品名</th>
-                                            <th>説明</th>
-                                            <th>使用数</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="part in stockedParts"
-                                            :key="part.id"
-                                            class="table-row"
-                                            :class="{ 'active-row': selectedStockedPartId === part.id }"
-                                            @click="selectedStockedPartId = part.id"
-                                            @dblclick="openStockedPartEditFor(part)"
-                                        >
-                                            <td>{{ part.partID }}</td>
-                                            <td>{{ part.stocked_part_master?.partName || '—' }}</td>
-                                            <td class="text-cell">{{ part.stocked_part_master?.description || '—' }}</td>
-                                            <td>{{ part.quantity ?? '—' }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else class="empty-message">stocked Parts がありません。</p>
-                        </div>
-                    </section>
 
-                    <section class="panel panel-block panel-notes">
-                        <aside class="card-side">
-                            <h3>Notes（{{ sharedNotes.length }}件）</h3>
-                            <div class="card-side-actions">
-                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(false)">新規追加</button>
-                                <button type="button" class="action-btn" :disabled="!canModifySelectedSharedNote" @click="openNoteEdit(false)">編集</button>
-                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedSharedNote" @click="openNoteDelete(false)">削除</button>
-                            </div>
-                        </aside>
-                        <div class="card-main">
-                            <NotesTable
-                                v-model:selected-id="selectedSharedNoteId"
-                                :notes="sharedNotes"
-                                :record-order-id="record?.orderID ?? draftRecord?.orderID"
-                                :current-user-name="currentUserName"
-                                @edit="openNoteEdit(false)"
-                            />
-                        </div>
-                    </section>
+                    <Splitpanes
+                        horizontal
+                        class="default-theme right-inner-splitpanes"
+                        @resized="syncRightInnerPaneSizes"
+                    >
+                        <Pane
+                            class="right-inner-pane right-inner-pane-stocked"
+                            :size="stockedPaneSize"
+                            :min-size="18"
+                        >
+                            <section class="panel panel-block panel-stocked">
+                                <aside class="card-side">
+                                    <h3>stocked Parts（{{ stockedParts.length }}件）</h3>
+                                    <div class="card-side-actions">
+                                        <button type="button" class="action-btn action-btn-primary" @click="openStockedPartCreate">新規追加</button>
+                                        <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartEdit">数量編集</button>
+                                        <button type="button" class="action-btn" :disabled="!selectedStockedPartId" @click="openStockedPartDelete">削除</button>
+                                    </div>
+                                </aside>
+                                <div class="card-main">
+                                    <div v-if="stockedParts.length" class="table-wrap">
+                                        <table class="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Part ID</th>
+                                                    <th>部品名</th>
+                                                    <th>説明</th>
+                                                    <th>使用数</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr
+                                                    v-for="part in stockedParts"
+                                                    :key="part.id"
+                                                    class="table-row"
+                                                    :class="{ 'active-row': selectedStockedPartId === part.id }"
+                                                    @click="selectedStockedPartId = part.id"
+                                                    @dblclick="openStockedPartEditFor(part)"
+                                                >
+                                                    <td>{{ part.partID }}</td>
+                                                    <td>{{ part.stocked_part_master?.partName || '—' }}</td>
+                                                    <td class="text-cell">{{ part.stocked_part_master?.description || '—' }}</td>
+                                                    <td>{{ part.quantity ?? '—' }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p v-else class="empty-message">stocked Parts がありません。</p>
+                                </div>
+                            </section>
+                        </Pane>
 
-                    <section class="panel panel-block panel-notes">
-                        <aside class="card-side">
-                            <h3>Personal Notes（{{ personalNotes.length }}件）</h3>
-                            <div class="card-side-actions">
-                                <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(true)">新規追加</button>
-                                <button type="button" class="action-btn" :disabled="!canModifySelectedPersonalNote" @click="openNoteEdit(true)">編集</button>
-                                <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedPersonalNote" @click="openNoteDelete(true)">削除</button>
-                            </div>
-                        </aside>
-                        <div class="card-main">
-                            <NotesTable
-                                v-model:selected-id="selectedPersonalNoteId"
-                                :notes="personalNotes"
-                                :record-order-id="record?.orderID ?? draftRecord?.orderID"
-                                :current-user-name="currentUserName"
-                                empty-message="Personal Notes がありません。"
-                                @edit="openNoteEdit(true)"
-                            />
-                        </div>
-                    </section>
+                        <Pane
+                            class="right-inner-pane right-inner-pane-notes"
+                            :size="notesPaneSize"
+                            :min-size="20"
+                        >
+                            <div class="notes-below-stack">
+                                <section class="panel panel-block panel-notes">
+                                    <aside class="card-side">
+                                        <h3>Notes（{{ sharedNotes.length }}件）</h3>
+                                        <div class="card-side-actions">
+                                            <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(false)">新規追加</button>
+                                            <button type="button" class="action-btn" :disabled="!canModifySelectedSharedNote" @click="openNoteEdit(false)">編集</button>
+                                            <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedSharedNote" @click="openNoteDelete(false)">削除</button>
+                                        </div>
+                                    </aside>
+                                    <div class="card-main">
+                                        <NotesTable
+                                            v-model:selected-id="selectedSharedNoteId"
+                                            :notes="sharedNotes"
+                                            :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                            :current-user-name="currentUserName"
+                                            @edit="openNoteEdit(false)"
+                                        />
+                                    </div>
+                                </section>
 
+                                <section class="panel panel-block panel-notes">
+                                    <aside class="card-side">
+                                        <h3>Personal Notes（{{ personalNotes.length }}件）</h3>
+                                        <div class="card-side-actions">
+                                            <button type="button" class="action-btn action-btn-primary" @click="openNoteCreate(true)">新規追加</button>
+                                            <button type="button" class="action-btn" :disabled="!canModifySelectedPersonalNote" @click="openNoteEdit(true)">編集</button>
+                                            <button type="button" class="action-btn action-btn-danger" :disabled="!canModifySelectedPersonalNote" @click="openNoteDelete(true)">削除</button>
+                                        </div>
+                                    </aside>
+                                    <div class="card-main">
+                                        <NotesTable
+                                            v-model:selected-id="selectedPersonalNoteId"
+                                            :notes="personalNotes"
+                                            :record-order-id="record?.orderID ?? draftRecord?.orderID"
+                                            :current-user-name="currentUserName"
+                                            empty-message="Personal Notes がありません。"
+                                            @edit="openNoteEdit(true)"
+                                        />
+                                    </div>
+                                </section>
 
-                    <section class="panel panel-block panel-parts">
-                        <aside class="card-side">
-                            <h3>Parts（{{ parts.length }}件）</h3>
-                            <div class="card-side-actions">
-                                <button type="button" class="action-btn action-btn-primary" @click="openPartCreate">新規追加</button>
-                                <button type="button" class="action-btn" :disabled="!selectedPartId" @click="openPartDelete">削除</button>
+                                <section class="panel panel-block panel-parts">
+                                    <aside class="card-side">
+                                        <h3>Parts（{{ parts.length }}件）</h3>
+                                        <div class="card-side-actions">
+                                            <button type="button" class="action-btn action-btn-primary" @click="openPartCreate">新規追加</button>
+                                            <button type="button" class="action-btn" :disabled="!selectedPartId" @click="openPartDelete">削除</button>
+                                        </div>
+                                    </aside>
+                                    <div class="card-main">
+                                        <div v-if="parts.length" class="table-wrap">
+                                            <table class="data-table parts-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Part ID</th>
+                                                        <th>部品名</th>
+                                                        <th>説明</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr
+                                                        v-for="part in parts"
+                                                        :key="part.id"
+                                                        class="table-row"
+                                                        :class="{ 'active-row': selectedPartId === part.id }"
+                                                        @click="selectedPartId = part.id"
+                                                    >
+                                                        <td>{{ part.partID }}</td>
+                                                        <td>{{ part.part_master?.partName || '—' }}</td>
+                                                        <td class="text-cell">{{ part.part_master?.description || '—' }}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <p v-else class="empty-message">Parts がありません。</p>
+                                    </div>
+                                </section>
                             </div>
-                        </aside>
-                        <div class="card-main">
-                            <div v-if="parts.length" class="table-wrap">
-                                <table class="data-table parts-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Part ID</th>
-                                            <th>部品名</th>
-                                            <th>説明</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="part in parts"
-                                            :key="part.id"
-                                            class="table-row"
-                                            :class="{ 'active-row': selectedPartId === part.id }"
-                                            @click="selectedPartId = part.id"
-                                        >
-                                            <td>{{ part.partID }}</td>
-                                            <td>{{ part.part_master?.partName || '—' }}</td>
-                                            <td class="text-cell">{{ part.part_master?.description || '—' }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else class="empty-message">Parts がありません。</p>
-                        </div>
-                    </section>
+                        </Pane>
+                    </Splitpanes>
 
                 </div>
             </Pane>
@@ -268,6 +285,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { countBusinessDaysBetween, normalizeDateYmd, tokyoTodayYmd } from '@/utils/businessDays'
 
 const props = defineProps({
     record: Object,
@@ -286,6 +304,8 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 
 const page = usePage()
 const leftPaneSize = ref(48)
 const rightPaneSize = ref(52)
+const stockedPaneSize = ref(38)
+const notesPaneSize = ref(62)
 const selectedFileId = ref(null)
 const selectedPartId = ref(null)
 const selectedStockedPartId = ref(null)
@@ -366,6 +386,12 @@ function syncPaneSizes({ panes } = {}) {
     rightPaneSize.value = panes[1].size
 }
 
+function syncRightInnerPaneSizes({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    stockedPaneSize.value = panes[0].size
+    notesPaneSize.value = panes[1].size
+}
+
 function canModifyNote(note) {
     if (!note) return false
     if (!currentUserName.value) return false
@@ -417,10 +443,12 @@ async function toggleFlag(field) {
     }
 }
 
-async function updateRecordStatus(status) {
+async function updateRecordStatus(status, extra = {}) {
     if (!props.record?.orderID) {
         throw new Error('案件が選択されていません。')
     }
+
+    const payload = { status, ...extra }
 
     const result = await apiFetch(getRecordApiUrl(), {
         method: 'POST',
@@ -428,17 +456,58 @@ async function updateRecordStatus(status) {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': getCsrfToken(),
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
     })
 
     if (!result?.response?.ok) {
         throw new Error(result?.data?.message || `status の更新に失敗しました。（HTTP ${result?.response?.status ?? ''}）`)
     }
 
-    if (props.draftRecord) props.draftRecord.status = status
-    if (props.record) props.record.status = status
+    const updated = result.data?.record
+    if (props.draftRecord) {
+        props.draftRecord.status = status
+        if (payload.work_completion_date != null) {
+            props.draftRecord.work_completion_date = payload.work_completion_date
+        }
+        if (payload.tat != null) {
+            props.draftRecord.tat = payload.tat
+        }
+    }
+    if (props.record) {
+        props.record.status = status
+        if (updated?.work_completion_date != null) {
+            props.record.work_completion_date = updated.work_completion_date
+        } else if (payload.work_completion_date != null) {
+            props.record.work_completion_date = payload.work_completion_date
+        }
+        if (updated?.tat != null) {
+            props.record.tat = updated.tat
+        } else if (payload.tat != null) {
+            props.record.tat = payload.tat
+        }
+    }
 
     return result.data
+}
+
+function buildWorkCompletionPayload() {
+    const today = tokyoTodayYmd()
+    const orderDate = normalizeDateYmd(
+        props.draftRecord?.orderDate ?? props.record?.orderDate ?? null,
+    )
+
+    const payload = {
+        work_completion_date: today,
+    }
+
+    if (orderDate && today) {
+        const tat = countBusinessDaysBetween(orderDate, today)
+        if (tat !== null) {
+            payload.tat = tat
+        }
+    }
+
+    return payload
 }
 
 async function onComplete() {
@@ -455,7 +524,7 @@ async function onComplete() {
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
-        await updateRecordStatus(nextStatus)
+        await updateRecordStatus(nextStatus, buildWorkCompletionPayload())
         emit('workflow-done', { action: 'complete', status: nextStatus })
     } catch (e) {
         actionMessage.value = e.message || '完了処理に失敗しました。'
@@ -668,31 +737,29 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     margin: 0;
     font-size: 14px;
     color: #0f172a;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .panel-actions {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
-}
-
-.captured-images-panel {
     flex: 0 0 auto;
-    margin: 0 0 8px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    overflow: hidden;
+    margin-left: auto;
 }
 
 .captured-toggle {
-    width: 100%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    flex: 1 1 auto;
+    min-width: 140px;
+    max-width: 280px;
     padding: 6px 10px;
-    border: none;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
     background: #e2e8f0;
     color: #0f172a;
     font-size: 13px;
@@ -707,6 +774,7 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 .captured-toggle.has-images {
     background: #86efac;
     color: #14532d;
+    border-color: #4ade80;
 }
 
 .captured-toggle.has-images:hover {
@@ -723,9 +791,14 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 }
 
 .captured-images-body {
+    flex: 0 0 auto;
     max-height: 180px;
     overflow: auto;
+    margin: 0 0 8px;
     padding: 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
 }
 
 .files-list {
@@ -743,6 +816,45 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     flex-direction: column;
     gap: 6px;
     padding-right: 2px;
+}
+
+.right-inner-splitpanes {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+
+.right-inner-pane {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+}
+
+.right-inner-pane-stocked,
+.right-inner-pane-notes {
+    height: 100%;
+}
+
+.notes-below-stack {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.notes-below-stack .panel {
+    height: auto;
+    flex: 1 1 0;
+}
+
+.notes-below-stack .panel-parts {
+    flex: 0.5 1 0;
+    max-height: 22%;
+    min-height: 72px;
 }
 
 .action-bar {
@@ -864,15 +976,19 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 }
 
 .panel-parts {
-    flex: 0.9 1 0;
+    flex: 0.45 1 0;
+    min-height: 72px;
 }
 
 .panel-notes {
-    flex: 1.35 1 0;
+    flex: 1.5 1 0;
+    min-height: 140px;
 }
 
 .panel-stocked {
-    flex: 1.1 1 0;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
 }
 
 .card-side {

@@ -279,6 +279,72 @@
                                 </div>
                             </section>
 
+                            <section
+                                v-if="maintenanceSearchDone || maintenanceContracts.length"
+                                class="info-card info-card-maintenance"
+                            >
+                                <div class="maintenance-header">
+                                    <h3>保守契約検索結果</h3>
+                                    <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                        {{ maintenanceContracts.length }}件
+                                    </span>
+                                    <button
+                                        v-if="selectedMaintenanceContractId"
+                                        type="button"
+                                        class="btn btn-secondary maintenance-clear-btn"
+                                        @click="clearMaintenanceSelection"
+                                    >
+                                        選択解除
+                                    </button>
+                                </div>
+                                <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
+                                <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
+                                    <table class="maintenance-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 36px;"></th>
+                                                <th>dealer</th>
+                                                <th>契約種別</th>
+                                                <th>instrumentName</th>
+                                                <th>SN</th>
+                                                <th>開始</th>
+                                                <th>契約終了</th>
+                                                <th>RefNumber</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr
+                                                v-for="row in maintenanceContracts"
+                                                :key="row.id"
+                                                :class="{ selected: isMaintenanceSelected(row.id) }"
+                                                @click="toggleMaintenanceSelection(row.id)"
+                                            >
+                                                <td style="text-align: center;" @click.stop>
+                                                    <input
+                                                        type="checkbox"
+                                                        :checked="isMaintenanceSelected(row.id)"
+                                                        @change="toggleMaintenanceSelection(row.id)"
+                                                    >
+                                                </td>
+                                                <td>{{ row.dealer || '—' }}</td>
+                                                <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
+                                                <td>{{ row.instrumentName || '—' }}</td>
+                                                <td>{{ row.SN || '—' }}</td>
+                                                <td>{{ row.startDate || '—' }}</td>
+                                                <td>{{ row.expireDate || '—' }}</td>
+                                                <td>{{ row.RefNumber || '—' }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
+                                    条件に一致する有効な保守契約はありません。
+                                </p>
+                                <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
+                                    選択中の保守契約は保存時に Note として案件へ紐づけられます。
+                                </p>
+                            </section>
+
                             <section class="info-card info-card-enduser stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">endUser</div>
@@ -365,72 +431,6 @@
                                 </div>
                             </section>
                         </div>
-
-                        <section
-                            v-if="maintenanceSearchDone || maintenanceContracts.length"
-                            class="info-card info-card-maintenance"
-                        >
-                            <div class="maintenance-header">
-                                <h3>保守契約検索結果</h3>
-                                <span v-if="maintenanceSearchDone" class="maintenance-count">
-                                    {{ maintenanceContracts.length }}件
-                                </span>
-                                <button
-                                    v-if="selectedMaintenanceContractId"
-                                    type="button"
-                                    class="btn btn-secondary maintenance-clear-btn"
-                                    @click="clearMaintenanceSelection"
-                                >
-                                    選択解除
-                                </button>
-                            </div>
-                            <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
-                            <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
-                                <table class="maintenance-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 36px;"></th>
-                                            <th>dealer</th>
-                                            <th>契約種別</th>
-                                            <th>instrumentName</th>
-                                            <th>SN</th>
-                                            <th>開始</th>
-                                            <th>契約終了</th>
-                                            <th>RefNumber</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="row in maintenanceContracts"
-                                            :key="row.id"
-                                            :class="{ selected: isMaintenanceSelected(row.id) }"
-                                            @click="toggleMaintenanceSelection(row.id)"
-                                        >
-                                            <td style="text-align: center;" @click.stop>
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="isMaintenanceSelected(row.id)"
-                                                    @change="toggleMaintenanceSelection(row.id)"
-                                                >
-                                            </td>
-                                            <td>{{ row.dealer || '—' }}</td>
-                                            <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
-                                            <td>{{ row.instrumentName || '—' }}</td>
-                                            <td>{{ row.SN || '—' }}</td>
-                                            <td>{{ row.startDate || '—' }}</td>
-                                            <td>{{ row.expireDate || '—' }}</td>
-                                            <td>{{ row.RefNumber || '—' }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
-                                条件に一致する有効な保守契約はありません。
-                            </p>
-                            <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
-                                選択中の保守契約は保存時に Note として案件へ紐づけられます。
-                            </p>
-                        </section>
                     </div>
 
                     <div v-else class="form-stack">
@@ -531,6 +531,72 @@
                             </div>
                         </section>
 
+                        <section
+                            v-if="maintenanceSearchDone || maintenanceContracts.length"
+                            class="info-card info-card-maintenance"
+                        >
+                            <div class="maintenance-header">
+                                <h3>保守契約検索結果</h3>
+                                <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                    {{ maintenanceContracts.length }}件
+                                </span>
+                                <button
+                                    v-if="selectedMaintenanceContractId"
+                                    type="button"
+                                    class="btn btn-secondary maintenance-clear-btn"
+                                    @click="clearMaintenanceSelection"
+                                >
+                                    選択解除
+                                </button>
+                            </div>
+                            <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
+                            <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
+                                <table class="maintenance-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 36px;"></th>
+                                            <th>dealer</th>
+                                            <th>契約種別</th>
+                                            <th>instrumentName</th>
+                                            <th>SN</th>
+                                            <th>開始</th>
+                                            <th>契約終了</th>
+                                            <th>RefNumber</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="row in maintenanceContracts"
+                                            :key="row.id"
+                                            :class="{ selected: isMaintenanceSelected(row.id) }"
+                                            @click="toggleMaintenanceSelection(row.id)"
+                                        >
+                                            <td style="text-align: center;" @click.stop>
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="isMaintenanceSelected(row.id)"
+                                                    @change="toggleMaintenanceSelection(row.id)"
+                                                >
+                                            </td>
+                                            <td>{{ row.dealer || '—' }}</td>
+                                            <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
+                                            <td>{{ row.instrumentName || '—' }}</td>
+                                            <td>{{ row.SN || '—' }}</td>
+                                            <td>{{ row.startDate || '—' }}</td>
+                                            <td>{{ row.expireDate || '—' }}</td>
+                                            <td>{{ row.RefNumber || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
+                                条件に一致する有効な保守契約はありません。
+                            </p>
+                            <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
+                                選択中の保守契約は保存時に Note として案件へ紐づけられます。
+                            </p>
+                        </section>
+
                         <section class="info-card info-card-enduser stakeholder-card">
                             <aside class="stakeholder-side">
                                 <div class="stakeholder-label">endUser</div>
@@ -615,72 +681,6 @@
                                     <input v-model="form.deliveryDestination_address2" type="text" class="w-address2" placeholder="address2" lang="ja">
                                 </div>
                             </div>
-                        </section>
-
-                        <section
-                            v-if="maintenanceSearchDone || maintenanceContracts.length"
-                            class="info-card info-card-maintenance"
-                        >
-                            <div class="maintenance-header">
-                                <h3>保守契約検索結果</h3>
-                                <span v-if="maintenanceSearchDone" class="maintenance-count">
-                                    {{ maintenanceContracts.length }}件
-                                </span>
-                                <button
-                                    v-if="selectedMaintenanceContractId"
-                                    type="button"
-                                    class="btn btn-secondary maintenance-clear-btn"
-                                    @click="clearMaintenanceSelection"
-                                >
-                                    選択解除
-                                </button>
-                            </div>
-                            <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
-                            <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
-                                <table class="maintenance-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 36px;"></th>
-                                            <th>dealer</th>
-                                            <th>契約種別</th>
-                                            <th>instrumentName</th>
-                                            <th>SN</th>
-                                            <th>開始</th>
-                                            <th>契約終了</th>
-                                            <th>RefNumber</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="row in maintenanceContracts"
-                                            :key="row.id"
-                                            :class="{ selected: isMaintenanceSelected(row.id) }"
-                                            @click="toggleMaintenanceSelection(row.id)"
-                                        >
-                                            <td style="text-align: center;" @click.stop>
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="isMaintenanceSelected(row.id)"
-                                                    @change="toggleMaintenanceSelection(row.id)"
-                                                >
-                                            </td>
-                                            <td>{{ row.dealer || '—' }}</td>
-                                            <td>{{ row.contractTypeName || row.contractTypeDescription || '—' }}</td>
-                                            <td>{{ row.instrumentName || '—' }}</td>
-                                            <td>{{ row.SN || '—' }}</td>
-                                            <td>{{ row.startDate || '—' }}</td>
-                                            <td>{{ row.expireDate || '—' }}</td>
-                                            <td>{{ row.RefNumber || '—' }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p v-else-if="maintenanceSearchDone" class="maintenance-empty">
-                                条件に一致する有効な保守契約はありません。
-                            </p>
-                            <p v-if="selectedMaintenanceContractId" class="maintenance-selected-hint">
-                                選択中の保守契約は保存時に Note として案件へ紐づけられます。
-                            </p>
                         </section>
                     </div>
                 </div>

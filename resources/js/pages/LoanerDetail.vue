@@ -148,6 +148,10 @@
                                         {{ form.shippingOut_requiredDate || '選択してください' }}
                                     </button>
                                 </div>
+                                <div class="commerce-row commerce-row-po">
+                                    <span class="commerce-label">coNum</span>
+                                    <input v-model="form.coNum" type="text" class="commerce-po">
+                                </div>
                                 <div class="commerce-application-form-slot">
                                     <button
                                         type="button"
@@ -457,7 +461,7 @@
                                 type="button"
                                 class="select-btn add-btn"
                                 :disabled="fileBusy"
-                                @click="openFilePicker"
+                                @click="openFileCreate"
                             >
                                 {{ uploading ? '追加中...' : 'ファイル追加' }}
                             </button>
@@ -472,6 +476,7 @@
                     </div>
                     <p v-if="fileError" class="file-error">{{ fileError }}</p>
                     <div
+                        v-if="showFileDropzone"
                         class="file-dropzone"
                         :class="{ active: fileDropActive, disabled: fileBusy }"
                         @dragenter.prevent="onFileDragEnter"
@@ -480,7 +485,17 @@
                         @drop.prevent="onFileDrop"
                         @click="openFilePicker"
                     >
-                        <strong>{{ uploading ? `アップロード中 ${uploadProgress}` : 'ファイルをドロップ、またはクリックして選択' }}</strong>
+                        <div class="file-dropzone-top" @click.stop>
+                            <strong>{{ uploading ? `アップロード中 ${uploadProgress}` : 'ファイルをドロップ、またはクリックして選択' }}</strong>
+                            <button
+                                type="button"
+                                class="select-btn file-dropzone-cancel"
+                                :disabled="fileBusy"
+                                @click="closeFileDropzone"
+                            >
+                                閉じる
+                            </button>
+                        </div>
                         <span>PDF・画像・メール・その他のファイル（1ファイル10MBまで）</span>
                     </div>
                     <div v-if="sortedFiles.length" class="files-list">
@@ -945,6 +960,7 @@ const fileError = ref('')
 const noteError = ref('')
 const uploadProgress = ref('')
 const fileDropActive = ref(false)
+const showFileDropzone = ref(false)
 const fileDragDepth = ref(0)
 const filePendingDelete = ref(null)
 const notePendingDelete = ref(null)
@@ -1077,6 +1093,7 @@ const form = reactive({
     orderNum: stringValue(props.record.orderNum),
     orderDate: toDateInputValue(props.record.orderDate),
     poNum: stringValue(props.record.poNum),
+    coNum: stringValue(props.record.coNum),
     shippingOut_requiredDate: toDateInputValue(props.record.shippingOut_requiredDate),
     discount_service: props.record.discount_service ?? 0,
     sentDate: stringValue(props.attached.sentDate),
@@ -1915,6 +1932,22 @@ async function moveFile(fileId, direction) {
     }
 }
 
+function openFileCreate() {
+    if (fileBusy.value) return
+    fileError.value = ''
+    showFileDropzone.value = true
+    fileDropActive.value = false
+    fileDragDepth.value = 0
+}
+
+function closeFileDropzone() {
+    if (fileBusy.value) return
+    showFileDropzone.value = false
+    fileDropActive.value = false
+    fileError.value = ''
+    fileDragDepth.value = 0
+}
+
 function openFilePicker() {
     if (fileBusy.value) return
     fileError.value = ''
@@ -2016,6 +2049,9 @@ async function uploadFiles(files) {
         }
         if (lastAdded) selectedFileId.value = lastAdded.id
         success.value = `${list.length}件のファイルを追加しました。`
+        showFileDropzone.value = false
+        fileDropActive.value = false
+        fileDragDepth.value = 0
     } catch (e) {
         fileError.value = e.message || 'ファイルのアップロードに失敗しました。'
     } finally {
@@ -2483,6 +2519,7 @@ function syncCurrentDates(attached, record = null) {
         form.orderNum = stringValue(record.orderNum)
         form.orderDate = toDateInputValue(record.orderDate)
         form.poNum = stringValue(record.poNum)
+        form.coNum = stringValue(record.coNum)
         if (Object.prototype.hasOwnProperty.call(record, 'shippingOut_requiredDate')) {
             form.shippingOut_requiredDate = toDateInputValue(record.shippingOut_requiredDate)
         }
@@ -3303,6 +3340,20 @@ a.btn {
     color: #475569;
     text-align: center;
     cursor: pointer;
+}
+.file-dropzone-top {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.file-dropzone-top strong {
+    flex: 1;
+    text-align: center;
+}
+.file-dropzone-cancel {
+    flex: 0 0 auto;
 }
 .file-dropzone strong { color: #1e293b; }
 .file-dropzone span { font-size: 10px; }

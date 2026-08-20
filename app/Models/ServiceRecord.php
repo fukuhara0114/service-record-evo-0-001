@@ -74,6 +74,8 @@ class ServiceRecord extends Model
         'poNum',
         'orderDate',
         'orderNum',
+        'work_completion_date',
+        'tat',
         'invNum',
         'price',
         'rmaNumOverSea',
@@ -105,6 +107,7 @@ class ServiceRecord extends Model
 
     protected $casts = [
         'promotion_ready_at' => 'datetime',
+        'work_completion_date' => 'date',
     ];
 
 

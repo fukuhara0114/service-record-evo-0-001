@@ -7,11 +7,11 @@
                     <div class="header-left">
                         <span class="service-detail-badge">Service詳細</span>
                         <div class="header-summary">
-                            <span class="header-summary-item">OrderID: {{ record?.orderID }}</span>
+                            <span class="header-summary-item header-summary-orderid">OrderID: {{ record?.orderID }}</span>
                             <span class="header-summary-item">{{ headerDealer }}</span>
                             <span class="header-summary-item">{{ headerProductName }}</span>
-                            <span class="header-summary-item">SN: {{ headerSn }}</span>
-                            <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
+                            <span class="header-summary-item header-summary-sn">SN: {{ headerSn }}</span>
+                            <span class="header-summary-item header-summary-return">{{ headerReturnCodeLabel }}</span>
                         </div>
                     </div>
                     <div class="header-center-actions">
@@ -72,13 +72,13 @@
                         </template>
                     </div>
                     <div class="header-summary">
+                        <span class="header-summary-item header-summary-orderid">OrderID: {{ record?.orderID }}</span>
                         <span class="header-summary-item">{{ headerDealer }}</span>
                         <span class="header-summary-item">{{ headerProductName }}</span>
-                        <span class="header-summary-item"> SN: {{ headerSn }}</span>
-                        <span class="header-summary-item">{{ headerReturnCodeLabel }}</span>
+                        <span class="header-summary-item header-summary-sn">SN: {{ headerSn }}</span>
+                        <span class="header-summary-item header-summary-return">{{ headerReturnCodeLabel }}</span>
                     </div>
                     <div class="detail-meta">
-                        <span>OrderID: {{ record?.orderID }}</span>
                         <p v-if="saveError" class="save-error">{{ saveError }}</p>
                         <button type="button" class="close-x-btn" aria-label="閉じる" title="閉じる" @click="$emit('close')">
                             <span aria-hidden="true">×</span>
@@ -418,6 +418,24 @@ function toggleRemand() {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.header-summary-orderid {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 110px;
+}
+
+.header-summary-sn {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 150px;
+}
+
+.header-summary-return {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 100px;
 }
 
 .closing-title {
