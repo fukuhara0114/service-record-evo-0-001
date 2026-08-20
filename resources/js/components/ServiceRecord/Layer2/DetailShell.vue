@@ -92,6 +92,7 @@
                 :class="{
                     'detail-body-engineer': mode === 'engineer',
                     'detail-body-closing': layout === 'closing' || layout === 'invoice' || layout === 'logistics' || mode === 'logistics',
+                    'detail-body-form-a': layout === 'A',
                 }"
             >
                 <DetailFormEngineer
@@ -549,6 +550,11 @@ function toggleRemand() {
 }
 
 .detail-body-closing {
+    overflow: hidden;
+    padding: 0;
+}
+
+.detail-body-form-a {
     overflow: hidden;
     padding: 0;
 }

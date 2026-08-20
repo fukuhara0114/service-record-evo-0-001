@@ -26,39 +26,34 @@
                 <a :href="fileUrl" target="_blank" rel="noopener" class="open-link" @click.stop>別タブで開く</a>
             </div>
 
-            <div class="file-meta">
-                <span class="file-name">{{ file.documentName || '（名称なし）' }}</span>
-                <span class="file-type">{{ file.fileType || '—' }}</span>
-                <span v-if="file.documentType" class="file-doc-type">{{ file.documentType }}</span>
-                <div class="sort-control" @click.stop>
-                    <span class="sort-label">順序</span>
-                    <button
-                        type="button"
-                        class="sort-btn"
-                        :disabled="!canMoveUp || sorting"
-                        title="上へ"
-                        @click="$emit('move', 'up')"
-                    >
-                        ↑
-                    </button>
-                    <input
-                        v-model.number="draftSortNum"
-                        type="number"
-                        class="sort-input"
-                        :disabled="sorting"
-                        @keydown.enter.prevent="commitSortNum"
-                        @change="commitSortNum"
-                    >
-                    <button
-                        type="button"
-                        class="sort-btn"
-                        :disabled="!canMoveDown || sorting"
-                        title="下へ"
-                        @click="$emit('move', 'down')"
-                    >
-                        ↓
-                    </button>
-                </div>
+            <div class="sort-control" @click.stop>
+                <span class="sort-label">順序</span>
+                <button
+                    type="button"
+                    class="sort-btn"
+                    :disabled="!canMoveUp || sorting"
+                    title="上へ"
+                    @click="$emit('move', 'up')"
+                >
+                    ↑
+                </button>
+                <input
+                    v-model.number="draftSortNum"
+                    type="number"
+                    class="sort-input"
+                    :disabled="sorting"
+                    @keydown.enter.prevent="commitSortNum"
+                    @change="commitSortNum"
+                >
+                <button
+                    type="button"
+                    class="sort-btn"
+                    :disabled="!canMoveDown || sorting"
+                    title="下へ"
+                    @click="$emit('move', 'down')"
+                >
+                    ↓
+                </button>
             </div>
         </div>
 
@@ -417,44 +412,25 @@ function commitSortNum() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: nowrap;
 }
 
 .file-actions {
     display: flex;
     gap: 12px;
     align-items: center;
-    flex: 0 0 auto;
-}
-
-.file-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    justify-content: flex-end;
-    margin-left: auto;
-    text-align: right;
+    flex: 1 1 auto;
     min-width: 0;
-}
-
-.file-name {
-    font-weight: bold;
-    color: #1e293b;
-}
-
-.file-type,
-.file-doc-type {
-    font-size: 13px;
-    color: #64748b;
+    flex-wrap: wrap;
 }
 
 .sort-control {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    flex: 0 0 auto;
     padding: 2px 6px;
     border: 1px solid #cbd5e1;
     border-radius: 4px;

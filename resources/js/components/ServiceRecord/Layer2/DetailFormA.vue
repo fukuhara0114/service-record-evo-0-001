@@ -2054,6 +2054,7 @@ function formatDate(value) {
 .detail-form {
     display: flex;
     flex-direction: column;
+    width: 100%;
     height: 100%;
     min-height: 0;
     font-size: 14px;
@@ -2084,6 +2085,7 @@ function formatDate(value) {
 .detail-splitpanes {
     flex: 1;
     min-height: 0;
+    width: 100%;
 }
 
 .detail-splitpanes-bottom {
@@ -2117,10 +2119,9 @@ function formatDate(value) {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
     min-width: 0;
     overflow: hidden;
-    padding-right: 4px;
     box-sizing: border-box;
 }
 
@@ -2192,26 +2193,24 @@ function formatDate(value) {
 .pane-content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 4px;
     width: 100%;
     min-width: 0;
     min-height: 0;
     height: 100%;
     overflow: hidden;
     box-sizing: border-box;
-    padding-right: 4px;
 }
 
 .left-top-layout {
     display: grid;
     grid-template-rows: auto minmax(72px, 1fr);
-    gap: 5px;
+    gap: 4px;
     width: 100%;
     height: 100%;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    padding-right: 4px;
     box-sizing: border-box;
 }
 
@@ -2231,7 +2230,7 @@ function formatDate(value) {
 .left-top-section-contacts {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
 }
 
 .left-top-section-main {
@@ -2242,7 +2241,6 @@ function formatDate(value) {
 .left-top-section-contacts {
     height: 100%;
     overflow-y: auto;
-    padding-right: 4px;
     box-sizing: border-box;
 }
 
@@ -2251,16 +2249,16 @@ function formatDate(value) {
 }
 
 .section-card {
-    padding: 16px;
+    padding: 8px;
     background: #fff;
     border: 1px solid #cbd5e1;
-    border-radius: 8px;
+    border-radius: 4px;
 }
 
 .detail-top-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
-    gap: 5px;
+    gap: 4px;
     align-items: stretch;
 }
 
@@ -2282,11 +2280,11 @@ function formatDate(value) {
 }
 
 .detail-bottom-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
     align-items: stretch;
-    justify-content: flex-start;
+    width: 100%;
     margin-top: 0;
 }
 
@@ -2583,9 +2581,9 @@ function formatDate(value) {
 .detail-bottom-grid > .detail-card {
     display: flex;
     flex-direction: column;
-    flex: 0 1 500px;
-    width: 500px;
-    max-width: min(500px, 100%);
+    min-width: 0;
+    width: 100%;
+    max-width: none;
     box-sizing: border-box;
 }
 
@@ -2688,7 +2686,7 @@ function formatDate(value) {
 }
 
 .section-card h3 {
-    margin: 0 0 12px;
+    margin: 0 0 6px;
     font-size: 16px;
     color: #000;
     font-weight: 700;
