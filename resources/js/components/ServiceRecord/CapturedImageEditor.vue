@@ -1,12 +1,25 @@
 <template>
     <div class="editor-overlay" @click.self="requestClose">
-        <div class="editor-panel">
+        <div ref="panelRef" class="editor-panel" :style="editorPanelStyle">
             <div class="editor-header">
                 <div>
                     <h3>画像編集</h3>
                     <p>{{ image.title || image.file_name || '—' }}</p>
                 </div>
-                <button type="button" class="close-btn" :disabled="busy" @click="requestClose">×</button>
+                <div class="header-actions">
+                    <button type="button" class="action-btn" :disabled="busy" @click="requestClose">
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="action-btn action-btn-primary"
+                        :disabled="busy || !ready || !dirty"
+                        @click="saveEditedImage"
+                    >
+                        {{ busy ? '保存中...' : '保存' }}
+                    </button>
+                    <button type="button" class="close-btn" :disabled="busy" @click="requestClose">×</button>
+                </div>
             </div>
 
             <div class="editor-toolbar">
@@ -158,6 +171,36 @@
                         >
                     </label>
                 </div>
+
+                <div class="zoom-group" :class="{ 'zoom-group-after-text': tool === 'text' }">
+                    <button
+                        type="button"
+                        class="tool-btn"
+                        :disabled="busy || !ready"
+                        @click="zoomOut"
+                        title="縮小"
+                    >
+                        −
+                    </button>
+                    <button
+                        type="button"
+                        class="tool-btn"
+                        :disabled="busy || !ready"
+                        @click="zoomReset"
+                        title="表示を合わせる"
+                    >
+                        {{ Math.round(viewZoom * 100) }}%
+                    </button>
+                    <button
+                        type="button"
+                        class="tool-btn"
+                        :disabled="busy || !ready"
+                        @click="zoomIn"
+                        title="拡大"
+                    >
+                        ＋
+                    </button>
+                </div>
             </div>
 
             <div class="editor-body">
@@ -184,22 +227,9 @@
                 </template>
             </div>
 
-            <div class="editor-footer">
+            <div v-if="error || success" class="editor-footer">
                 <p v-if="error" class="status-message error footer-status">{{ error }}</p>
                 <p v-else-if="success" class="status-message success footer-status">{{ success }}</p>
-                <div class="footer-actions">
-                    <button type="button" class="action-btn" :disabled="busy" @click="requestClose">
-                        キャンセル
-                    </button>
-                    <button
-                        type="button"
-                        class="action-btn action-btn-primary"
-                        :disabled="busy || !ready || !dirty"
-                        @click="saveEditedImage"
-                    >
-                        {{ busy ? '保存中...' : '保存' }}
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -222,12 +252,19 @@ const page = usePage()
 
 const canvasRef = ref(null)
 const wrapRef = ref(null)
+const panelRef = ref(null)
 const ready = ref(false)
 const busy = ref(false)
 const dirty = ref(false)
 const loadError = ref('')
 const error = ref('')
 const success = ref('')
+const viewZoom = ref(1)
+const editorPanelStyle = ref({
+    height: '100vh',
+    width: 'max-content',
+    maxWidth: '100vw',
+})
 const tool = ref('draw')
 /** @type {import('vue').Ref<'freehand' | 'rect' | 'circle'>} */
 const drawMode = ref('freehand')
@@ -251,6 +288,44 @@ const lastPoint = ref(null)
 const shapeStart = ref(null)
 
 let displayScale = 1
+let baseFitScale = 1
+
+const EDITOR_CHROME_FALLBACK = 168
+
+function measureEditorChrome() {
+    const panel = panelRef.value
+    if (!panel) return EDITOR_CHROME_FALLBACK
+    const header = panel.querySelector('.editor-header')
+    const toolbar = panel.querySelector('.editor-toolbar')
+    const footer = panel.querySelector('.editor-footer')
+    const h = (header?.offsetHeight || 0)
+        + (toolbar?.offsetHeight || 0)
+        + (footer?.offsetHeight || 0)
+    return h > 0 ? h : EDITOR_CHROME_FALLBACK
+}
+
+function updateEditorPanelSize() {
+    const canvas = canvasRef.value
+    if (!canvas?.width || !canvas?.height) return
+
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const maxH = Math.max(120, vh - measureEditorChrome())
+    const maxW = Math.max(120, vw)
+
+    let height = maxH
+    let width = height * (canvas.width / canvas.height)
+    if (width > maxW) {
+        width = maxW
+        height = width * (canvas.height / canvas.width)
+    }
+
+    editorPanelStyle.value = {
+        height: '100vh',
+        width: `${Math.round(width)}px`,
+        maxWidth: '100vw',
+    }
+}
 
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
@@ -294,13 +369,34 @@ function fitCanvasDisplay() {
     const canvas = canvasRef.value
     const wrap = wrapRef.value
     if (!canvas || !wrap) return
+    if (!canvas.width || !canvas.height) return
+
+    updateEditorPanelSize()
 
     const maxW = Math.max(120, wrap.clientWidth - 8)
     const maxH = Math.max(120, wrap.clientHeight - 8)
-    const scale = Math.min(maxW / canvas.width, maxH / canvas.height, 1)
-    displayScale = scale > 0 ? scale : 1
+    // 高さ優先でフィット（プレビューと同様）。ユーザーズームは係数として乗算
+    baseFitScale = Math.min(maxW / canvas.width, maxH / canvas.height)
+    if (!(baseFitScale > 0)) baseFitScale = 1
+
+    displayScale = Math.max(0.05, baseFitScale * viewZoom.value)
     canvas.style.width = `${Math.round(canvas.width * displayScale)}px`
     canvas.style.height = `${Math.round(canvas.height * displayScale)}px`
+}
+
+function zoomIn() {
+    viewZoom.value = Math.min(4, Number((viewZoom.value * 1.25).toFixed(3)))
+    fitCanvasDisplay()
+}
+
+function zoomOut() {
+    viewZoom.value = Math.max(0.25, Number((viewZoom.value / 1.25).toFixed(3)))
+    fitCanvasDisplay()
+}
+
+function zoomReset() {
+    viewZoom.value = 1
+    fitCanvasDisplay()
 }
 
 function restoreBaseImage() {
@@ -712,6 +808,7 @@ async function loadImage() {
     history.value = []
     historyBaseIsOriginal.value = true
     dirty.value = false
+    viewZoom.value = 1
     clearCrop()
 
     const url = props.image?.image_url
@@ -886,18 +983,20 @@ onBeforeUnmount(() => {
     position: fixed;
     inset: 0;
     z-index: 400;
-    background: rgba(15, 23, 42, 0.78);
+    background: rgba(15, 23, 42, 0.85);
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    padding: 12px;
+    padding: 0;
 }
 
 .editor-panel {
-    width: min(98vw, 1200px);
-    max-height: 96vh;
+    height: 100vh;
+    max-height: 100vh;
+    width: max-content;
+    max-width: 100vw;
     background: #0f172a;
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -908,7 +1007,7 @@ onBeforeUnmount(() => {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    align-items: flex-start;
+    align-items: center;
     padding: 12px 16px;
 }
 
@@ -923,6 +1022,14 @@ onBeforeUnmount(() => {
     color: #cbd5e1;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -930,6 +1037,7 @@ onBeforeUnmount(() => {
     font-size: 24px;
     cursor: pointer;
     line-height: 1;
+    margin-left: 4px;
 }
 
 .close-btn:disabled {
@@ -952,6 +1060,17 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     gap: 6px;
     align-items: center;
+}
+
+.zoom-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.zoom-group-after-text {
+    margin-left: 100px;
 }
 
 .tool-btn {
@@ -1018,22 +1137,23 @@ onBeforeUnmount(() => {
 
 .editor-body {
     flex: 1;
-    min-height: 280px;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px 16px;
+    padding: 8px 12px;
     overflow: hidden;
 }
 
 .canvas-wrap {
     width: 100%;
-    height: min(62vh, 720px);
+    height: 100%;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #1e293b;
-    border-radius: 6px;
+    border-radius: 0;
     overflow: auto;
 }
 
