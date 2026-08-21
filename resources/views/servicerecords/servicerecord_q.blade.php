@@ -380,6 +380,7 @@
                     <th class="sortable-th" data-sort-key="receivedDate" style="width:  80px;">着荷日</th>
                     <th class="sortable-th" data-sort-key="orderDate" style="width:  80px;">受注日</th>
                     <th class="sortable-th" data-sort-key="status" style="width: 120px;">Status</th>
+                    <th class="sortable-th" data-sort-key="tat" style="width:  60px;">TAT</th>
                     <th class="sortable-th" data-sort-key="RMA" style="width:  80px;">RMA</th>
                     <th class="sortable-th" data-sort-key="productName" style="width: 150px;">製品名</th>
                     <th class="sortable-th" data-sort-key="SN" style="width: 120px;">SN</th>
@@ -440,7 +441,8 @@
     function recordSortValue(record, key) {
         switch (key) {
             case 'orderID':
-            case 'status': {
+            case 'status':
+            case 'tat': {
                 const n = Number(record?.[key]);
                 return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
             }
@@ -530,6 +532,7 @@
                 <td style="text-align: center;" >${r.receivedDate || ''}</td>
                 <td style="text-align: center;" >${r.orderDate || ''}</td>
                 <td                             >${statusLabel(r)}</td>
+                <td style="text-align: center;" >${r.tat ?? ''}</td>
                 <td style="text-align: center;" >${r.RMA || ''}</td>
                 <td                             >${r.productName || ''}</td>
                 <td                             >${r.SN || ''}</td>
@@ -582,7 +585,7 @@
 
         const filtered = allRecords.filter(r => {
             const combinedText = [
-                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.RMA,
+                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.tat, r.RMA,
                 r.productName, r.SN, r.endUser,
                 r.endUser_depart, r.endUser_contactPerson,
                 r.endUser_address1, r.endUser_address2,

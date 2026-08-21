@@ -182,7 +182,7 @@
         </div>
 
         <div v-if="previewItem" class="preview-overlay" @click.self="closePreview">
-            <div class="preview-panel">
+            <div class="preview-panel" :style="previewPanelStyle">
                 <div class="preview-header">
                     <div>
                         <h3>{{ previewItem.title || previewItem.file_name }}</h3>
@@ -200,7 +200,13 @@
                     </div>
                 </div>
                 <div class="preview-body">
-                    <img :src="previewItem.image_url" :alt="previewItem.title || previewItem.file_name" class="preview-image">
+                    <img
+                        :src="previewItem.image_url"
+                        :alt="previewItem.title || previewItem.file_name"
+                        class="preview-image"
+                        :style="previewImageStyle"
+                        @load="onPreviewImageLoad"
+                    >
                 </div>
             </div>
         </div>
@@ -269,6 +275,65 @@ const error = ref('')
 const previewItem = ref(null)
 const editingItem = ref(null)
 const previewId = ref(null)
+const previewNaturalSize = ref({ width: 0, height: 0 })
+const previewViewport = ref({ width: 0, height: 0 })
+
+const PREVIEW_HEADER_HEIGHT = 72
+
+const previewImageStyle = computed(() => {
+    const nw = previewNaturalSize.value.width
+    const nh = previewNaturalSize.value.height
+    const vw = previewViewport.value.width || (typeof window !== 'undefined' ? window.innerWidth : 0)
+    const vh = previewViewport.value.height || (typeof window !== 'undefined' ? window.innerHeight : 0)
+    if (!nw || !nh || !vw || !vh) {
+        return { height: `calc(100vh - ${PREVIEW_HEADER_HEIGHT}px)`, width: 'auto' }
+    }
+
+    const maxH = Math.max(120, vh - PREVIEW_HEADER_HEIGHT)
+    const maxW = Math.max(120, vw)
+    // 高さ優先で最大化し、幅はアスペクト比で決定（横にはみ出す場合のみ縮小）
+    let height = maxH
+    let width = height * (nw / nh)
+    if (width > maxW) {
+        width = maxW
+        height = width * (nh / nw)
+    }
+
+    return {
+        width: `${Math.round(width)}px`,
+        height: `${Math.round(height)}px`,
+    }
+})
+
+const previewPanelStyle = computed(() => {
+    const img = previewImageStyle.value
+    if (!img.width || img.width === 'auto') {
+        return { height: '100vh', width: 'max-content', maxWidth: '100vw' }
+    }
+    return {
+        height: '100vh',
+        width: img.width,
+        maxWidth: '100vw',
+    }
+})
+
+function syncPreviewViewport() {
+    if (typeof window === 'undefined') return
+    previewViewport.value = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+    }
+}
+
+function onPreviewImageLoad(event) {
+    const img = event?.target
+    if (!img) return
+    previewNaturalSize.value = {
+        width: img.naturalWidth || 0,
+        height: img.naturalHeight || 0,
+    }
+    syncPreviewViewport()
+}
 const photographerOptions = ref([])
 const capturedByFilter = ref(props.initialCapturedBy || '')
 const periodFilter = ref('today')
@@ -698,11 +763,14 @@ function loadMore() {
 function openPreview(item) {
     previewId.value = item.id
     previewItem.value = item
+    previewNaturalSize.value = { width: 0, height: 0 }
+    syncPreviewViewport()
     emit('select', item)
 }
 
 function closePreview() {
     previewItem.value = null
+    previewNaturalSize.value = { width: 0, height: 0 }
 }
 
 function openEditor() {
@@ -789,6 +857,8 @@ onMounted(() => {
         suppressPeriodWatch.value = false
     })
     reload()
+    syncPreviewViewport()
+    window.addEventListener('resize', syncPreviewViewport)
 })
 
 onBeforeUnmount(() => {
@@ -798,6 +868,7 @@ onBeforeUnmount(() => {
         reloadTimer = null
     }
     pendingReloadOptions = null
+    window.removeEventListener('resize', syncPreviewViewport)
 })
 
 defineExpose({
@@ -1087,18 +1158,20 @@ defineExpose({
     position: fixed;
     inset: 0;
     z-index: 300;
-    background: rgba(15, 23, 42, 0.72);
+    background: rgba(15, 23, 42, 0.85);
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    padding: 16px;
+    padding: 0;
 }
 
 .preview-panel {
-    width: min(96vw, 1100px);
-    max-height: 94vh;
+    height: 100vh;
+    max-height: 100vh;
+    width: max-content;
+    max-width: 100vw;
     background: #0f172a;
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -1111,6 +1184,7 @@ defineExpose({
     align-items: flex-start;
     padding: 12px 16px;
     color: #fff;
+    flex: 0 0 auto;
 }
 
 .preview-header h3 {
@@ -1140,20 +1214,20 @@ defineExpose({
 }
 
 .preview-body {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 16px 16px;
-    overflow: auto;
+    padding: 0;
+    overflow: hidden;
+    background: #0b1220;
 }
 
 .preview-image {
-    max-width: 100%;
-    max-height: calc(94vh - 90px);
-    object-fit: contain;
+    display: block;
     background: #1e293b;
+    object-fit: fill;
 }
 
 .sr-only {

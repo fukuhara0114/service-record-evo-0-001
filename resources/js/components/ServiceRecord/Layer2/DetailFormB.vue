@@ -4,14 +4,16 @@
             <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="30">
                 <div class="files-section">
                     <section class="section-card section-card-files">
-                        <div class="section-header">
-                            <h3>
-                                Files（書類 {{ sortedFiles.length }}件
-                                ／ 撮影画像 {{ capturedImages.length }}件）
-                            </h3>
-                        </div>
-                        <div class="files-type-label">
-                            <span class="type-badge type-badge-doc">書類ファイル</span>
+                        <div class="files-title-bar">
+                            <div class="section-header">
+                                <h3>
+                                    Files（書類 {{ sortedFiles.length }}件
+                                    ／ 撮影画像 {{ capturedImages.length }}件）
+                                </h3>
+                            </div>
+                            <div class="files-type-label">
+                                <span class="type-badge type-badge-doc">書類ファイル</span>
+                            </div>
                         </div>
 
                         <div class="files-list-wrap">
@@ -485,7 +487,10 @@ function openServiceMasterSelect() {
 .detail-pane {
     min-width: 0;
     min-height: 0;
+    height: 100%;
     display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .files-section,
@@ -497,9 +502,10 @@ function openServiceMasterSelect() {
     box-sizing: border-box;
 }
 
-/* 左 Files のヘッダー＋書類バッジ＋ファイル操作バー下端（プレビュー開始位置）に揃える */
-.info-section {
-    padding-top: 108px;
+.files-section {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .pane-content-scroll {
@@ -521,10 +527,16 @@ function openServiceMasterSelect() {
 }
 
 .section-card-files {
+    flex: 1 1 auto;
     height: 100%;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+}
+
+.files-title-bar {
+    flex: 0 0 auto;
 }
 
 .section-header {
@@ -532,7 +544,7 @@ function openServiceMasterSelect() {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     flex: 0 0 auto;
 }
 

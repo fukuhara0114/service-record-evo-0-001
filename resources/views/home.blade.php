@@ -128,12 +128,14 @@
     @php
         $showMasterPriceRevision = strtolower((string) (auth()->user()?->name ?? '')) === 'hfukuhara';
         $permission = strtolower((string) (auth()->user()?->permission ?? ''));
-        $showUsers = in_array($permission, ['administrator', 'admin'], true);
+        $isAdminPermission = in_array($permission, ['administrator', 'admin'], true);
     @endphp
 
     <div class="menu-container menu-desktop">
         <a href="{{ url('/servicerecord_q') }}" class="btn">ServiceRecord</a>
-        <a href="{{ url('/servicerecord/administrator') }}?orderType=service&arrival=hide_future" class="btn">Admin</a>
+        @if ($isAdminPermission)
+            <a href="{{ url('/servicerecord/administrator') }}?orderType=service&arrival=hide_future" class="btn">Admin</a>
+        @endif
         <a href="{{ url('/servicerecord/intake') }}" class="btn">Intake</a>
         <a href="{{ url('/servicerecord/engineer') }}" class="btn">Engineer</a>
         <a href="{{ url('/servicerecord/shipping-prep') }}" class="btn">Invoice</a>
@@ -141,7 +143,7 @@
         <a href="{{ url('/servicerecord/loaner/master') }}" class="btn">Loaner</a>
         <a href="{{ url('/servicerecord/maintenance-contracts') }}" class="btn">Contract</a>
         <a href="{{ url('/servicerecord/gallery') }}" class="btn">Gallery</a>
-        @if ($showUsers)
+        @if ($isAdminPermission)
             <a href="{{ url('/users') }}" class="btn">Users</a>
         @endif
         @if ($showMasterPriceRevision)

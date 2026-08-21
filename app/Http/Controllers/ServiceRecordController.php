@@ -94,6 +94,7 @@ class ServiceRecordController extends Controller
                 'RMA',
                 'receivedDate',
                 'orderDate',
+                'tat',
                 'productName',
                 'SN',
                 'returnCode',
