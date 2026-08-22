@@ -286,6 +286,7 @@ import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImage
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { countBusinessDaysBetween, normalizeDateYmd, tokyoTodayYmd } from '@/utils/businessDays'
+import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     record: Object,
@@ -510,21 +511,59 @@ function buildWorkCompletionPayload() {
     return payload
 }
 
+function resolveCompleteNextStatus(orderType, currentStatus) {
+    if (orderType === 'loaner') {
+        return 399
+    }
+    if (currentStatus === 90) {
+        return 180
+    }
+    if (currentStatus === 180) {
+        return 190
+    }
+    return null
+}
+
+function resolveStatusLabelByProcessId(processId, orderType) {
+    const id = String(processId ?? '')
+    if (orderType === 'loaner') {
+        const row = page.props.statusesLoaner?.find(
+            (status) => String(status.processID_new) === id,
+        )
+        return loanerStatusLabel(row) || `status=${id}`
+    }
+    const row = page.props.statuses?.find(
+        (status) => String(status.processID_new) === id,
+    )
+    return String(row?.status ?? '').trim() || `status=${id}`
+}
+
+function completeConfirmMessage(orderType, nextStatus) {
+    const label = resolveStatusLabelByProcessId(nextStatus, orderType)
+    return `「${label}」に変更（status=${nextStatus}）しますか？`
+}
+
 async function onComplete() {
     if (statusActionSaving.value) return
 
     const orderType = props.record?.order_type ?? props.draftRecord?.order_type ?? 'service'
-    const isLoaner = orderType === 'loaner'
-    const nextStatus = isLoaner ? 399 : 400
-    const statusHint = isLoaner
-        ? '完了前、予約確認（status=399）'
-        : '完了（status=400）'
-    if (!window.confirm(`この案件を${statusHint}にしますか？`)) return
+    const currentStatus = Number(props.record?.status ?? props.draftRecord?.status)
+    const nextStatus = resolveCompleteNextStatus(orderType, currentStatus)
+
+    if (nextStatus == null) {
+        actionMessage.value = 'この status では完了操作できません。'
+        return
+    }
+
+    if (!window.confirm(completeConfirmMessage(orderType, nextStatus))) return
 
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
-        await updateRecordStatus(nextStatus, buildWorkCompletionPayload())
+        const extra = orderType !== 'loaner' && currentStatus === 180
+            ? buildWorkCompletionPayload()
+            : {}
+        await updateRecordStatus(nextStatus, extra)
         emit('workflow-done', { action: 'complete', status: nextStatus })
     } catch (e) {
         actionMessage.value = e.message || '完了処理に失敗しました。'

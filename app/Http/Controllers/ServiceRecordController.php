@@ -236,8 +236,7 @@ class ServiceRecordController extends Controller
         } elseif ($mode === 'shippingPrep') {
             $query->whereIn('status', [300, 310 ,350, 385]);
         } elseif ($mode === 'engineer') {
-            // service: status=受注(90) かつ自分の labor
-            // loaner: status=受け入れ確認中(396) かつ自分の labor
+            // service: status 90〜180 / loaner: status 396（受け入れ確認中）かつ自分の labor
             $laborID = auth()->user()?->laborID;
             if ($laborID === null || $laborID === '') {
                 $query->whereRaw('1 = 0');
@@ -252,7 +251,8 @@ class ServiceRecordController extends Controller
                                             ->orWhereNull('order_type')
                                             ->orWhere('order_type', '');
                                     })
-                                    ->where('status', 90);
+                                    ->where('status', '>=', 90)
+                                    ->where('status', '<=', 180);
                             })
                             ->orWhere(function ($loanerQuery) {
                                 $loanerQuery->where('order_type', 'loaner')
@@ -596,7 +596,8 @@ class ServiceRecordController extends Controller
                                     ->orWhereNull('order_type')
                                     ->orWhere('order_type', '');
                             })
-                            ->where('status', 90);
+                            ->where('status', '>=', 90)
+                            ->where('status', '<=', 180);
                     })
                     ->orWhere(function ($loanerQuery) {
                         $loanerQuery->where('order_type', 'loaner')

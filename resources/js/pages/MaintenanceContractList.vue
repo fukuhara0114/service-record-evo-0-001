@@ -36,6 +36,22 @@
                         <span>endUser</span>
                         <input v-model="searchForm.endUser" type="text" placeholder="endUser">
                     </label>
+                    <div class="search-range">
+                        <span class="range-label">有効期限（expireDate）</span>
+                        <div class="range-inputs">
+                            <input v-model="searchForm.expireDateFrom" type="date" aria-label="expireDate From">
+                            <span class="range-sep">〜</span>
+                            <input v-model="searchForm.expireDateTo" type="date" aria-label="expireDate To">
+                        </div>
+                    </div>
+                    <div class="search-range">
+                        <span class="range-label">認証期限（certificationExpireDate）</span>
+                        <div class="range-inputs">
+                            <input v-model="searchForm.certificationExpireDateFrom" type="date" aria-label="certificationExpireDate From">
+                            <span class="range-sep">〜</span>
+                            <input v-model="searchForm.certificationExpireDateTo" type="date" aria-label="certificationExpireDate To">
+                        </div>
+                    </div>
                     <div class="search-side">
                         <button
                             type="button"
@@ -151,6 +167,10 @@ const props = defineProps({
             endUser: '',
             instrumentName: '',
             SN: '',
+            expireDateFrom: '',
+            expireDateTo: '',
+            certificationExpireDateFrom: '',
+            certificationExpireDateTo: '',
             scope: 'active',
         }),
     },
@@ -169,6 +189,10 @@ const searchForm = reactive({
     endUser: props.filters?.endUser ?? '',
     instrumentName: props.filters?.instrumentName ?? '',
     SN: props.filters?.SN ?? '',
+    expireDateFrom: props.filters?.expireDateFrom ?? '',
+    expireDateTo: props.filters?.expireDateTo ?? '',
+    certificationExpireDateFrom: props.filters?.certificationExpireDateFrom ?? '',
+    certificationExpireDateTo: props.filters?.certificationExpireDateTo ?? '',
     scope: props.filters?.scope === 'all' ? 'all' : 'active',
 })
 
@@ -181,6 +205,10 @@ watch(
         searchForm.endUser = next?.endUser ?? ''
         searchForm.instrumentName = next?.instrumentName ?? ''
         searchForm.SN = next?.SN ?? ''
+        searchForm.expireDateFrom = next?.expireDateFrom ?? ''
+        searchForm.expireDateTo = next?.expireDateTo ?? ''
+        searchForm.certificationExpireDateFrom = next?.certificationExpireDateFrom ?? ''
+        searchForm.certificationExpireDateTo = next?.certificationExpireDateTo ?? ''
         searchForm.scope = next?.scope === 'all' ? 'all' : 'active'
     },
     { deep: true },
@@ -192,6 +220,14 @@ function buildQuery(extra = {}) {
     if (searchForm.endUser.trim()) query.endUser = searchForm.endUser.trim()
     if (searchForm.instrumentName.trim()) query.instrumentName = searchForm.instrumentName.trim()
     if (searchForm.SN.trim()) query.SN = searchForm.SN.trim()
+    if (searchForm.expireDateFrom) query.expireDateFrom = searchForm.expireDateFrom
+    if (searchForm.expireDateTo) query.expireDateTo = searchForm.expireDateTo
+    if (searchForm.certificationExpireDateFrom) {
+        query.certificationExpireDateFrom = searchForm.certificationExpireDateFrom
+    }
+    if (searchForm.certificationExpireDateTo) {
+        query.certificationExpireDateTo = searchForm.certificationExpireDateTo
+    }
     query.scope = searchForm.scope === 'all' ? 'all' : 'active'
     return query
 }
@@ -222,6 +258,10 @@ function clearSearch() {
     searchForm.endUser = ''
     searchForm.instrumentName = ''
     searchForm.SN = ''
+    searchForm.expireDateFrom = ''
+    searchForm.expireDateTo = ''
+    searchForm.certificationExpireDateFrom = ''
+    searchForm.certificationExpireDateTo = ''
     // scope（有効/全件）は維持
     runQuery(listUrl.value, buildQuery())
 }
@@ -333,6 +373,40 @@ function formatAmount(value) {
     font-size: 13px;
     font-weight: 700;
     color: #0f172a;
+}
+
+.search-range {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: #475569;
+}
+
+.range-label {
+    font-weight: 700;
+}
+
+.range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.range-inputs input {
+    width: 140px;
+    box-sizing: border-box;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    padding: 7px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.range-sep {
+    color: #64748b;
 }
 
 .search-side {

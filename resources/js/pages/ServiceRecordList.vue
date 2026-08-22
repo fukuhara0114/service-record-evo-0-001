@@ -198,6 +198,13 @@
                     >
                     <button type="button" @click="clearSearch">Clear</button>
                     <button
+                        v-if="mode === 'engineer'"
+                        type="button"
+                        class="sm-mode-btn"
+                        :class="{ active: engineerQuoteCoMode }"
+                        @click="toggleEngineerQuoteCoMode"
+                    >Quote/CO</button>
+                    <button
                         v-if="!isRestrictedListMode"
                         type="button"
                         class="sm-mode-btn"
@@ -491,6 +498,19 @@
                 </button>
                 <span v-if="shippingExcelCopyMessage" class="abroad-excel-message">{{ shippingExcelCopyMessage }}</span>
             </div>
+            <!-- Engineer: Quote/CO → smsync -->
+            <div v-if="mode === 'engineer' && engineerQuoteCoMode" class="abroad-toolbar abroad-toolbar-sm">
+                <div class="abroad-toolbar-main">
+                    <button
+                        type="button"
+                        class="abroad-excel-btn abroad-sync-sm-btn"
+                        :disabled="engineerQuoteCoBusy"
+                        @click="syncQuoteCoSelected"
+                    >
+                        Sync SM{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                    </button>
+                </div>
+            </div>
             <!-- RMA / Update SM: Sync SM + Auto update -->
             <div v-else-if="isSmListMode" class="abroad-toolbar abroad-toolbar-sm">
                 <div class="abroad-toolbar-main">
@@ -521,6 +541,16 @@
                 <thead>
                     <tr v-if="mode === 'engineer'">
                         <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
+                        <th v-if="engineerQuoteCoMode" style="width: 44px; text-align: center;">
+                            <input
+                                type="checkbox"
+                                :checked="abroadAllVisibleSelected"
+                                :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                title="表示中を全選択"
+                                @click.stop
+                                @change="toggleAbroadSelectAll($event)"
+                            >
+                        </th>
                         <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
                         <SortableTh sort-key="order_type" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">order_type</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
@@ -661,6 +691,13 @@
                     >
                         <template v-if="mode === 'engineer'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td v-if="engineerQuoteCoMode" style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
                             <td>{{ r.receivedDate }}</td>
                             <td>{{ engineerOrderTypeLabel(r) }}</td>
                             <td>{{ statusLabel(r) }}</td>
@@ -1338,6 +1375,8 @@ const entityIdEditOriginal = new Map()
 const smListAutoUpdate = ref(false)
 const smListAutoRefreshTimer = ref(null)
 const smListAutoRefreshing = ref(false)
+const engineerQuoteCoMode = ref(false)
+const engineerQuoteCoBusy = ref(false)
 const SM_LIST_AUTO_REFRESH_MS = 60 * 1000
 /** 詳細オープン直後の誤 close（dblclick の残存 click / Inertia 競合）を無視する */
 const detailCloseGuardUntil = ref(0)
@@ -1426,6 +1465,10 @@ function smReturnCodeValue(returnCode) {
 
 function smReturnCodeLabel(returnCode) {
     return smReturnCodeValue(returnCode)
+}
+
+function quoteCoWarrantyPeriod(dealer) {
+    return String(dealer ?? '').includes('小森コーポレーション') ? 6 : 3
 }
 
 function onEntityIdFocus(record, event) {
@@ -1610,6 +1653,99 @@ function syncSmSelected() {
         return
     }
     exportIncidentParamJson(userName)
+}
+
+function toggleEngineerQuoteCoMode() {
+    engineerQuoteCoMode.value = !engineerQuoteCoMode.value
+    if (!engineerQuoteCoMode.value) {
+        clearAbroadSelection()
+    } else {
+        abroadSelectedIds.value = new Set()
+    }
+}
+
+function quoteCoStockedPartsFromAttachment(stockedParts) {
+    return (stockedParts ?? []).map((part) => ({
+        partName: String(part.stocked_part_master?.partName ?? '').trim(),
+        quantity: Number(part.quantity ?? 0),
+    }))
+}
+
+async function fetchStockedPartsForQuoteCo(orderID) {
+    const url = `${window.location.origin}${getBasePath()}/attachments/${orderID}`
+    const result = await apiFetch(url)
+    if (!result) {
+        throw new Error(`OrderID ${orderID}: stocked Parts の取得に失敗しました。`)
+    }
+    const { response, data } = result
+    if (!response.ok) {
+        throw new Error(data?.message || `OrderID ${orderID}: stocked Parts の取得に失敗しました。（HTTP ${response.status}）`)
+    }
+    if (data?.error) {
+        throw new Error(`OrderID ${orderID}: ${data.error}`)
+    }
+    return data?.stockedParts ?? []
+}
+
+async function exportQuoteCoParamJson(theUserNameKanji) {
+    console.log('commonScript::exportQuoteCoParamJson was called')
+
+    const rows = filteredRecords.value
+    if (!rows.length) {
+        alert('データテーブルが表示されていません。')
+        return
+    }
+
+    const selectedRows = rows.filter((r) => isAbroadSelected(r.orderID))
+    if (selectedRows.length === 0) {
+        alert('「Sel」列にチェックが入っている行がありません。出力したいデータの「Sel」にチェックを入れてください。')
+        return
+    }
+
+    const jsonData = []
+    for (const r of selectedRows) {
+        const orderID = String(r.orderID ?? '').trim()
+        const sm_workorder = String(r.sm_workorder ?? '').trim()
+        const entityID = String(r.entityID ?? '').trim()
+        const sn = String(r.SN ?? '').trim()
+
+        let stockedParts = []
+        try {
+            stockedParts = await fetchStockedPartsForQuoteCo(orderID)
+        } catch (e) {
+            alert(e.message || `OrderID ${orderID || '不明'}: stocked Parts の取得に失敗しました。`)
+            return
+        }
+
+        jsonData.push({
+            orderID,
+            sm_workorder,
+            entityID,
+            SN: sn,
+            returnCode: smReturnCodeValue(r.returnCode),
+            warranty_period: quoteCoWarrantyPeriod(r.dealer),
+            stockedParts: quoteCoStockedPartsFromAttachment(stockedParts),
+        })
+    }
+
+    const finalOutput = {
+        sm_mode: 'quote_co',
+        who_exported: theUserNameKanji,
+        param: jsonData,
+    }
+
+    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
+    window.location.href = `smsync://action?json=${encodedJson}`
+}
+
+async function syncQuoteCoSelected() {
+    if (engineerQuoteCoBusy.value) return
+    engineerQuoteCoBusy.value = true
+    try {
+        await exportQuoteCoParamJson(currentUserKanji.value)
+    } finally {
+        engineerQuoteCoBusy.value = false
+    }
 }
 
 async function refreshSmListData() {
@@ -1944,17 +2080,25 @@ const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
     if (props.mode === 'engineer') {
-        records = records.filter((r) => {
-            const orderType = r?.order_type ?? 'service'
-            const status = Number(r?.status)
-            if (orderType === 'service' || orderType === '' || orderType == null) {
-                return status === 90
-            }
-            if (orderType === 'loaner') {
-                return status === 396
-            }
-            return false
-        })
+        if (engineerQuoteCoMode.value) {
+            records = records.filter((r) => {
+                const orderType = r?.order_type ?? 'service'
+                const status = Number(r?.status)
+                return (orderType === 'service' || orderType === '' || orderType == null) && status === 180
+            })
+        } else {
+            records = records.filter((r) => {
+                const orderType = r?.order_type ?? 'service'
+                const status = Number(r?.status)
+                if (orderType === 'service' || orderType === '' || orderType == null) {
+                    return Number.isFinite(status) && status >= 90 && status <= 180
+                }
+                if (orderType === 'loaner') {
+                    return status === 396
+                }
+                return false
+            })
+        }
     } else if (!isBoardMode.value) {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
     }

@@ -20,6 +20,10 @@ class MaintenanceContractController extends Controller
             'endUser' => trim((string) $request->input('endUser', '')),
             'instrumentName' => trim((string) $request->input('instrumentName', '')),
             'SN' => trim((string) $request->input('SN', '')),
+            'expireDateFrom' => $this->normalizeDateInput($request->input('expireDateFrom')),
+            'expireDateTo' => $this->normalizeDateInput($request->input('expireDateTo')),
+            'certificationExpireDateFrom' => $this->normalizeDateInput($request->input('certificationExpireDateFrom')),
+            'certificationExpireDateTo' => $this->normalizeDateInput($request->input('certificationExpireDateTo')),
             'scope' => $scope,
         ];
 
@@ -43,6 +47,19 @@ class MaintenanceContractController extends Controller
         if ($filters['SN'] !== '') {
             $query->where('SN', 'like', $this->likeContains($filters['SN']));
         }
+
+        $this->applyDateRangeFilter(
+            $query,
+            'expireDate',
+            $filters['expireDateFrom'],
+            $filters['expireDateTo'],
+        );
+        $this->applyDateRangeFilter(
+            $query,
+            'certificationExpireDate',
+            $filters['certificationExpireDateFrom'],
+            $filters['certificationExpireDateTo'],
+        );
 
         $contracts = $query
             ->orderByRaw('CASE WHEN expireDate IS NULL THEN 1 ELSE 0 END')
@@ -195,6 +212,30 @@ class MaintenanceContractController extends Controller
                 'expireDateAfter' => $today,
             ],
         ]);
+    }
+
+    private function normalizeDateInput(mixed $value): string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '';
+        }
+
+        try {
+            return Carbon::parse($raw)->toDateString();
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function applyDateRangeFilter($query, string $column, string $from, string $to): void
+    {
+        if ($from !== '') {
+            $query->whereNotNull($column)->whereDate($column, '>=', $from);
+        }
+        if ($to !== '') {
+            $query->whereNotNull($column)->whereDate($column, '<=', $to);
+        }
     }
 
     private function likeContains(string $value): string

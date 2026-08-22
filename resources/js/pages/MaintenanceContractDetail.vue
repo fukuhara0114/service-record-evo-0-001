@@ -3,6 +3,8 @@
         <header class="page-header">
             <div>
                 <h1>Maintenance Contract 詳細</h1>
+            </div>
+            <div>
                 <p class="subtitle">
                     ID: {{ form.id }}
                     <span v-if="form.contractTypeName"> / {{ form.contractTypeName }}</span>
@@ -19,172 +21,221 @@
             </div>
         </header>
 
-        <div class="content-grid">
-            <section class="panel">
-                <h2>契約情報</h2>
-                <div class="form-grid">
-                    <label class="field">
-                        <span>契約種別</span>
-                        <select v-model="form.contractType">
-                            <option value="">未選択</option>
-                            <option
-                                v-for="type in contractTypes"
-                                :key="type.id"
-                                :value="String(type.id)"
+        <Splitpanes class="default-theme detail-splitpanes" @resized="syncPaneSizes">
+            <Pane class="detail-pane detail-pane-left" :size="leftPaneSize" :min-size="28">
+            <div class="left-column">
+                <section class="panel">
+                    <h2>製品 </h2>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>instrumentName</span>
+                            <input v-model="form.instrumentName" type="text">
+                        </label>
+                        <label class="field">
+                            <span>SN</span>
+                            <input v-model="form.SN" type="text">
+                        </label>
+                        <label class="field">
+                            <span>status</span>
+                            <input v-model="form.status" type="text">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <h2>契約情報</h2>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>RefNumber</span>
+                            <input v-model="form.RefNumber" type="text">
+                        </label>
+                        <label class="field">
+                            <span>契約種別</span>
+                            <select v-model="form.contractType">
+                                <option value="">未選択</option>
+                                <option
+                                    v-for="type in contractTypes"
+                                    :key="type.id"
+                                    :value="String(type.id)"
+                                >
+                                    {{ type.contractType }}（{{ type.id }}）
+                                </option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span>価格</span>
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                class="amount-input"
+                                :value="amountFocused ? amountEditText : formatYen(form.amount)"
+                                @focus="onAmountFocus"
+                                @input="onAmountInput"
+                                @blur="onAmountBlur"
                             >
-                                {{ type.contractType }}（{{ type.id }}）
-                            </option>
-                        </select>
-                    </label>
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>startDate</span>
+                            <input v-model="form.startDate" type="date">
+                        </label>
+                        <label class="field">
+                            <span>expireDate</span>
+                            <input v-model="form.expireDate" type="date">
+                        </label>
+                        <label class="field">
+                            <span>certificationTicket</span>
+                            <input v-model="form.certificationTicket" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>certificationExpireDate</span>
+                            <input v-model="form.certificationExpireDate" type="date">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel panel-plain">
+                    <h2>受注</h2>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>informedDate</span>
+                            <input v-model="form.informedDate" type="date">
+                        </label>
+                        <label class="field checkbox-field">
+                            <span>informed</span>
+                            <input v-model="form.informed" type="checkbox">
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>renewalInformation</span>
+                            <input v-model="form.renewalInformation" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>renewedDate</span>
+                            <input v-model="form.renewedDate" type="date">
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>shippingDate</span>
+                            <input v-model="form.shippingDate" type="date">
+                        </label>
+                        <label class="field">
+                            <span>orderedDate</span>
+                            <input v-model="form.orderedDate" type="date">
+                        </label>
+                    </div>
+                    <div class="row row-3">
+                        <label class="field">
+                            <span>yayoi_PO</span>
+                            <input v-model="form.yayoi_PO" type="text">
+                        </label>
+                        <label class="field">
+                            <span>mapics_PO</span>
+                            <input v-model="form.mapics_PO" type="text">
+                        </label>
+                        <label class="field">
+                            <span>invoice_num</span>
+                            <input v-model="form.invoice_num" type="text">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel panel-plain">
                     <label class="field">
-                        <span>status</span>
-                        <input v-model="form.status" type="text">
-                    </label>
-                    <label class="field">
-                        <span>RefNumber</span>
-                        <input v-model="form.RefNumber" type="text">
-                    </label>
-                    <label class="field">
-                        <span>amount</span>
-                        <input v-model="form.amount" type="number" step="0.01">
-                    </label>
-                    <label class="field">
-                        <span>startDate</span>
-                        <input v-model="form.startDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>expireDate</span>
-                        <input v-model="form.expireDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>certificationTicket</span>
-                        <input v-model="form.certificationTicket" type="text">
-                    </label>
-                    <label class="field">
-                        <span>certificationExpireDate</span>
-                        <input v-model="form.certificationExpireDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>informedDate</span>
-                        <input v-model="form.informedDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>renewedDate</span>
-                        <input v-model="form.renewedDate" type="date">
-                    </label>
-                    <label class="field checkbox-field">
-                        <span>informed</span>
-                        <input v-model="form.informed" type="checkbox">
-                    </label>
-                    <label class="field span-2">
-                        <span>renewalInformation</span>
-                        <input v-model="form.renewalInformation" type="text">
-                    </label>
-                    <label class="field span-2">
                         <span>description</span>
                         <textarea v-model="form.description" rows="3"></textarea>
                     </label>
-                    <label class="field span-2">
+                    <label class="field">
                         <span>additional_information</span>
                         <textarea v-model="form.additional_information" rows="3"></textarea>
                     </label>
-                </div>
-            </section>
+                </section>
+            </div>
+            </Pane>
 
-            <section class="panel">
-                <h2>製品 / 受注</h2>
-                <div class="form-grid">
-                    <label class="field">
-                        <span>instrumentName</span>
-                        <input v-model="form.instrumentName" type="text">
-                    </label>
-                    <label class="field">
-                        <span>SN</span>
-                        <input v-model="form.SN" type="text">
-                    </label>
-                    <label class="field">
-                        <span>shippingDate</span>
-                        <input v-model="form.shippingDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>orderedDate</span>
-                        <input v-model="form.orderedDate" type="date">
-                    </label>
-                    <label class="field">
-                        <span>yayoi_PO</span>
-                        <input v-model="form.yayoi_PO" type="text">
-                    </label>
-                    <label class="field">
-                        <span>mapics_PO</span>
-                        <input v-model="form.mapics_PO" type="text">
-                    </label>
-                    <label class="field span-2">
-                        <span>invoice_num</span>
-                        <input v-model="form.invoice_num" type="text">
-                    </label>
-                </div>
-            </section>
+            <Pane class="detail-pane detail-pane-right" :size="rightPaneSize" :min-size="28">
+            <div class="right-column">
+                <section class="panel stakeholder-panel">
+                    <h2>dealer</h2>
+                    <div class="row row-2">
+                        <label class="field">
+                            <span>dealer</span>
+                            <input v-model="form.dealer" type="text">
+                        </label>
+                        <label class="field">
+                            <span>branch</span>
+                            <input v-model="form.branch" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-2">
+                        <label class="field">
+                            <span>contact</span>
+                            <input v-model="form.contact" type="text">
+                        </label>
+                        <label class="field">
+                            <span>phone</span>
+                            <input v-model="form.phone" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-1">
+                        <label class="field">
+                            <span>email</span>
+                            <input v-model="form.email" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-1">
+                        <label class="field">
+                            <span>address</span>
+                            <textarea v-model="form.address" rows="3"></textarea>
+                        </label>
+                    </div>
+                </section>
 
-            <section class="panel">
-                <h2>dealer</h2>
-                <div class="form-grid">
-                    <label class="field">
-                        <span>dealer</span>
-                        <input v-model="form.dealer" type="text">
-                    </label>
-                    <label class="field">
-                        <span>branch</span>
-                        <input v-model="form.branch" type="text">
-                    </label>
-                    <label class="field">
-                        <span>contact</span>
-                        <input v-model="form.contact" type="text">
-                    </label>
-                    <label class="field">
-                        <span>phone</span>
-                        <input v-model="form.phone" type="text">
-                    </label>
-                    <label class="field span-2">
-                        <span>email</span>
-                        <input v-model="form.email" type="text">
-                    </label>
-                    <label class="field span-2">
-                        <span>address</span>
-                        <textarea v-model="form.address" rows="2"></textarea>
-                    </label>
-                </div>
-            </section>
-
-            <section class="panel">
-                <h2>endUser</h2>
-                <div class="form-grid">
-                    <label class="field">
-                        <span>endUser</span>
-                        <input v-model="form.endUser" type="text">
-                    </label>
-                    <label class="field">
-                        <span>endUser_depart</span>
-                        <input v-model="form.endUser_depart" type="text">
-                    </label>
-                    <label class="field">
-                        <span>endUser_contact</span>
-                        <input v-model="form.endUser_contact" type="text">
-                    </label>
-                    <label class="field">
-                        <span>endUser_phone</span>
-                        <input v-model="form.endUser_phone" type="text">
-                    </label>
-                    <label class="field span-2">
-                        <span>endUser_email</span>
-                        <input v-model="form.endUser_email" type="text">
-                    </label>
-                    <label class="field span-2">
-                        <span>endUser_address</span>
-                        <textarea v-model="form.endUser_address" rows="2"></textarea>
-                    </label>
-                </div>
-            </section>
-        </div>
+                <section class="panel stakeholder-panel">
+                    <h2>endUser</h2>
+                    <div class="row row-2">
+                        <label class="field">
+                            <span>endUser</span>
+                            <input v-model="form.endUser" type="text">
+                        </label>
+                        <label class="field">
+                            <span>endUser_depart</span>
+                            <input v-model="form.endUser_depart" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-2">
+                        <label class="field">
+                            <span>endUser_contact</span>
+                            <input v-model="form.endUser_contact" type="text">
+                        </label>
+                        <label class="field">
+                            <span>endUser_phone</span>
+                            <input v-model="form.endUser_phone" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-1">
+                        <label class="field">
+                            <span>endUser_email</span>
+                            <input v-model="form.endUser_email" type="text">
+                        </label>
+                    </div>
+                    <div class="row row-1">
+                        <label class="field">
+                            <span>endUser_address</span>
+                            <textarea v-model="form.endUser_address" rows="3"></textarea>
+                        </label>
+                    </div>
+                </section>
+            </div>
+            </Pane>
+        </Splitpanes>
 
         <p class="meta-foot">
             最終更新: {{ form.lastEditPerson || '—' }} / {{ form.lastEditDate || '—' }}
@@ -195,6 +246,8 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import { Pane, Splitpanes } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -213,9 +266,59 @@ const page = usePage()
 const saving = ref(false)
 const error = ref('')
 const success = ref('')
+const leftPaneSize = ref(50)
+const rightPaneSize = ref(50)
+const amountFocused = ref(false)
+const amountEditText = ref('')
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/maintenance-contracts`)
+
+function syncPaneSizes({ panes } = {}) {
+    if (!panes || panes.length < 2) return
+    leftPaneSize.value = panes[0].size
+    rightPaneSize.value = panes[1].size
+}
+
+function formatYen(value) {
+    if (value === '' || value == null) return ''
+    const num = Number(value)
+    if (!Number.isFinite(num)) return String(value)
+    return new Intl.NumberFormat('ja-JP', {
+        style: 'currency',
+        currency: 'JPY',
+    }).format(num)
+}
+
+function parseYenInput(value) {
+    const raw = String(value ?? '').replace(/[￥¥,\s]/g, '').trim()
+    if (raw === '') return ''
+    const num = Number(raw)
+    return Number.isFinite(num) ? num : null
+}
+
+function onAmountFocus() {
+    amountFocused.value = true
+    amountEditText.value = form.amount === '' || form.amount == null
+        ? ''
+        : String(form.amount)
+}
+
+function onAmountInput(event) {
+    amountEditText.value = event.target.value
+}
+
+function onAmountBlur() {
+    amountFocused.value = false
+    const parsed = parseYenInput(amountEditText.value)
+    if (parsed === null) {
+        amountEditText.value = form.amount === '' || form.amount == null
+            ? ''
+            : String(form.amount)
+        return
+    }
+    form.amount = parsed
+}
 
 const form = reactive({
     id: props.contract.id,
@@ -351,7 +454,7 @@ async function save() {
 .detail-page {
     min-height: 100vh;
     padding: 12px 16px 24px;
-    background: #e2e8f0;
+    background: #dbe4ee;
     box-sizing: border-box;
     color: #1e293b;
     font-weight: 700;
@@ -373,7 +476,8 @@ async function save() {
 .subtitle {
     margin: 0;
     color: #64748b;
-    font-size: 13px;
+    font-size: 18px;
+    font-weight: 900;
 }
 
 .header-actions {
@@ -422,49 +526,93 @@ async function save() {
     background: #64748b;
 }
 
-.content-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+.detail-splitpanes {
+    height: auto;
+    min-height: calc(100vh - 110px);
+    background: transparent;
+}
+
+.detail-pane {
+    overflow: auto;
+    padding: 0 4px;
+}
+
+.left-column,
+.right-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    height: 100%;
+}
+
+:deep(.splitpanes__splitter) {
+    background: #94a3b8;
+    min-width: 6px;
+}
+
+:deep(.splitpanes__splitter:hover) {
+    background: #64748b;
 }
 
 .panel {
-    background: #fff;
+    background: #e0e0e0;
     border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 6px;
+    padding: 12px 14px;
+}
+
+.panel-plain {
+    border-color: #d8e0ea;
 }
 
 .panel h2 {
     margin: 0 0 10px;
     font-size: 15px;
-    color: #0f172a;
+    font-weight: 700;
+    color: #000;
 }
 
-.form-grid {
+.stakeholder-panel h2 {
+    margin-bottom: 12px;
+}
+
+.row {
     display: grid;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.row:last-child {
+    margin-bottom: 0;
+}
+
+.row-1 {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.row-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 10px;
+}
+
+.row-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 12px;
-    color: #475569;
+    font-size: 13px;
+    color: #000;
+    font-weight: 700;
     min-width: 0;
 }
 
-.field.span-2 {
-    grid-column: 1 / -1;
-}
-
-.field.checkbox-field {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding-top: 22px;
+.field > span {
+    color: #000;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .field input,
@@ -473,7 +621,7 @@ async function save() {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid #94a3b8;
-    border-radius: 4px;
+    border-radius: 3px;
     padding: 7px 8px;
     font-size: 13px;
     font-weight: 700;
@@ -483,10 +631,27 @@ async function save() {
 
 .field textarea {
     resize: vertical;
+    line-height: 1.4;
+}
+
+.amount-input {
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
+
+.field.checkbox-field {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 8px;
+    padding-bottom: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .field.checkbox-field input {
     width: auto;
+    margin: 0;
 }
 
 .meta-foot {
@@ -495,14 +660,14 @@ async function save() {
     font-size: 12px;
 }
 
-@media (max-width: 960px) {
-    .content-grid,
-    .form-grid {
+@media (max-width: 720px) {
+    .row-2,
+    .row-3 {
         grid-template-columns: 1fr;
     }
 
-    .field.span-2 {
-        grid-column: auto;
+    .field.checkbox-field {
+        padding-bottom: 0;
     }
 }
 </style>
