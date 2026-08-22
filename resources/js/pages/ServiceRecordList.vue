@@ -1469,7 +1469,7 @@ function smReturnCodeLabel(returnCode) {
 }
 
 function quoteCoWarrantyPeriod(dealer) {
-    return String(dealer ?? '').includes('小森コーポレーション') ? 6 : 3
+    return String(dealer ?? '').includes('小森コーポレーション') ? '6' : '3'
 }
 
 function onEntityIdFocus(record, event) {
@@ -1668,7 +1668,7 @@ function toggleEngineerQuoteCoMode() {
 function quoteCoStockedPartsFromAttachment(stockedParts) {
     return (stockedParts ?? []).map((part) => ({
         partname: String(part.stocked_part_master?.partName ?? '').trim(),
-        quantity: Number(part.quantity ?? 0),
+        quantity: String(Number(part.quantity ?? 0)),
     }))
 }
 
