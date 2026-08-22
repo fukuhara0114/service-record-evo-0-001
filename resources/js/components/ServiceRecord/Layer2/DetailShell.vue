@@ -162,6 +162,7 @@
                 />
                 <DetailFormA
                     v-else-if="layout === 'A'"
+                    ref="detailFormARef"
                     :record="record"
                     :draft-record="draftRecord"
                     :notes="notes"
@@ -206,7 +207,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import DetailFormA from './DetailFormA.vue'
 import DetailFormB from './DetailFormB.vue'
@@ -274,6 +275,16 @@ const props = defineProps({
 })
 
 defineEmits(['close', 'switch-layout', 'open-dialog', 'save', 'files-updated', 'reload-attachments', 'workflow-done'])
+
+const detailFormARef = ref(null)
+
+function confirmAssignNotifyMail(count) {
+    return detailFormARef.value?.confirmAssignNotifyMail?.(count) ?? Promise.resolve(false)
+}
+
+defineExpose({
+    confirmAssignNotifyMail,
+})
 
 const page = usePage()
 

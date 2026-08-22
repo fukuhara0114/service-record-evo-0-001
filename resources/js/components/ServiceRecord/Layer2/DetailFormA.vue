@@ -825,6 +825,29 @@
             </div>
         </div>
 
+        <div
+            v-if="showAssignNotifyDialog"
+            class="confirm-overlay assign-notify-overlay"
+            @click.self="cancelAssignNotifyDialog"
+        >
+            <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="assign-notify-title" @click.stop>
+                <div class="confirm-header">
+                    <h3 id="assign-notify-title">アサイン通知</h3>
+                </div>
+                <div class="confirm-body">
+                    <p>{{ assignNotifyDialogMessage }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="action-btn" @click="resolveAssignNotifyDialog(false)">
+                        送信しない
+                    </button>
+                    <button type="button" class="action-btn action-btn-primary" @click="resolveAssignNotifyDialog(true)">
+                        送信する
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <EmailDraftTypeDialog
             v-if="showEmailDraftDialog"
             :creating="emailDraftCreating"
@@ -858,7 +881,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineExpose, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -2048,9 +2071,51 @@ function formatDate(value) {
     // toLocaleString から toLocaleDateString に変更
     return date.toLocaleDateString('ja-JP') 
 }
+
+const showAssignNotifyDialog = ref(false)
+const assignNotifyDialogMessage = ref('')
+let assignNotifyDialogResolve = null
+
+function buildAssignNotifyConfirmMessage(count) {
+    const laborLabel = String(
+        props.draftRecord?.labor_master?.laborName
+        ?? props.record?.labor_master?.laborName
+        ?? '',
+    ).trim()
+    if (laborLabel) {
+        return `[宛先] ${laborLabel} ${count} 名にアサイン通知メールを送信しますか？`
+    }
+    return `同じ laborID の担当者 ${count} 名にアサイン通知メールを送信しますか？`
+}
+
+function confirmAssignNotifyMail(count) {
+    return new Promise((resolve) => {
+        assignNotifyDialogMessage.value = buildAssignNotifyConfirmMessage(count)
+        assignNotifyDialogResolve = resolve
+        showAssignNotifyDialog.value = true
+    })
+}
+
+function resolveAssignNotifyDialog(send) {
+    showAssignNotifyDialog.value = false
+    assignNotifyDialogResolve?.(!!send)
+    assignNotifyDialogResolve = null
+}
+
+function cancelAssignNotifyDialog() {
+    resolveAssignNotifyDialog(false)
+}
+
+defineExpose({
+    confirmAssignNotifyMail,
+})
 </script>
 
 <style scoped>
+.assign-notify-overlay {
+    z-index: 460;
+}
+
 .detail-form {
     display: flex;
     flex-direction: column;

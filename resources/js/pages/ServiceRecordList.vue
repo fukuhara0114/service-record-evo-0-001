@@ -981,6 +981,7 @@
 
         <DetailShell
             v-if="isDetailOpen"
+            ref="detailShellRef"
             :record="activeRecord"
             :draft-record="draftRecord"
             :notes="activeNotes"
@@ -1666,7 +1667,7 @@ function toggleEngineerQuoteCoMode() {
 
 function quoteCoStockedPartsFromAttachment(stockedParts) {
     return (stockedParts ?? []).map((part) => ({
-        partName: String(part.stocked_part_master?.partName ?? '').trim(),
+        partname: String(part.stocked_part_master?.partName ?? '').trim(),
         quantity: Number(part.quantity ?? 0),
     }))
 }
@@ -1718,13 +1719,13 @@ async function exportQuoteCoParamJson(theUserNameKanji) {
         }
 
         jsonData.push({
-            orderID,
+            orderid: orderID,
             sm_workorder,
-            entityID,
-            SN: sn,
-            returnCode: smReturnCodeValue(r.returnCode),
+            entityid: entityID,
+            sn,
+            returncode: smReturnCodeValue(r.returnCode),
             warranty_period: quoteCoWarrantyPeriod(r.dealer),
-            stockedParts: quoteCoStockedPartsFromAttachment(stockedParts),
+            stockedparts: quoteCoStockedPartsFromAttachment(stockedParts),
         })
     }
 
@@ -2726,6 +2727,7 @@ const attachmentsLoading = ref(false)
 const attachmentsError = ref('')
 const isSavingRecord = ref(false)
 const saveError = ref('')
+const detailShellRef = ref(null)
 const detailLoading = ref(false)
 const detailOpenError = ref('')
 const attachmentsRequestSeq = ref(0)
@@ -3213,10 +3215,7 @@ async function saveRecord() {
                 })
                 const count = Number(preview?.data?.count ?? 0)
                 if (Number.isFinite(count) && count > 0) {
-                    const ok = window.confirm(
-                        `同じ laborID の担当者 ${count} 名にアサイン通知メールを送信しますか？\n\n[はい]=送信　[いいえ]=送信しない`,
-                    )
-                    notifyAssign = !!ok
+                    notifyAssign = await detailShellRef.value?.confirmAssignNotifyMail?.(count) ?? false
                 }
             } catch (e) {
                 // 対象確認失敗時はメール無しで保存続行
