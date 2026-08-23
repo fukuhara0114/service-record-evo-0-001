@@ -1725,6 +1725,8 @@ async function exportQuoteCoParamJson(theUserNameKanji) {
             sn,
             returncode: smReturnCodeValue(r.returnCode),
             warranty_period: quoteCoWarrantyPeriod(r.dealer),
+            price: String(r.price ?? '').trim(),
+            ponum: String(r.poNum ?? '').trim(),
             stockedparts: quoteCoStockedPartsFromAttachment(stockedParts),
         })
     }
