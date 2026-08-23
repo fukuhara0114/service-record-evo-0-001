@@ -555,6 +555,7 @@
                         <SortableTh sort-key="order_type" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">order_type</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
                         <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="sm_quote" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">QUOTE</SortableTh>
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                         <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
                         <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
@@ -702,6 +703,7 @@
                             <td>{{ engineerOrderTypeLabel(r) }}</td>
                             <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
+                            <td>{{ r.sm_quote }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.item || '' }}</td>
                             <td>{{ r.SN }}</td>
@@ -2087,7 +2089,11 @@ const filteredRecords = computed(() => {
             records = records.filter((r) => {
                 const orderType = r?.order_type ?? 'service'
                 const status = Number(r?.status)
-                return (orderType === 'service' || orderType === '' || orderType == null) && status === 180
+                const smQuote = Number(r?.sm_quote)
+                return (orderType === 'service' || orderType === '' || orderType == null)
+                    && status === 180
+                    && Number.isFinite(smQuote)
+                    && smQuote < 1000
             })
         } else {
             records = records.filter((r) => {
@@ -2154,6 +2160,7 @@ const filteredRecords = computed(() => {
                     r.a2la,
                     r.symptoms,
                     r.sm_workorder,
+                    r.sm_quote,
                     r.entityID,
                     r.incident,
                     String(symptomsNumForRecord(r)),
