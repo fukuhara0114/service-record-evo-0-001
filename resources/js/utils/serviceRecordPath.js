@@ -4,12 +4,17 @@
  *   /servicerecord/administrator → /servicerecord
  *   /dev/stage001/service-record-evo-0-001/servicerecord/shipping-calendar
  *     → /dev/stage001/service-record-evo-0-001/servicerecord
+ *   /v85/servicerecord/public/servicerecord/administrator
+ *     → /v85/servicerecord/public/servicerecord
+ *     （フォルダ名の /servicerecord ではなく、ルート側の末尾を使う）
  */
 export function getServiceRecordBasePath() {
     if (typeof window === 'undefined') return '/servicerecord'
     const path = window.location.pathname || ''
     const marker = '/servicerecord'
-    const idx = path.indexOf(marker)
+    // 配備パスに "servicerecord" フォルダが含まれる場合、最初の一致だと
+    // /v85/servicerecord/... になり /public 配下のアプリを外れるため、末尾を使う。
+    const idx = path.lastIndexOf(marker)
     if (idx === -1) return marker
     return path.slice(0, idx + marker.length)
 }
