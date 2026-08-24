@@ -327,10 +327,16 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 
 const INVOICE_STATUS_MPPICS_FINAL = 385
 const INVOICE_COMPLETE_STATUS_LOGISTICS = 350
 const INVOICE_COMPLETE_STATUS_SHIPPED = 400
+const INVOICE_COMPLETE_STATUS_LOANER_LENDING = 388
 
-function resolveInvoiceCompleteStatus(currentStatus) {
+function resolveInvoiceCompleteStatus(currentStatus, orderType) {
     const status = Number(currentStatus)
-    if (status === INVOICE_STATUS_MPPICS_FINAL) return INVOICE_COMPLETE_STATUS_SHIPPED
+    const type = String(orderType ?? 'service').trim().toLowerCase()
+    if (status === INVOICE_STATUS_MPPICS_FINAL) {
+        return type === 'loaner'
+            ? INVOICE_COMPLETE_STATUS_LOANER_LENDING
+            : INVOICE_COMPLETE_STATUS_SHIPPED
+    }
     return INVOICE_COMPLETE_STATUS_LOGISTICS
 }
 
@@ -842,7 +848,8 @@ async function onComplete() {
     if (statusActionSaving.value || !props.draftRecord) return
 
     const currentStatus = props.draftRecord?.status ?? props.record?.status
-    const nextStatus = resolveInvoiceCompleteStatus(currentStatus)
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
+    const nextStatus = resolveInvoiceCompleteStatus(currentStatus, orderType)
 
     statusActionSaving.value = true
     actionMessage.value = ''
