@@ -18,28 +18,67 @@
                 alt="Preview"
                 class="preview-image"
             >
+            <p v-else-if="success" class="upload-success-message">{{ success }}</p>
             <p v-else class="preview-placeholder">Preview</p>
         </div>
 
         <p v-if="error" class="status-message is-error">{{ error }}</p>
-        <p v-else-if="success" class="status-message is-success">{{ success }}</p>
 
-        <div class="action-stack">
+        <div class="action-row">
             <button
                 type="button"
-                class="cam-btn"
-                :disabled="busy || !selectedFile"
-                @click="uploadCapturedImage"
-            >
-                {{ busy && selectedFile ? 'Uploading...' : 'Upload' }}
-            </button>
-            <button
-                type="button"
-                class="cam-btn"
+                class="cam-btn cam-btn-action"
                 :disabled="busy"
                 @click="openCamera"
             >
-                {{ previewUrl ? 'Capture again' : 'Capture' }}
+                <span class="cam-btn-content">
+                    <svg class="cam-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M9 4h2l1-2h2l1 2h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4Z"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linejoin="round"
+                        />
+                        <circle
+                            cx="12"
+                            cy="12"
+                            r="3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                        />
+                    </svg>
+                    <span class="cam-btn-label">Capture</span>
+                </span>
+            </button>
+            <button
+                type="button"
+                class="cam-btn cam-btn-action"
+                :disabled="busy || !selectedFile"
+                @click="uploadCapturedImage"
+            >
+                <span class="cam-btn-content">
+                    <svg class="cam-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M12 16V4m0 0 4 4m-4-4-4 4"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                        <path
+                            d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    <span class="cam-btn-label">{{ busy && selectedFile ? 'Uploading...' : 'Upload' }}</span>
+                </span>
             </button>
         </div>
 
@@ -277,6 +316,7 @@ onBeforeUnmount(() => {
     min-height: 100vh;
     min-height: 100dvh;
     width: 100%;
+    max-width: 100%;
     margin: 0;
     padding: 16px;
     box-sizing: border-box;
@@ -303,8 +343,9 @@ onBeforeUnmount(() => {
 .preview-wrap {
     width: 100%;
     flex: 1 1 auto;
-    min-height: 220px;
-    border: 2px solid #0f172a;
+    min-height: 280px;
+    border: 2px solid #000;
+    border-radius: 0;
     background: #eff6ff;
     display: flex;
     align-items: center;
@@ -328,9 +369,21 @@ onBeforeUnmount(() => {
     font-weight: 600;
 }
 
+.upload-success-message {
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+    font-size: clamp(32px, 12vw, 72px);
+    font-weight: 700;
+    line-height: 1.2;
+    color: #0f172a;
+    word-break: break-word;
+}
+
 .status-message {
     margin: 0;
-    font-size: 14px;
+    font-size: clamp(16px, 4vw, 22px);
+    font-weight: 700;
     text-align: center;
     flex: 0 0 auto;
 }
@@ -339,14 +392,9 @@ onBeforeUnmount(() => {
     color: #b91c1c;
 }
 
-.status-message.is-success {
-    color: #047857;
-}
-
-.action-stack {
+.action-row {
     display: flex;
-    flex-direction: column;
-    gap: 15px;
+    gap: 8px;
     width: 100%;
     flex: 0 0 auto;
 }
@@ -358,8 +406,8 @@ onBeforeUnmount(() => {
     width: 100%;
     min-height: 52px;
     padding: 12px 16px;
-    border: 2px solid #0f172a;
-    border-radius: 0;
+    border: 1px solid #000;
+    border-radius: 3px;
     background: #fff;
     color: #0f172a;
     font-size: clamp(18px, 3.5vw, 24px);
@@ -370,8 +418,30 @@ onBeforeUnmount(() => {
     cursor: pointer;
 }
 
-.action-stack .cam-btn {
+.cam-btn-action {
+    flex: 1 1 0;
     min-height: 104px;
+    background: #e5e5e5;
+}
+
+.cam-btn-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.cam-btn-icon {
+    width: clamp(36px, 10vw, 52px);
+    height: clamp(36px, 10vw, 52px);
+    flex: 0 0 auto;
+}
+
+.cam-btn-label {
+    font-size: clamp(18px, 3.5vw, 24px);
+    font-weight: 700;
+    line-height: 1.1;
 }
 
 .cam-btn:disabled {
@@ -383,11 +453,13 @@ onBeforeUnmount(() => {
     width: 100%;
     margin: 0;
     padding: 0;
+    flex: 0 0 auto;
 }
 
 .cam-btn-close {
     margin-top: 50px;
     min-height: 52px;
+    background: #fff;
 }
 
 @media (orientation: landscape) {
@@ -397,15 +469,20 @@ onBeforeUnmount(() => {
     }
 
     .preview-wrap {
-        min-height: 160px;
+        min-height: 180px;
     }
 
-    .action-stack .cam-btn {
+    .cam-btn-action {
         min-height: 88px;
     }
 
     .cam-btn-close {
+        margin-top: 24px;
         min-height: 44px;
+    }
+
+    .upload-success-message {
+        font-size: clamp(28px, 8vw, 56px);
     }
 }
 </style>

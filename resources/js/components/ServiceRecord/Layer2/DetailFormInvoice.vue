@@ -324,6 +324,16 @@ const props = defineProps({
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'save', 'workflow-done'])
 
+const INVOICE_STATUS_MPPICS_FINAL = 385
+const INVOICE_COMPLETE_STATUS_LOGISTICS = 350
+const INVOICE_COMPLETE_STATUS_SHIPPED = 400
+
+function resolveInvoiceCompleteStatus(currentStatus) {
+    const status = Number(currentStatus)
+    if (status === INVOICE_STATUS_MPPICS_FINAL) return INVOICE_COMPLETE_STATUS_SHIPPED
+    return INVOICE_COMPLETE_STATUS_LOGISTICS
+}
+
 const page = usePage()
 const leftPaneSize = ref(40)
 const rightPaneSize = ref(60)
@@ -831,11 +841,14 @@ async function updateRecordFields(payload) {
 async function onComplete() {
     if (statusActionSaving.value || !props.draftRecord) return
 
+    const currentStatus = props.draftRecord?.status ?? props.record?.status
+    const nextStatus = resolveInvoiceCompleteStatus(currentStatus)
+
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
         await updateRecordFields({
-            status: 350,
+            status: nextStatus,
             invNum: props.draftRecord.invNum,
             mapics_inv: props.draftRecord.mapics_inv,
             mapics47: props.draftRecord.mapics47,
@@ -846,7 +859,7 @@ async function onComplete() {
         })
         emit('workflow-done', {
             action: 'complete',
-            status: 350,
+            status: nextStatus,
         })
     } catch (e) {
         if (!e.cancelled) {

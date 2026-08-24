@@ -1,5 +1,6 @@
 <template>
-    <div class="list-page-container">
+    <div class="list-page-container" :class="{ 'list-page-compact-shell': !isRestrictedListMode }">
+        <div class="list-page-inner" :class="{ 'list-page-compact': !isRestrictedListMode }">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
             <div class="header-left">
@@ -218,6 +219,12 @@
                         :class="{ active: orderTypeFilter === 'update_sm' }"
                         @click="orderTypeFilter = 'update_sm'"
                     >Update SM</button>
+                    <button
+                        v-if="!isRestrictedListMode"
+                        type="button"
+                        class="sm-mode-btn sm-mode-btn-check"
+                        @click="onCheckSmHeaderClick"
+                    >Check SM</button>
                 </div>
             </div>
             <div class="header-right">
@@ -554,7 +561,8 @@
                         <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
                         <SortableTh sort-key="order_type" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">order_type</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
-                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA</SortableTh>
+                        <SortableTh sort-key="sm_workorder" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">WORKORDER</SortableTh>
                         <SortableTh sort-key="sm_quote" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">QUOTE</SortableTh>
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                         <SortableTh sort-key="item" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
@@ -703,6 +711,7 @@
                             <td>{{ engineerOrderTypeLabel(r) }}</td>
                             <td>{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
+                            <td>{{ r.sm_workorder }}</td>
                             <td>{{ r.sm_quote }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.item || '' }}</td>
@@ -1086,6 +1095,7 @@
             @close="closeDialog"
             @saved="onDialogSaved"
         />
+        </div>
     </div>
 </template>
 
@@ -1474,6 +1484,13 @@ function quoteCoWarrantyPeriod(dealer) {
     return String(dealer ?? '').includes('小森コーポレーション') ? '6' : '3'
 }
 
+function matchesEngineerQuoteCoSmQuote(record) {
+    const smQuoteRaw = record?.sm_quote
+    if (smQuoteRaw === null || smQuoteRaw === undefined) return true
+    const smQuote = Number(smQuoteRaw)
+    return Number.isFinite(smQuote) && smQuote < 100000
+}
+
 function onEntityIdFocus(record, event) {
     entityIdEditOriginal.set(record.orderID, String(event.target.value ?? ''))
 }
@@ -1522,7 +1539,7 @@ async function onEntityIdBlur(record, event) {
     }
 }
 
-function exportIncidentParamJson(theUserNameKanji) {
+function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
     console.log('commonScript::exportIncidentParamJson was called')
 
     const rows = filteredRecords.value
@@ -1572,7 +1589,7 @@ function exportIncidentParamJson(theUserNameKanji) {
     }
 
     const finalOutput = {
-        sm_mode: 'rma_wo',
+        sm_mode: smMode,
         who_exported: theUserNameKanji,
         param: jsonData,
     }
@@ -1581,7 +1598,7 @@ function exportIncidentParamJson(theUserNameKanji) {
     window.location.href = `smsync://action?json=${encodedJson}`
 }
 
-function exportUpdatePoParamJson(theUserNameKanji) {
+function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
     console.log('commonScript::exportUpdatePoParamJson was called')
 
     const rows = filteredRecords.value
@@ -1639,7 +1656,7 @@ function exportUpdatePoParamJson(theUserNameKanji) {
     }
 
     const finalOutput = {
-        sm_mode: 'update_po',
+        sm_mode: smMode,
         who_exported: theUserNameKanji,
         param: jsonData,
     }
@@ -1656,6 +1673,10 @@ function syncSmSelected() {
         return
     }
     exportIncidentParamJson(userName)
+}
+
+function onCheckSmHeaderClick() {
+    // Check SM の動作は別途指定予定
 }
 
 function toggleEngineerQuoteCoMode() {
@@ -1690,7 +1711,7 @@ async function fetchStockedPartsForQuoteCo(orderID) {
     return data?.stockedParts ?? []
 }
 
-async function exportQuoteCoParamJson(theUserNameKanji) {
+async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
     console.log('commonScript::exportQuoteCoParamJson was called')
 
     const rows = filteredRecords.value
@@ -1734,7 +1755,7 @@ async function exportQuoteCoParamJson(theUserNameKanji) {
     }
 
     const finalOutput = {
-        sm_mode: 'quote_co',
+        sm_mode: smMode,
         who_exported: theUserNameKanji,
         param: jsonData,
     }
@@ -1747,7 +1768,7 @@ async function syncQuoteCoSelected() {
     if (engineerQuoteCoBusy.value) return
     engineerQuoteCoBusy.value = true
     try {
-        await exportQuoteCoParamJson(currentUserKanji.value)
+        await exportQuoteCoParamJson(currentUserKanji.value, 'quote_co')
     } finally {
         engineerQuoteCoBusy.value = false
     }
@@ -2089,11 +2110,9 @@ const filteredRecords = computed(() => {
             records = records.filter((r) => {
                 const orderType = r?.order_type ?? 'service'
                 const status = Number(r?.status)
-                const smQuote = Number(r?.sm_quote)
                 return (orderType === 'service' || orderType === '' || orderType == null)
                     && status === 180
-                    && Number.isFinite(smQuote)
-                    && smQuote < 1000
+                    && matchesEngineerQuoteCoSmQuote(r)
             })
         } else {
             records = records.filter((r) => {
@@ -3384,9 +3403,94 @@ async function saveRecord() {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
     background: #e2e8f0;
     position: relative;
+}
+
+.list-page-inner {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+/* Admin 一覧: ブラウザ 90% 相当の密度 + ボタン間余白 */
+.list-page-inner.list-page-compact {
+    zoom: 0.9;
+    width: 100%;
+    height: calc(100% / 0.9);
+    min-height: calc(100% / 0.9);
+    transform-origin: top left;
+}
+
+.list-page-compact .fixed-header-zone {
+    padding: 12px 16px;
+}
+
+.list-page-compact .header-left,
+.list-page-compact .order-type-filters,
+.list-page-compact .arrival-date-filters {
+    gap: 10px;
+}
+
+.list-page-compact .header-center {
+    gap: 14px;
+}
+
+.list-page-compact .header-right,
+.list-page-compact .search-area,
+.list-page-compact .home-link-area {
+    gap: 12px;
+}
+
+.list-page-compact .order-type-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
+.list-page-compact .order-type-badge {
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    line-height: 16px;
+}
+
+.list-page-compact .filtered-count {
+    padding: 5px 9px;
+    font-size: 12px;
+}
+
+.list-page-compact .search-area input {
+    width: min(320px, 28vw);
+    padding: 5px 10px;
+    font-size: 13px;
+}
+
+.list-page-compact .search-area > button:not(.calendar-link):not(.sm-mode-btn),
+.list-page-compact .search-area button.sm-mode-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
+.list-page-compact .search-area a.calendar-link,
+.list-page-compact .search-area button.calendar-link,
+.list-page-compact .home-link-area a.calendar-link,
+.list-page-compact .home-link-area button.calendar-link {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.list-page-compact #myLargeTable td,
+.list-page-compact #myLargeTable th {
+    padding: 5px 7px;
+    font-size: 11px;
 }
 
 .fixed-header-zone {
@@ -3395,13 +3499,14 @@ async function saveRecord() {
     align-items: center;
     /* A | ① | B | ② | C で ①=② になる */
     justify-content: space-between;
-    gap: 0;
+    gap: 8px;
     padding: 14px 20px;
     box-sizing: border-box;
     background: #dbdbdb;
     border-bottom: 2px solid #3b82f6;
     z-index: 20;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    min-width: 0;
 }
 
 /* グループA: ステータスフィルタ（左寄せ・内容を崩さない） */
@@ -3421,7 +3526,7 @@ async function saveRecord() {
     flex-wrap: nowrap;
     align-items: center;
     gap: 10px;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-width: 0;
     justify-content: center;
 }
@@ -3449,7 +3554,8 @@ async function saveRecord() {
     flex-wrap: nowrap;
     gap: 8px;
     flex: 0 0 auto;
-    min-width: 0;
+    flex-shrink: 0;
+    min-width: max-content;
 }
 
 .order-type-filters {
@@ -3547,6 +3653,7 @@ async function saveRecord() {
 
 .search-area input {
     width: 400px;
+    max-width: 100%;
     padding: 6px 12px;
     border: 1px solid #94a3b8;
     border-radius: 4px;
@@ -3646,6 +3753,7 @@ async function saveRecord() {
     justify-content: flex-end;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 .mode-badge {
@@ -3716,12 +3824,17 @@ async function saveRecord() {
 }
 
 .scrollable-table-zone {
-    flex: 1;
+    flex: 1 1 0;
     min-height: 0;
     padding-left: 10px;
     padding-right: 10px;
     overflow: auto;
     background: #e2e8f0;
+}
+
+.list-page-compact .scrollable-table-zone {
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .abroad-toolbar {
