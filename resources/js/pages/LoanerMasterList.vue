@@ -19,6 +19,16 @@
                 </button>
             </div>
             <div class="header-actions">
+                <form class="search-form" @submit.prevent="runSearch">
+                    <input
+                        v-model="searchInput"
+                        type="search"
+                        class="search-input"
+                        placeholder="loanerID / 製品名 / SN など"
+                        :disabled="loading"
+                    >
+                    <button type="submit" class="search-btn" :disabled="loading">検索</button>
+                </form>
                 <CloseToHomeButton :href="homeUrl" />
             </div>
         </header>
@@ -106,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 
@@ -139,22 +149,32 @@ const props = defineProps({
         type: String,
         default: 'all',
     },
+    q: {
+        type: String,
+        default: '',
+    },
 })
 
 const page = usePage()
 const loading = ref(false)
 const savingStatus = ref(false)
 const selectedId = ref(null)
+const searchInput = ref(props.q || '')
+watch(() => props.q, (value) => {
+    searchInput.value = value || ''
+})
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const rows = computed(() => props.masters?.data ?? [])
 const totalCount = computed(() => props.masters?.total ?? rows.value.length)
 const currentSort = computed(() => props.sort || 'item')
 const currentDirection = computed(() => props.direction === 'desc' ? 'desc' : 'asc')
 const currentScope = computed(() => props.scope || 'all')
+const currentSearch = computed(() => props.q || '')
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/master`)
 const scopeButtons = [
     { id: 'all', label: '全件' },
     { id: 'stock', label: '在庫' },
+    { id: 'non_stock', label: '非在庫' },
     { id: 'unregistered', label: '未登録' },
     { id: 'reserved', label: '確保済み' },
     { id: 'lending', label: '貸出中' },
@@ -206,12 +226,24 @@ function sortIndicator(column) {
 }
 
 function listQuery(extra = {}) {
-    return {
+    const query = {
         sort: currentSort.value,
         direction: currentDirection.value,
         scope: currentScope.value,
         ...extra,
     }
+
+    const q = Object.prototype.hasOwnProperty.call(extra, 'q')
+        ? String(extra.q ?? '').trim()
+        : currentSearch.value.trim()
+
+    if (q !== '') {
+        query.q = q
+    } else {
+        delete query.q
+    }
+
+    return query
 }
 
 function runListQuery(query) {
@@ -229,6 +261,15 @@ function runListQuery(query) {
 function setScope(scope) {
     if (!scope || loading.value) return
     runListQuery(listQuery({ scope }))
+}
+
+function runSearch() {
+    if (loading.value) return
+    runListQuery(listQuery({ q: searchInput.value }))
+}
+
+function selectRow(row) {
+    selectedId.value = row?.id ?? null
 }
 
 function toggleSort(column) {
@@ -293,7 +334,52 @@ function goToPage(url) {
 .header-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.search-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.search-input {
+    width: min(220px, 36vw);
+    min-width: 120px;
+    padding: 7px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #1e293b;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.search-input:disabled {
+    opacity: 0.7;
+}
+
+.search-btn {
+    padding: 7px 12px;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.search-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .scope-btn {

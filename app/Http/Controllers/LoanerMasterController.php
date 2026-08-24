@@ -19,6 +19,7 @@ class LoanerMasterController extends Controller
         $sort = (string) $request->query('sort', 'item');
         $direction = strtolower((string) $request->query('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
         $scope = $this->normalizeScope((string) $request->query('scope', 'all'));
+        $search = trim((string) $request->query('q', ''));
 
         if (!in_array($sort, $columns, true)) {
             $sort = 'item';
@@ -37,10 +38,14 @@ class LoanerMasterController extends Controller
             });
 
         $this->applyStatusScope($query, $statusColumn, $scope);
+        $this->applySearch($query, $columns, $search);
 
         if ($sort === 'item') {
+            // MySQL 5.7/8 共通: 【使用不可】【サービス終了】を除いてソート（REGEXP_REPLACE 非使用）
             $query
-                ->orderByRaw("TRIM(REGEXP_REPLACE(COALESCE(item, ''), '【[^】]*】', '')) {$direction}")
+                ->orderByRaw(
+                    "TRIM(REPLACE(REPLACE(COALESCE(item, ''), '【使用不可】', ''), '【サービス終了】', '')) {$direction}"
+                )
                 ->orderBy('item', $direction);
         } else {
             $query->orderBy($sort, $direction);
@@ -61,6 +66,7 @@ class LoanerMasterController extends Controller
             'sort' => $sort,
             'direction' => $direction,
             'scope' => $scope,
+            'q' => $search,
         ]);
     }
 
@@ -156,28 +162,29 @@ class LoanerMasterController extends Controller
 
     /**
      * loanerID ごとに最新版（validDateMin → id）の id を返すサブクエリ。
+     * MySQL 5.7 互換（ROW_NUMBER ウィンドウ関数は使わない）。
      */
     private function latestVersionIdQuery(string $table)
     {
         return function ($sub) use ($table) {
-            $sub->fromSub(function ($inner) use ($table) {
-                $inner->from($table)
-                    ->select('id')
-                    ->selectRaw(
-                        "ROW_NUMBER() OVER (
-                            PARTITION BY IFNULL(NULLIF(loanerID, ''), CONCAT('id:', id))
-                            ORDER BY validDateMin DESC, id DESC
-                        ) as version_rank"
-                    );
-            }, 'loaner_latest')
-                ->select('id')
-                ->where('version_rank', 1);
+            $sub->from("{$table} as lm")
+                ->select('lm.id')
+                ->whereRaw(
+                    "lm.id = (
+                        SELECT t2.id
+                        FROM `{$table}` AS t2
+                        WHERE IFNULL(NULLIF(t2.loanerID, ''), CONCAT('id:', t2.id))
+                            = IFNULL(NULLIF(lm.loanerID, ''), CONCAT('id:', lm.id))
+                        ORDER BY t2.validDateMin DESC, t2.id DESC
+                        LIMIT 1
+                    )"
+                );
         };
     }
 
     private function normalizeScope(string $scope): string
     {
-        $allowed = ['all', 'stock', 'unregistered', 'reserved', 'lending', 'returning', 'other'];
+        $allowed = ['all', 'stock', 'non_stock', 'unregistered', 'reserved', 'lending', 'returning', 'other'];
 
         return in_array($scope, $allowed, true) ? $scope : 'all';
     }
@@ -198,6 +205,7 @@ class LoanerMasterController extends Controller
 
         match ($scope) {
             'stock' => $query->whereRaw("{$statusExpr} = 0"),
+            'non_stock' => $query->whereRaw("NOT ({$statusExpr} <=> 0)"),
             'unregistered' => $query
                 ->whereRaw("{$statusExpr} > 0 AND {$statusExpr} < 388")
                 ->when($associatedExpr, fn ($q) => $q->whereRaw("{$associatedExpr} = 0")),
@@ -209,6 +217,32 @@ class LoanerMasterController extends Controller
             'other' => $query->whereRaw("{$statusExpr} > 400"),
             default => null,
         };
+    }
+
+    /**
+     * @param  array<int, string>  $columns
+     */
+    private function applySearch($query, array $columns, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $targets = array_values(array_intersect(
+            ['loanerID', 'item', 'productName', 'SN', 'manageNum', 'inventory', 'note1', 'note2'],
+            $columns,
+        ));
+
+        if ($targets === []) {
+            return;
+        }
+
+        $like = '%'.$search.'%';
+        $query->where(function ($builder) use ($targets, $like) {
+            foreach ($targets as $column) {
+                $builder->orWhere($column, 'like', $like);
+            }
+        });
     }
 
     /**
