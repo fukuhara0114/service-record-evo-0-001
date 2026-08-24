@@ -133,11 +133,11 @@
                         <div class="form-row row-2">
                             <label class="field">
                                 <span>開始日</span>
-                                <input v-model="form.plannedSentDate" type="date">
+                                <DateInputWithToday v-model="form.plannedSentDate" />
                             </label>
                             <label class="field">
                                 <span>終了日</span>
-                                <input v-model="form.plannedReturnedDate" type="date">
+                                <DateInputWithToday v-model="form.plannedReturnedDate" />
                             </label>
                         </div>
                         <p class="field-hint">
@@ -336,6 +336,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'

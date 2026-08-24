@@ -21,12 +21,11 @@
                                     <dl class="info-grid compact-info-grid">
                                         <dt>受領日</dt>
                                         <dd>
-                                            <input
-                                                type="date"
+                                            <DateInputWithToday
                                                 class="field-input"
-                                                :value="toDateInputValue(draftRecord?.receivedDate ?? record?.receivedDate)"
-                                                @input="updateDraftDateValue('receivedDate', $event.target.value)"
-                                            >
+                                                :model-value="toDateInputValue(draftRecord?.receivedDate ?? record?.receivedDate)"
+                                                @update:model-value="updateDraftDateValue('receivedDate', $event)"
+                                            />
                                         </dd>
                                         <dt>status</dt>
                                         <dd>
@@ -150,13 +149,12 @@
                                                 :value="draftRecord?.quoteNum ?? record?.quoteNum ?? ''"
                                                 @input="updateDraftValue('quoteNum', $event.target.value)"
                                             >
-                                            <input
-                                                type="date"
+                                            <DateInputWithToday
                                                 class="field-input field-date"
                                                 title="quoteDate"
-                                                :value="toDateInputValue(draftRecord?.quoteDate ?? record?.quoteDate)"
-                                                @input="updateDraftDateValue('quoteDate', $event.target.value)"
-                                            >
+                                                :model-value="toDateInputValue(draftRecord?.quoteDate ?? record?.quoteDate)"
+                                                @update:model-value="updateDraftDateValue('quoteDate', $event)"
+                                            />
                                         </dd>
                                         <dt>受注 #</dt>
                                         <dd class="dd-inline-fields dd-order-num">
@@ -166,13 +164,12 @@
                                                 :value="draftRecord?.orderNum ?? record?.orderNum ?? ''"
                                                 @input="updateDraftValue('orderNum', $event.target.value)"
                                             >
-                                            <input
-                                                type="date"
+                                            <DateInputWithToday
                                                 class="field-input field-date"
                                                 title="orderDate"
-                                                :value="toDateInputValue(draftRecord?.orderDate ?? record?.orderDate)"
-                                                @input="updateDraftDateValue('orderDate', $event.target.value)"
-                                            >
+                                                :model-value="toDateInputValue(draftRecord?.orderDate ?? record?.orderDate)"
+                                                @update:model-value="updateDraftDateValue('orderDate', $event)"
+                                            />
                                         </dd>
                                         <dt>注文 #</dt>
                                         <dd>
@@ -199,24 +196,22 @@
                                         </label>
                                         <label class="misc-field">
                                             <span>海外発送日：</span>
-                                            <input
-                                                type="date"
+                                            <DateInputWithToday
                                                 class="field-input"
-                                                :value="toDateInputValue(draftRecord?.sentOut ?? record?.sentOut)"
-                                                @input="updateDraftDateValue('sentOut', $event.target.value)"
-                                            >
+                                                :model-value="toDateInputValue(draftRecord?.sentOut ?? record?.sentOut)"
+                                                @update:model-value="updateDraftDateValue('sentOut', $event)"
+                                            />
                                         </label>
                                     </div>
 
                                     <div class="misc-block">
                                         <label class="misc-field">
                                             <span>出荷日：</span>
-                                            <input
-                                                type="date"
+                                            <DateInputWithToday
                                                 class="field-input"
-                                                :value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
-                                                @input="updateDraftDateValue('shippingOut_requiredDate', $event.target.value)"
-                                            >
+                                                :model-value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
+                                                @update:model-value="updateDraftDateValue('shippingOut_requiredDate', $event)"
+                                            />
                                         </label>
                                         <button type="button" class="yayoi-search-btn">弥生検索</button>
                                     </div>
@@ -578,7 +573,7 @@
                 </div>
             </Pane>
 
-            <Pane class="detail-pane detail-pane-files" :size="rightPaneSize" :min-size="28">
+            <Pane class="detail-pane detail-pane-files" :size="rightPaneSize" :min-size="10">
                 <div class="pane-content">
                     <section class="section-card section-card-files">
                         <div class="section-header">
@@ -885,6 +880,7 @@ import { computed, defineExpose, nextTick, onMounted, reactive, ref, watch } fro
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
@@ -2207,6 +2203,12 @@ defineExpose({
     min-height: 0;
 }
 
+.detail-pane-contacts {
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
 .detail-pane-notes,
 .detail-pane-parts {
     min-width: 0;
@@ -2291,19 +2293,24 @@ defineExpose({
     scrollbar-gutter: stable;
 }
 
-.left-top-section-main,
+.left-top-section-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
 .left-top-section-contacts {
     display: flex;
     flex-direction: column;
     gap: 4px;
-}
-
-.left-top-section-main {
-    flex: 0 0 auto;
-    overflow: hidden;
-}
-
-.left-top-section-contacts {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
     height: 100%;
     overflow-y: auto;
     box-sizing: border-box;
@@ -2350,7 +2357,10 @@ defineExpose({
     gap: 4px;
     align-items: stretch;
     width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     margin-top: 0;
+    flex: 1 1 auto;
 }
 
 .price-adjust-row {
@@ -2839,6 +2849,11 @@ defineExpose({
     min-width: 0;
 }
 
+.info-grid dd .date-input-with-today {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .info-grid dd .field-input {
     width: 100%;
     padding: 4px 8px;
@@ -2861,9 +2876,16 @@ defineExpose({
     min-width: 0;
 }
 
+.dd-inline-fields .date-input-with-today {
+    flex: 0 0 168px;
+    width: 168px;
+    min-width: 0;
+}
+
 .dd-inline-fields .field-date {
-    flex: 0 0 140px;
-    width: 140px;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
 }
 
 .detail-card-rma-order .rma-order-grid {
@@ -2896,10 +2918,16 @@ defineExpose({
     max-width: none;
 }
 
-.dd-order-num .field-date,
-.dd-order-num input[type="date"] {
+.dd-order-num .date-input-with-today {
     flex: 1 1 0;
     width: 0;
+    min-width: 0;
+}
+
+.dd-order-num .field-date,
+.dd-order-num input[type="date"] {
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
 }
 
@@ -2951,6 +2979,12 @@ defineExpose({
     min-width: 5.5em;
     color: #000;
     font-weight: 700;
+}
+
+.misc-field .date-input-with-today {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
 }
 
 .misc-field .field-input {

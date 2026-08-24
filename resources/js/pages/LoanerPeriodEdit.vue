@@ -230,11 +230,11 @@
                     <div class="period-dates-row">
                         <label v-if="dateFields.hasPlannedSent" class="field field-on-white">
                             <span>予定開始</span>
-                            <input v-model="form.plannedSentDate" type="date">
+                            <DateInputWithToday v-model="form.plannedSentDate" />
                         </label>
                         <label v-if="dateFields.hasPlannedReturned" class="field field-on-white">
                             <span>予定終了</span>
-                            <input v-model="form.plannedReturnedDate" type="date">
+                            <DateInputWithToday v-model="form.plannedReturnedDate" />
                         </label>
                     </div>
                     <div class="period-status-row">
@@ -474,6 +474,7 @@ import {
     rollingMonthViewConfig,
 } from '@/utils/fullCalendarCommon'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'

@@ -78,11 +78,11 @@
                     <div class="row row-3">
                         <label class="field">
                             <span>startDate</span>
-                            <input v-model="form.startDate" type="date">
+                            <DateInputWithToday v-model="form.startDate" />
                         </label>
                         <label class="field">
                             <span>expireDate</span>
-                            <input v-model="form.expireDate" type="date">
+                            <DateInputWithToday v-model="form.expireDate" />
                         </label>
                         <label class="field">
                             <span>certificationTicket</span>
@@ -92,7 +92,7 @@
                     <div class="row row-3">
                         <label class="field">
                             <span>certificationExpireDate</span>
-                            <input v-model="form.certificationExpireDate" type="date">
+                            <DateInputWithToday v-model="form.certificationExpireDate" />
                         </label>
                     </div>
                 </section>
@@ -102,7 +102,7 @@
                     <div class="row row-3">
                         <label class="field">
                             <span>informedDate</span>
-                            <input v-model="form.informedDate" type="date">
+                            <DateInputWithToday v-model="form.informedDate" />
                         </label>
                         <label class="field checkbox-field">
                             <span>informed</span>
@@ -118,17 +118,17 @@
                     <div class="row row-3">
                         <label class="field">
                             <span>renewedDate</span>
-                            <input v-model="form.renewedDate" type="date">
+                            <DateInputWithToday v-model="form.renewedDate" />
                         </label>
                     </div>
                     <div class="row row-3">
                         <label class="field">
                             <span>shippingDate</span>
-                            <input v-model="form.shippingDate" type="date">
+                            <DateInputWithToday v-model="form.shippingDate" />
                         </label>
                         <label class="field">
                             <span>orderedDate</span>
-                            <input v-model="form.orderedDate" type="date">
+                            <DateInputWithToday v-model="form.orderedDate" />
                         </label>
                     </div>
                     <div class="row row-3">
@@ -249,6 +249,7 @@ import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({

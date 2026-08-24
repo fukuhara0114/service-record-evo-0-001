@@ -441,6 +441,193 @@ class LoanerRecordController extends Controller
         ]);
     }
 
+    /**
+     * 予約入替用: 同機種の waiting_list 候補を返す。
+     */
+    public function waitingListForSwap(Request $request, int $id)
+    {
+        [$attached, $record] = $this->resolveAttachedAndRecordForMutation($id);
+
+        if (!$attached || !$record || $record->order_type !== 'loaner') {
+            return response()->json(['message' => 'loaner 案件のみ予約入替できます。'], 422);
+        }
+
+        if (!$this->isSecuredStockStatus((int) $record->status)) {
+            return response()->json(['message' => 'status が「確保済み」の案件のみ予約入替できます。'], 422);
+        }
+
+        $productName = trim((string) ($record->productName ?? ''));
+        if ($productName === '') {
+            return response()->json(['message' => 'productName が未設定のため候補を取得できません。'], 422);
+        }
+
+        $candidates = $this->serializePromotionCandidates(
+            $this->findWaitingListCandidatesByProductName($productName),
+        );
+
+        return response()->json([
+            'productName' => $productName,
+            'candidates' => $candidates,
+        ]);
+    }
+
+    /**
+     * 確保済み loaner と waiting_list を入れ替え、機材を waiting 側へ移す。
+     */
+    public function swapWithWaiting(Request $request, int $id)
+    {
+        [$attached, $loanerRecord] = $this->resolveAttachedAndRecordForMutation($id);
+
+        if (!$attached || !$loanerRecord || $loanerRecord->order_type !== 'loaner') {
+            return response()->json(['message' => 'loaner 案件のみ予約入替できます。'], 422);
+        }
+
+        if (!$this->isSecuredStockStatus((int) $loanerRecord->status)) {
+            return response()->json(['message' => 'status が「確保済み」の案件のみ予約入替できます。'], 422);
+        }
+
+        $validated = $request->validate([
+            'waitingOrderID' => 'required|integer',
+        ]);
+
+        $waitingRecord = ServiceRecord::query()
+            ->where('orderID', $validated['waitingOrderID'])
+            ->where('order_type', 'waiting_list')
+            ->first();
+
+        if (!$waitingRecord) {
+            return response()->json(['message' => '指定された waiting_list 案件が見つかりません。'], 422);
+        }
+
+        $productName = trim((string) ($loanerRecord->productName ?? ''));
+        $waitingProduct = trim((string) ($waitingRecord->productName ?? ''));
+        if ($productName === '' || strcasecmp($productName, $waitingProduct) !== 0) {
+            return response()->json(['message' => '同機種（productName）の waiting_list のみ入替できます。'], 422);
+        }
+
+        $loanerId = $loanerRecord->loanerID ?? $attached->loanerID;
+        if ($loanerId === null || $loanerId === '') {
+            return response()->json(['message' => 'loanerID が未設定のため入替できません。'], 422);
+        }
+
+        $waitingAttached = AttachedLoaner::query()
+            ->where('associatedID', $waitingRecord->orderID)
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$waitingAttached) {
+            return response()->json(['message' => 'waiting_list 側の attachedloaner が見つかりません。'], 422);
+        }
+
+        $user = $request->user();
+        $securedStatus = (int) $loanerRecord->status;
+        $sn = $loanerRecord->SN;
+        $loanerProductName = $loanerRecord->productName;
+        $fallbackLoanerId = $this->resolveFallbackLoanerId($productName) ?? $loanerId;
+
+        DB::transaction(function () use (
+            $loanerRecord,
+            $attached,
+            $waitingRecord,
+            $waitingAttached,
+            $loanerId,
+            $fallbackLoanerId,
+            $securedStatus,
+            $sn,
+            $loanerProductName,
+            $user,
+        ) {
+            // 現在の loaner → waiting_list
+            $loanerRecord->order_type = 'waiting_list';
+            $loanerRecord->status = -1;
+            $loanerRecord->loanerID = $fallbackLoanerId;
+            if (Schema::hasColumn('servicerecord', 'promotion_ready_at')) {
+                $loanerRecord->promotion_ready_at = null;
+            }
+            if (Schema::hasColumn('servicerecord', 'promotion_source_orderID')) {
+                $loanerRecord->promotion_source_orderID = null;
+            }
+            $loanerRecord->lastEditPerson = $user?->kanji_name;
+            $loanerRecord->lastEditDate = now();
+            $loanerRecord->save();
+
+            $attachedColumns = Schema::getColumnListing('attachedloaners');
+            $attached->loanerID = $fallbackLoanerId;
+            if (in_array('assignStatus', $attachedColumns, true)) {
+                $attached->assignStatus = 'waiting';
+            }
+            if (in_array('comment', $attachedColumns, true)) {
+                $comment = trim((string) ($attached->comment ?? ''));
+                $note = 'swapped to waiting_list';
+                $attached->comment = $comment === '' ? $note : $comment.' / '.$note;
+            }
+            $attached->save();
+
+            // waiting_list → loaner（機材を紐づけ）
+            $waitingRecord->order_type = 'loaner';
+            $waitingRecord->status = $securedStatus;
+            $waitingRecord->RMA = 'loaner';
+            $waitingRecord->loanerID = $loanerId;
+            $waitingRecord->productName = $loanerProductName ?: $waitingRecord->productName;
+            $waitingRecord->SN = $sn;
+            if (Schema::hasColumn('servicerecord', 'promotion_ready_at')) {
+                $waitingRecord->promotion_ready_at = null;
+            }
+            if (Schema::hasColumn('servicerecord', 'promotion_source_orderID')) {
+                $waitingRecord->promotion_source_orderID = null;
+            }
+            $waitingRecord->lastEditPerson = $user?->kanji_name;
+            $waitingRecord->lastEditDate = now();
+            $waitingRecord->save();
+
+            $waitingAttached->loanerID = $loanerId;
+            if (in_array('assignStatus', $attachedColumns, true)) {
+                $waitingAttached->assignStatus = 'reserved';
+            }
+            if (in_array('productName', $attachedColumns, true)) {
+                $waitingAttached->productName = $loanerProductName ?: $waitingAttached->productName;
+            }
+            if (in_array('comment', $attachedColumns, true)) {
+                $comment = trim((string) ($waitingAttached->comment ?? ''));
+                $note = 'swapped from waiting_list';
+                $waitingAttached->comment = $comment === '' ? $note : $comment.' / '.$note;
+            }
+            if (
+                in_array('assignStatus', $attachedColumns, true)
+                && ($waitingAttached->assignStatus === null || $waitingAttached->assignStatus === '')
+            ) {
+                $waitingAttached->assignStatus = 'reserved';
+            }
+            $waitingAttached->save();
+
+            $this->setLoanerInventoryStatus($loanerId, $securedStatus);
+        });
+
+        $waitingRecord->refresh();
+        $waitingAttached->refresh();
+
+        return response()->json([
+            'message' => '予約を入れ替えました。',
+            'record' => $waitingRecord->only([
+                'orderID',
+                'parentID',
+                'order_type',
+                'status',
+                'laborID',
+                'productName',
+                'SN',
+                'loanerID',
+            ]),
+            'attached' => [
+                'id' => $waitingAttached->id,
+                'loanerID' => $waitingAttached->loanerID,
+                'assignStatus' => $waitingAttached->assignStatus ?? null,
+            ],
+            // detail 画面の URL {id} は orderID
+            'redirectOrderId' => $waitingRecord->orderID,
+        ]);
+    }
+
     public function cancelReservation(Request $request, int $id)
     {
         $attachedRow = AttachedLoaner::query()->find($id);
@@ -2047,6 +2234,42 @@ class LoanerRecordController extends Controller
         return $resolved !== null
             ? (int) $resolved
             : LoanerStatusFlow::UNREGISTERED;
+    }
+
+    /**
+     * mutation API の {id} は attachedloaners.id でも orderID でも可。
+     *
+     * @return array{0: ?AttachedLoaner, 1: ?ServiceRecord}
+     */
+    private function resolveAttachedAndRecordForMutation(int $id): array
+    {
+        $attachedRow = AttachedLoaner::with('serviceRecord')->find($id);
+        if ($attachedRow?->serviceRecord) {
+            return [$attachedRow, $attachedRow->serviceRecord];
+        }
+
+        $orderId = $attachedRow?->associatedID ?: $id;
+        $resolved = $this->resolveLoanerDetailByOrderId((int) $orderId, ['serviceRecord']);
+
+        return [$resolved[0] ?? $attachedRow, $resolved[1] ?? null];
+    }
+
+    /**
+     * statusmaster_loaner の表記が「確保済み」か（processID は環境により 0 / 20 等）。
+     */
+    private function isSecuredStockStatus(int $status): bool
+    {
+        $row = StatusLoaner::query()
+            ->select(StatusLoaner::selectColumnsForDisplay())
+            ->where('processID_new', $status)
+            ->first();
+
+        $label = StatusLoaner::resolveLabel($row);
+        if (is_string($label) && $label !== '' && str_contains($label, '確保済み')) {
+            return true;
+        }
+
+        return $status === LoanerStatusFlow::STOCK;
     }
 
     /**

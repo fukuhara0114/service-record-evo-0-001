@@ -1,6 +1,7 @@
 <template>
-    <div class="list-page-container" :class="{ 'list-page-compact-shell': !isRestrictedListMode }">
-        <div class="list-page-inner" :class="{ 'list-page-compact': !isRestrictedListMode }">
+    <div class="list-page-container list-page-scale-shell">
+        <Head :title="documentTabTitle" />
+        <div class="list-page-inner list-page-scale">
         <!-- 第1階層: 検索窓 -->
         <div class="fixed-header-zone">
             <div class="header-left">
@@ -669,6 +670,22 @@
                         <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
                         <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
                     </tr>
+                    <tr v-else-if="orderTypeFilter === 'closing'">
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
+                        <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="orderDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受注日</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
+                        <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="email" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Email</SortableTh>
+                        <SortableTh sort-key="phone" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Phone</SortableTh>
+                    </tr>
                     <tr v-else>
                         <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
                         <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
@@ -825,6 +842,29 @@
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                             <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
                             <td>{{ r.RMA }}</td>
+                            <td>{{ r.productName }}</td>
+                            <td>{{ r.SN }}</td>
+                            <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
+                            <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.email }}</td>
+                            <td>{{ r.phone }}</td>
+                        </template>
+                        <template v-else-if="orderTypeFilter === 'closing'">
+                            <td style="text-align: center; font-weight: bold;">
+                                <span
+                                    v-if="isRemandRecord(r)"
+                                    class="remand-order-badge"
+                                    title="差戻"
+                                >{{ r.orderID }}</span>
+                                <template v-else>{{ r.orderID }}</template>
+                            </td>
+                            <td>{{ formatListDate(r.receivedDate) }}</td>
+                            <td>{{ statusLabel(r) }}</td>
+                            <td>{{ r.RMA }}</td>
+                            <td>{{ formatListDate(r.orderDate) }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
@@ -1101,7 +1141,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { router, usePage } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
@@ -1228,6 +1268,7 @@ onMounted(() => {
 onUnmounted(() => {
     stopLogisticsAutoRefresh()
     stopSmListAutoRefresh()
+    if (typeof document !== 'undefined') document.title = DEFAULT_DOCUMENT_TAB_TITLE
 })
 
 function resolveOpenOrderIdFromSearch(search) {
@@ -1313,6 +1354,27 @@ const orderTypeFilter = ref(resolveInitialOrderTypeFilter())
 const isSmListMode = computed(() =>
     orderTypeFilter.value === 'rma' || orderTypeFilter.value === 'update_sm',
 )
+
+const DEFAULT_DOCUMENT_TAB_TITLE = 'ServiceRecord Evo'
+const ORDER_TYPE_DOCUMENT_TAB_TITLES = {
+    service: 'service',
+    tech_comp: 'Tech Comp.',
+    closing: 'closing',
+    invoice: 'Invoice',
+    loaner: 'loaner',
+    waiting_list: 'waiting',
+    abroad: 'abroad',
+}
+
+const documentTabTitle = computed(() => {
+    if (isRestrictedListMode.value) return DEFAULT_DOCUMENT_TAB_TITLE
+    return ORDER_TYPE_DOCUMENT_TAB_TITLES[orderTypeFilter.value] || DEFAULT_DOCUMENT_TAB_TITLE
+})
+
+watch(documentTabTitle, (title) => {
+    if (typeof document !== 'undefined') document.title = title
+}, { immediate: true })
+
 const ARRIVAL_FILTER_STORAGE_KEY = 'serviceRecordArrivalFilter'
 const ARRIVAL_FILTERS = ['all', 'active', 'hide_future', 'today', '1day', '2day', '3day', '1wk']
 
@@ -2073,6 +2135,7 @@ function recordColumnSortValue(record, key) {
         case 'a2la':
             return abroadA2laLabel(record?.a2la) || ''
         case 'receivedDate':
+        case 'orderDate':
         case 'shippingOut_requiredDate':
         case 'shippedDate':
             return formatListDate(record?.[key]) || ''
@@ -3419,41 +3482,41 @@ async function saveRecord() {
     height: 100%;
 }
 
-/* Admin 一覧: ブラウザ 90% 相当の密度 + ボタン間余白 */
-.list-page-inner.list-page-compact {
-    zoom: 0.9;
+/* 一覧画面: ブラウザ 110% 相当（10%拡大） */
+.list-page-inner.list-page-scale {
+    zoom: 1.1;
     width: 100%;
-    height: calc(100% / 0.9);
-    min-height: calc(100% / 0.9);
+    height: calc(100% / 1.1);
+    min-height: calc(100% / 1.1);
     transform-origin: top left;
 }
 
-.list-page-compact .fixed-header-zone {
+.list-page-scale .fixed-header-zone {
     padding: 12px 16px;
 }
 
-.list-page-compact .header-left,
-.list-page-compact .order-type-filters,
-.list-page-compact .arrival-date-filters {
+.list-page-scale .header-left,
+.list-page-scale .order-type-filters,
+.list-page-scale .arrival-date-filters {
     gap: 10px;
 }
 
-.list-page-compact .header-center {
+.list-page-scale .header-center {
     gap: 14px;
 }
 
-.list-page-compact .header-right,
-.list-page-compact .search-area,
-.list-page-compact .home-link-area {
+.list-page-scale .header-right,
+.list-page-scale .search-area,
+.list-page-scale .home-link-area {
     gap: 12px;
 }
 
-.list-page-compact .order-type-btn {
+.list-page-scale .order-type-btn {
     padding: 5px 10px;
     font-size: 11px;
 }
 
-.list-page-compact .order-type-badge {
+.list-page-scale .order-type-badge {
     top: -6px;
     right: -6px;
     min-width: 16px;
@@ -3462,33 +3525,33 @@ async function saveRecord() {
     line-height: 16px;
 }
 
-.list-page-compact .filtered-count {
+.list-page-scale .filtered-count {
     padding: 5px 9px;
     font-size: 12px;
 }
 
-.list-page-compact .search-area input {
+.list-page-scale .search-area input {
     width: min(320px, 28vw);
     padding: 5px 10px;
     font-size: 13px;
 }
 
-.list-page-compact .search-area > button:not(.calendar-link):not(.sm-mode-btn),
-.list-page-compact .search-area button.sm-mode-btn {
+.list-page-scale .search-area > button:not(.calendar-link):not(.sm-mode-btn),
+.list-page-scale .search-area button.sm-mode-btn {
     padding: 5px 10px;
     font-size: 11px;
 }
 
-.list-page-compact .search-area a.calendar-link,
-.list-page-compact .search-area button.calendar-link,
-.list-page-compact .home-link-area a.calendar-link,
-.list-page-compact .home-link-area button.calendar-link {
+.list-page-scale .search-area a.calendar-link,
+.list-page-scale .search-area button.calendar-link,
+.list-page-scale .home-link-area a.calendar-link,
+.list-page-scale .home-link-area button.calendar-link {
     padding: 5px 10px;
     font-size: 12px;
 }
 
-.list-page-compact #myLargeTable td,
-.list-page-compact #myLargeTable th {
+.list-page-scale #myLargeTable td,
+.list-page-scale #myLargeTable th {
     padding: 5px 7px;
     font-size: 11px;
 }
@@ -3832,7 +3895,7 @@ async function saveRecord() {
     background: #e2e8f0;
 }
 
-.list-page-compact .scrollable-table-zone {
+.list-page-scale .scrollable-table-zone {
     flex: 1 1 0;
     min-height: 0;
 }

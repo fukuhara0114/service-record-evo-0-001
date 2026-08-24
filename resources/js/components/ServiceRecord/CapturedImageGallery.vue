@@ -16,23 +16,21 @@
                 </label>
                 <label class="filter-field">
                     開始日
-                    <input
+                    <DateInputWithToday
                         v-model="dateFrom"
-                        type="date"
                         class="filter-input"
                         :disabled="loading"
                         @change="onCustomDateChange"
-                    >
+                    />
                 </label>
                 <label class="filter-field">
                     終了日
-                    <input
+                    <DateInputWithToday
                         v-model="dateTo"
-                        type="date"
                         class="filter-input"
                         :disabled="loading"
                         @change="onCustomDateChange"
-                    >
+                    />
                 </label>
                 <label class="filter-field">
                     撮影者
@@ -223,6 +221,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import CapturedImageEditor from './CapturedImageEditor.vue'
 
 const PERIOD_OPTIONS = [

@@ -39,17 +39,17 @@
                     <div class="search-range">
                         <span class="range-label">有効期限（expireDate）</span>
                         <div class="range-inputs">
-                            <input v-model="searchForm.expireDateFrom" type="date" aria-label="expireDate From">
+                            <DateInputWithToday v-model="searchForm.expireDateFrom" aria-label="expireDate From" />
                             <span class="range-sep">〜</span>
-                            <input v-model="searchForm.expireDateTo" type="date" aria-label="expireDate To">
+                            <DateInputWithToday v-model="searchForm.expireDateTo" aria-label="expireDate To" />
                         </div>
                     </div>
                     <div class="search-range">
                         <span class="range-label">認証期限（certificationExpireDate）</span>
                         <div class="range-inputs">
-                            <input v-model="searchForm.certificationExpireDateFrom" type="date" aria-label="certificationExpireDate From">
+                            <DateInputWithToday v-model="searchForm.certificationExpireDateFrom" aria-label="certificationExpireDate From" />
                             <span class="range-sep">〜</span>
-                            <input v-model="searchForm.certificationExpireDateTo" type="date" aria-label="certificationExpireDate To">
+                            <DateInputWithToday v-model="searchForm.certificationExpireDateTo" aria-label="certificationExpireDate To" />
                         </div>
                     </div>
                     <div class="search-side">
@@ -150,6 +150,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 
 const props = defineProps({
     contracts: {
@@ -298,12 +299,15 @@ function formatAmount(value) {
 
 <style scoped>
 .contract-page {
-    min-height: 100vh;
+    zoom: 1.1;
+    width: 100%;
+    min-height: calc(100vh / 1.1);
     padding: 12px 16px 24px;
     background: #e2e8f0;
     box-sizing: border-box;
     color: #1e293b;
     font-weight: 700;
+    transform-origin: top left;
 }
 
 .page-header {
@@ -457,7 +461,7 @@ function formatAmount(value) {
 
 .table-wrap {
     overflow: auto;
-    max-height: calc(100vh - 260px);
+    max-height: calc((100vh / 1.1) - 260px);
 }
 
 table {

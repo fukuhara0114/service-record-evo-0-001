@@ -17,7 +17,7 @@
         <section class="toolbar panel">
             <label class="field">
                 <span>改定日（新版の validDateMin）</span>
-                <input v-model="effectiveDate" type="date">
+                <DateInputWithToday v-model="effectiveDate" />
             </label>
             <p class="hint">
                 旧版の validDateMax は改定日前日になります。CSVは Excel 向け Shift_JIS で出力し、取込は UTF-8 / Shift_JIS を自動判定します。
@@ -174,6 +174,7 @@ import { computed, reactive, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import Encoding from 'encoding-japanese'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({

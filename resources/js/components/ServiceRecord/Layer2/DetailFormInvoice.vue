@@ -6,7 +6,7 @@
             <span class="invoice-id-item">Loaner: {{ loanerLabel }}</span>
             <span class="invoice-id-item">受注#: {{ draftRecord?.orderNum || record?.orderNum || '—' }}</span>
             <span class="invoice-id-item">注文#: {{ draftRecord?.poNum || record?.poNum || '—' }}</span>
-            <span class="invoice-id-item">Col: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
+            <span class="invoice-id-item">Co#: {{ draftRecord?.coNum || record?.coNum || '—' }}</span>
         </header>
 
         <section class="invoice-toolbar">
@@ -41,13 +41,12 @@
             </button>
             <label class="toolbar-field">
                 <span>出荷予定</span>
-                <input
-                    type="date"
+                <DateInputWithToday
                     class="toolbar-input toolbar-input-date"
-                    :value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
+                    :model-value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
                     :disabled="statusActionSaving"
-                    @input="updateDraftDateValue('shippingOut_requiredDate', $event.target.value)"
-                >
+                    @update:model-value="updateDraftDateValue('shippingOut_requiredDate', $event)"
+                />
             </label>
             <div class="invoice-toolbar-actions">
                 <button type="button" class="action-btn action-btn-primary action-btn-wide" :disabled="statusActionSaving" @click="$emit('save')">
@@ -303,6 +302,7 @@ import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
@@ -981,7 +981,12 @@ watch(
 }
 
 .toolbar-input-date {
-    width: 140px;
+    width: 100%;
+    min-width: 0;
+}
+
+.toolbar-field .date-input-with-today {
+    width: 168px;
 }
 
 .toolbar-actions {

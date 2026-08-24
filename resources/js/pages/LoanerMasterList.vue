@@ -259,12 +259,15 @@ function goToPage(url) {
 
 <style scoped>
 .loaner-master-page {
-    min-height: 100vh;
+    zoom: 1.1;
+    width: 100%;
+    min-height: calc(100vh / 1.1);
     padding: 12px 16px 24px;
     background: #e2e8f0;
     box-sizing: border-box;
     color: #1e293b;
     font-weight: 700;
+    transform-origin: top left;
 }
 
 .scope-bar {
@@ -366,7 +369,7 @@ function goToPage(url) {
 
 .table-wrap {
     overflow: auto;
-    max-height: calc(100vh - 180px);
+    max-height: calc((100vh / 1.1) - 180px);
     border: 1px solid #e2e8f0;
     border-radius: 6px;
 }

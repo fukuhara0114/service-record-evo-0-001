@@ -160,7 +160,7 @@
                         </label>
                         <label class="field">
                             <span>receivedDate</span>
-                            <input v-model="linkForm.receivedDate" type="date">
+                            <DateInputWithToday v-model="linkForm.receivedDate" />
                         </label>
                         <label class="field">
                             <span>status</span>
@@ -190,6 +190,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 

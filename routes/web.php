@@ -91,6 +91,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/servicerecord/loaner/detail/{id}', [LoanerRecordController::class, 'updateDetail'])->name('servicerecord.loaner.detail.update');
     Route::post('/servicerecord/loaner/detail/{id}/application-form', [LoanerRecordController::class, 'applicationForm'])->name('servicerecord.loaner.detail.application-form');
     Route::post('/servicerecord/loaner/detail/{id}/promote', [LoanerRecordController::class, 'promoteFromWaiting'])->name('servicerecord.loaner.detail.promote');
+    Route::get('/servicerecord/loaner/detail/{id}/waiting-for-swap', [LoanerRecordController::class, 'waitingListForSwap'])->name('servicerecord.loaner.detail.waiting-for-swap');
+    Route::post('/servicerecord/loaner/detail/{id}/swap-waiting', [LoanerRecordController::class, 'swapWithWaiting'])->name('servicerecord.loaner.detail.swap-waiting');
     Route::post('/servicerecord/loaner/detail/{id}/cancel-reservation', [LoanerRecordController::class, 'cancelReservation'])->name('servicerecord.loaner.detail.cancel-reservation');
     Route::get('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'editPeriod'])->name('servicerecord.loaner.period.edit');
     Route::put('/servicerecord/loaner/period/{id}', [LoanerRecordController::class, 'updatePeriod'])->name('servicerecord.loaner.period.update');

@@ -459,7 +459,7 @@
                                 <input v-model="form.SN" type="text" placeholder="SN" lang="en" inputmode="latin">
                             </div>
                             <div class="form-row row-product-meta">
-                                <input v-model="form.receivedDate" type="date" class="w-received">
+                                <DateInputWithToday v-model="form.receivedDate" class="w-received" />
                                 <select v-model="form.status" class="w-status">
                                     <option value="">status</option>
                                     <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
@@ -1135,6 +1135,7 @@ import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMa
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 
 const props = defineProps({
     sourceFile: {

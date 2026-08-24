@@ -9,7 +9,7 @@
 
       <div>
         <label class="block text-sm">受領日</label>
-        <input type="date" v-model="form.receivedDate">
+        <DateInputWithToday v-model="form.receivedDate" />
       </div>
 
       <div>
@@ -115,8 +115,10 @@
 
 <script>
 import axios from 'axios'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 
 export default {
+  components: { DateInputWithToday },
   props: ['record', 'statuses', 'returnCodes', 'labors', 'mode'],
 
   data() {

@@ -77,17 +77,25 @@
                         <div class="loaner-top-layout">
                             <div class="loaner-identity-col">
                                 <label>
-                                    <span>製品名</span>
+                                    <button
+                                        type="button"
+                                        class="product-name-copy-btn"
+                                        :disabled="!productNameCopyValue"
+                                        :title="productNameCopyValue ? '製品名をクリップボードにコピー' : 'コピーする製品名がありません'"
+                                        @click.prevent="copyProductName"
+                                    >
+                                        {{ productNameCopyFeedback || '製品名' }}
+                                    </button>
                                     <button type="button" class="master-value" @click="activeSelectKind = 'loanerUnit'">
                                         {{ displayItemLabel || '選択してください' }}
                                     </button>
                                 </label>
                                 <label><span>SN</span><input v-model="form.SN" type="text"></label>
-                                <label><span>loanerID</span><input :value="form.loanerID" type="text" readonly></label>
                                 <label>
                                     <span>管理番号</span>
                                     <input :value="selectedUnit?.manageNum || loanerMaster?.manageNum || ''" type="text" readonly>
                                 </label>
+                                <label><span>loanerID</span><input :value="form.loanerID" type="text" readonly></label>
                                 <label class="parent-id-field">
                                     <span>parentID</span>
                                     <div class="parent-id-block">
@@ -126,13 +134,13 @@
                                     <span class="commerce-label">見積 #</span>
                                     <input v-model="form.quoteNum" type="text" class="commerce-num">
                                     <span class="commerce-date-label">日付</span>
-                                    <input v-model="form.quoteDate" type="date" class="commerce-date" title="見積日">
+                                    <DateInputWithToday v-model="form.quoteDate" class="commerce-date" title="見積日" />
                                 </div>
                                 <div class="commerce-row">
                                     <span class="commerce-label">受注 #</span>
                                     <input v-model="form.orderNum" type="text" class="commerce-num">
                                     <span class="commerce-date-label">日付</span>
-                                    <input v-model="form.orderDate" type="date" class="commerce-date" title="受注日">
+                                    <DateInputWithToday v-model="form.orderDate" class="commerce-date" title="受注日" />
                                 </div>
                                 <div class="commerce-row commerce-row-po">
                                     <span class="commerce-label">注文 #</span>
@@ -191,6 +199,15 @@
                                     </option>
                                 </select>
                             </label>
+                            <button
+                                type="button"
+                                class="btn btn-secondary reservation-swap-btn"
+                                :disabled="!canSwapReservation || reservationSwapLoading || reservationSwapSaving"
+                                :title="reservationSwapButtonTitle"
+                                @click="openReservationSwapDialog"
+                            >
+                                {{ reservationSwapSaving ? '入替中...' : '予約入替' }}
+                            </button>
                             <label v-if="isLaborEditable" class="labor-box labor-required-field">
                                 <span>Labor</span>
                                 <select v-model="form.laborID">
@@ -280,6 +297,41 @@
                         </section>
 
                         <section class="panel person-panel">
+                            <div class="panel-heading">
+                                <h2>endUser</h2>
+                                <button
+                                    type="button"
+                                    class="select-btn delivery-copy-btn"
+                                    @click="copyEndUserToDelivery"
+                                >
+                                    発送先Copy
+                                </button>
+                            </div>
+                            <div class="person-stack">
+                                <label><span>会社名</span><input v-model="form.endUser" type="text"></label>
+                                <label><span>部署名</span><input v-model="form.endUser_depart" type="text"></label>
+                                <label><span>担当者</span><input v-model="form.endUser_contactPerson" type="text"></label>
+                                <label><span>phone</span><input v-model="form.endUser_phone" type="text"></label>
+                                <label><span>email</span><input v-model="form.endUser_email" type="text"></label>
+                                <label class="zip-row">
+                                    <span class="zip-mark">〒</span>
+                                    <input
+                                        v-model="form.endUser_zipcode"
+                                        type="text"
+                                        class="zip-input"
+                                        placeholder="zipcode"
+                                        @change="lookupZip('endUser')"
+                                        @blur="lookupZip('endUser')"
+                                    >
+                                </label>
+                                <div class="address-pair">
+                                    <input v-model="form.endUser_address1" type="text" class="address1-input" placeholder="address1" aria-label="address1">
+                                    <input v-model="form.endUser_address2" type="text" class="address2-input" placeholder="address2" aria-label="address2">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel person-panel">
                             <div class="panel-heading delivery-heading">
                                 <h2>発送先</h2>
                                 <button
@@ -325,51 +377,16 @@
                                 </div>
                             </div>
                         </section>
-
-                        <section class="panel person-panel">
-                            <div class="panel-heading">
-                                <h2>endUser</h2>
-                                <button
-                                    type="button"
-                                    class="select-btn delivery-copy-btn"
-                                    @click="copyEndUserToDelivery"
-                                >
-                                    発送先Copy
-                                </button>
-                            </div>
-                            <div class="person-stack">
-                                <label><span>会社名</span><input v-model="form.endUser" type="text"></label>
-                                <label><span>部署名</span><input v-model="form.endUser_depart" type="text"></label>
-                                <label><span>担当者</span><input v-model="form.endUser_contactPerson" type="text"></label>
-                                <label><span>phone</span><input v-model="form.endUser_phone" type="text"></label>
-                                <label><span>email</span><input v-model="form.endUser_email" type="text"></label>
-                                <label class="zip-row">
-                                    <span class="zip-mark">〒</span>
-                                    <input
-                                        v-model="form.endUser_zipcode"
-                                        type="text"
-                                        class="zip-input"
-                                        placeholder="zipcode"
-                                        @change="lookupZip('endUser')"
-                                        @blur="lookupZip('endUser')"
-                                    >
-                                </label>
-                                <div class="address-pair">
-                                    <input v-model="form.endUser_address1" type="text" class="address1-input" placeholder="address1" aria-label="address1">
-                                    <input v-model="form.endUser_address2" type="text" class="address2-input" placeholder="address2" aria-label="address2">
-                                </div>
-                            </div>
-                        </section>
                     </div>
 
                     <section class="panel period-panel">
                         <h2>貸出期間</h2>
-                        <label><span>予定開始</span><input v-model="form.plannedSentDate" type="date"></label>
+                        <label><span>予定開始</span><DateInputWithToday v-model="form.plannedSentDate" /></label>
                         <span>〜</span>
-                        <label><span>予定終了</span><input v-model="form.plannedReturnedDate" type="date"></label>
-                        <label><span>実開始</span><input v-model="form.sentDate" type="date"></label>
+                        <label><span>予定終了</span><DateInputWithToday v-model="form.plannedReturnedDate" /></label>
+                        <label><span>実開始</span><DateInputWithToday v-model="form.sentDate" /></label>
                         <span>〜</span>
-                        <label><span>実終了</span><input v-model="form.returnedDate" type="date"></label>
+                        <label><span>実終了</span><DateInputWithToday v-model="form.returnedDate" /></label>
                     </section>
 
                     <section class="panel tab-panel">
@@ -444,7 +461,7 @@
                 </div>
             </Pane>
 
-            <Pane :size="rightPaneSize" :min-size="32" class="main-pane">
+            <Pane :size="rightPaneSize" :min-size="10" class="main-pane">
                 <section class="panel files-panel">
                     <div class="panel-heading">
                         <h2>Files（{{ fileItems.length }}件）</h2>
@@ -810,6 +827,73 @@
         </div>
 
         <div
+            v-if="reservationSwapDialogOpen"
+            class="confirm-overlay"
+            @click.self="closeReservationSwapDialog"
+        >
+            <div
+                class="confirm-panel promotion-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reservation-swap-title"
+            >
+                <h3 id="reservation-swap-title">予約入替（waiting_list）</h3>
+                <p class="promotion-lead">
+                    同機種（{{ record.productName || '—' }}）の waiting_list から入替先を選んでください。
+                    選択した案件が loaner になり、現在の機材（loanerID: {{ form.loanerID || '—' }}）が紐づきます。
+                </p>
+                <p v-if="reservationSwapError" class="confirm-error">{{ reservationSwapError }}</p>
+                <div class="promotion-table-wrap">
+                    <table v-if="reservationSwapCandidates.length" class="promotion-table">
+                        <thead>
+                            <tr>
+                                <th>OrderID</th>
+                                <th>dealer</th>
+                                <th>担当</th>
+                                <th>予定開始</th>
+                                <th>予定終了</th>
+                                <th style="width: 88px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="candidate in reservationSwapCandidates" :key="candidate.orderID">
+                                <td>{{ candidate.orderID }}</td>
+                                <td>{{ candidate.dealer || '—' }}</td>
+                                <td>{{ candidate.contactPerson || '—' }}</td>
+                                <td>{{ candidate.plannedSentDate || '—' }}</td>
+                                <td>{{ candidate.plannedReturnedDate || '—' }}</td>
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary promotion-open-btn"
+                                        :disabled="reservationSwapSaving"
+                                        @click="confirmReservationSwap(candidate)"
+                                    >
+                                        入替
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else-if="!reservationSwapLoading" class="promotion-empty">
+                        同機種の waiting_list 候補はありません。
+                    </p>
+                    <p v-else class="promotion-empty">読み込み中...</p>
+                </div>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        :disabled="reservationSwapSaving"
+                        @click="closeReservationSwapDialog"
+                    >
+                        閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div
             v-if="promotionModalOpen"
             class="confirm-overlay"
             @click.self="closePromotionModal"
@@ -886,6 +970,7 @@ import {
     fullCalendarDayCellClassNames,
     rollingMonthViewConfig,
 } from '@/utils/fullCalendarCommon'
+import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
@@ -999,6 +1084,11 @@ const noteDeleting = ref(false)
 const noteDialogError = ref('')
 const promotionModalOpen = ref(false)
 const promotionCandidates = ref([])
+const reservationSwapDialogOpen = ref(false)
+const reservationSwapCandidates = ref([])
+const reservationSwapLoading = ref(false)
+const reservationSwapSaving = ref(false)
+const reservationSwapError = ref('')
 const showShippingDialog = ref(false)
 const shippingConfirming = ref(false)
 const statusBeforeShippingDialog = ref(null)
@@ -1153,6 +1243,12 @@ const displayProductNameLabel = computed(() => {
     if (fromMaster) return fromMaster
     return ''
 })
+/** 画面上「製品名」欄に表示している値（コピー対象） */
+const productNameCopyValue = computed(() =>
+    String(displayItemLabel.value || displayProductNameLabel.value || '').trim(),
+)
+const productNameCopyFeedback = ref('')
+let productNameCopyFeedbackTimer = null
 const applicationFormItemPreview = computed(() =>
     String(displayItemLabel.value ?? '').replace(/【簿外】/g, '').trim(),
 )
@@ -1295,6 +1391,16 @@ const currentStatusLabel = computed(() => {
     if (id == null || Number.isNaN(id)) return '未設定'
     const row = statuses.value.find(item => Number(item.processID_new) === id)
     return row ? loanerStatusOptionLabel(row) : `status ${id}`
+})
+
+const canSwapReservation = computed(() => {
+    if (props.record.order_type !== 'loaner') return false
+    return String(currentStatusLabel.value || '').includes('確保済み')
+})
+
+const reservationSwapButtonTitle = computed(() => {
+    if (canSwapReservation.value) return 'waiting_list と予約を入れ替えます'
+    return 'status が「確保済み」のときのみ予約入替できます'
 })
 
 const isLaborEditable = computed(() =>
@@ -2500,6 +2606,80 @@ async function promoteToLoaner() {
     }
 }
 
+function closeReservationSwapDialog() {
+    if (reservationSwapSaving.value) return
+    reservationSwapDialogOpen.value = false
+    reservationSwapError.value = ''
+}
+
+async function openReservationSwapDialog() {
+    if (!canSwapReservation.value || reservationSwapLoading.value) return
+    reservationSwapError.value = ''
+    reservationSwapCandidates.value = []
+    reservationSwapDialogOpen.value = true
+    reservationSwapLoading.value = true
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/detail/${props.attached.id}/waiting-for-swap`,
+            {
+                method: 'GET',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+            },
+        )
+        if (!result) return
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(validationError(data, `候補の取得に失敗しました。（HTTP ${response.status}）`))
+        }
+        reservationSwapCandidates.value = Array.isArray(data.candidates) ? data.candidates : []
+    } catch (e) {
+        reservationSwapError.value = e.message || '候補の取得に失敗しました。'
+    } finally {
+        reservationSwapLoading.value = false
+    }
+}
+
+async function confirmReservationSwap(candidate) {
+    if (!candidate?.orderID || reservationSwapSaving.value) return
+    if (!window.confirm(`OrderID ${candidate.orderID} と予約を入れ替えますか？`)) return
+
+    reservationSwapSaving.value = true
+    reservationSwapError.value = ''
+    error.value = ''
+    success.value = ''
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/detail/${props.attached.id}/swap-waiting`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                body: JSON.stringify({ waitingOrderID: Number(candidate.orderID) }),
+            },
+        )
+        if (!result) return
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(validationError(data, `予約入替に失敗しました。（HTTP ${response.status}）`))
+        }
+        success.value = data.message || '予約を入れ替えました。'
+        // detail 画面の URL {id} は orderID（attached.id ではない）
+        const nextOrderId = data.redirectOrderId ?? data.record?.orderID ?? candidate.orderID
+        if (nextOrderId) {
+            const url = new URL(`${page.props.appBaseUrl}/servicerecord/loaner/detail/${nextOrderId}`, window.location.origin)
+            const returnUrl = safeReturnUrl()
+            if (returnUrl) url.searchParams.set('returnUrl', returnUrl)
+            window.location.href = url.href
+            return
+        }
+        window.location.reload()
+    } catch (e) {
+        reservationSwapError.value = e.message || '予約入替に失敗しました。'
+        error.value = reservationSwapError.value
+    } finally {
+        reservationSwapSaving.value = false
+    }
+}
+
 function syncCurrentDates(attached, record = null) {
     if (attached) {
         form.sentDate = attached.sentDate || ''
@@ -2703,6 +2883,45 @@ function openParentServiceDetail() {
     }
 }
 
+async function writeTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        return
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    if (!ok) throw new Error('クリップボードへのコピーに失敗しました。')
+}
+
+async function copyProductName() {
+    const value = productNameCopyValue.value
+    if (!value) {
+        error.value = 'コピーする製品名がありません。'
+        return
+    }
+
+    try {
+        await writeTextToClipboard(value)
+        if (productNameCopyFeedbackTimer) clearTimeout(productNameCopyFeedbackTimer)
+        productNameCopyFeedback.value = 'コピー済'
+        productNameCopyFeedbackTimer = setTimeout(() => {
+            productNameCopyFeedback.value = ''
+            productNameCopyFeedbackTimer = null
+        }, 1200)
+        success.value = `製品名「${value}」をコピーしました。`
+        error.value = ''
+    } catch (e) {
+        error.value = e.message || 'クリップボードへのコピーに失敗しました。'
+    }
+}
+
 function closePage() {
     if (window.opener && !window.opener.closed) {
         window.close()
@@ -2846,7 +3065,8 @@ a.btn {
 .period-panel { flex: 0 0 auto; min-height: 45px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .period-panel h2 { margin-right: 5px; white-space: nowrap; }
 .period-panel label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-.period-panel input { width: 116px; }
+.period-panel .date-input-with-today { width: 142px; }
+.period-panel .date-input-with-today :deep(input) { width: 100%; min-width: 0; }
 .calendar-help, .file-help { color: #64748b; font-size: 10px; }
 .calendar-error { margin: 0 0 3px; color: #b91c1c; font-size: 11px; }
 
@@ -2968,7 +3188,8 @@ a.btn {
 .compact-grid input,
 .compact-grid select,
 .master-value,
-.period-panel input {
+.period-panel input,
+.period-panel .date-input-with-today :deep(input) {
     width: 100%;
     min-width: 0;
     height: 25px;
@@ -3020,6 +3241,26 @@ a.btn {
     white-space: nowrap;
     color: #334155;
     font-size: 11px;
+}
+.loaner-identity-col .product-name-copy-btn {
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid #64748b;
+    border-radius: 2px;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.loaner-identity-col .product-name-copy-btn:hover:not(:disabled) {
+    background: #e2e8f0;
+}
+.loaner-identity-col .product-name-copy-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 .loaner-identity-col input,
 .loaner-identity-col .master-value {
@@ -3108,8 +3349,22 @@ a.btn {
     white-space: nowrap;
 }
 .commerce-num,
-.commerce-date,
 .commerce-po {
+    width: 100%;
+    min-width: 0;
+    height: 26px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 11px;
+}
+.commerce-row .date-input-with-today {
+    width: 100%;
+    min-width: 0;
+}
+.commerce-date {
     width: 100%;
     min-width: 0;
     height: 26px;
@@ -3128,12 +3383,25 @@ a.btn {
 .status-action-row {
     margin-top: 8px;
     display: grid;
-    grid-template-columns: minmax(140px, 1.1fr) auto minmax(160px, 1.2fr) minmax(140px, 1fr);
+    grid-template-columns: minmax(140px, 1.1fr) auto minmax(160px, 1.2fr) auto minmax(140px, 1fr);
     gap: 8px;
     align-items: stretch;
 }
 .status-action-waiting {
     grid-template-columns: minmax(140px, 1fr) minmax(160px, 1fr);
+}
+.reservation-swap-btn {
+    align-self: stretch;
+    min-height: 100%;
+    min-width: 88px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.reservation-swap-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 .status-current-box,
 .status-select-box,

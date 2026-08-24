@@ -531,13 +531,16 @@ async function uploadThenCreate(fileList) {
 
 <style scoped>
 .intake-page {
-    height: 100vh;
+    zoom: 1.1;
+    width: 100%;
+    height: calc(100vh / 1.1);
     padding: 24px;
     background: #e2e8f0;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transform-origin: top left;
 }
 
 .page-header {
