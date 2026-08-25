@@ -1,8 +1,10 @@
 /**
- * マスタ価格版の共通解決。
+ * マスタ価格版の共通解決（MySQL 5.7 / 8 共通）。
  * - 受注日あり: validDateMin <= 受注日 <= validDateMax（なければ最新）
  * - 受注日未定: 最新版（validDateMin が最新）
- * - 期間未設定行は常に候補
+ * - 期間未設定 / 0000-00-00 は常に候補
+ * - 製品名は TRIM 一致（5.7 PAD SPACE と 8 NO PAD の差を吸収）
+ * - 日付は Y-m-d（ISO UTC にしない）
  * - 製品選択など一覧は latestMastersByKey で最新版のみ表示
  */
 
@@ -15,7 +17,9 @@ function normalizeDate(value) {
     const text = String(value).trim()
     if (text === '' || text === '[object Object]') return null
     const match = text.match(/(\d{4}-\d{2}-\d{2})/)
-    return match ? match[1] : (text.length >= 10 ? text.slice(0, 10) : text)
+    const ymd = match ? match[1] : (text.length >= 10 ? text.slice(0, 10) : text)
+    if (!ymd || ymd.startsWith('0000-00-00') || Number(ymd.slice(0, 4)) < 1) return null
+    return ymd
 }
 
 function normalizeProductName(value) {

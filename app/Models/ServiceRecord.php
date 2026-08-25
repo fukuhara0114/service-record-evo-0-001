@@ -129,7 +129,7 @@ class ServiceRecord extends Model
     public function getServiceAtOrderedDate()
     {
         return app(\App\Services\MasterPriceVersionResolver::class)
-            ->serviceMaster($this->serviceID, $this->orderDate);
+            ->serviceMaster($this->serviceID, $this->orderDate, $this->productName);
     }
     // returnCode
     public function returnCodeMaster()

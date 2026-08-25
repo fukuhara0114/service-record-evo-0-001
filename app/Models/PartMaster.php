@@ -38,6 +38,14 @@ class PartMaster extends Model
     ];
 
     /**
+     * Inertia JSON は Y-m-d 固定。ISO UTC にすると TZ 差で 5.7/8 の版判定がずれる。
+     */
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d');
+    }
+
+    /**
      * 業務キー partID で紐づく添付部品（版をまたぐ）。
      */
     public function attachedParts(): HasMany

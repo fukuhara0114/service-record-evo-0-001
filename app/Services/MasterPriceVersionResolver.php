@@ -6,6 +6,7 @@ use App\Models\LoanerMaster;
 use App\Models\PartMaster;
 use App\Models\ServiceMaster;
 use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -13,8 +14,11 @@ use Illuminate\Support\Collection;
 /**
  * servicemaster / partmaster / loanermaster の価格版を解決する。
  *
- * - 受注日あり: validDateMin <= 受注日 <= validDateMax（なければ最新）
- * - 受注日未定: 最新版（validDateMin が最新）
+ * MySQL 5.7 / 8 共通:
+ * - 受注日あり: DATE(validDateMin) <= 受注日 <= DATE(validDateMax)
+ * - 期間未設定（NULL / 0000-00-00）は常に候補
+ * - 受注日未定 or 該当なし: 最新版（validDateMin が最新）
+ * - ウィンドウ関数は使わない
  */
 class MasterPriceVersionResolver
 {
@@ -26,8 +30,37 @@ class MasterPriceVersionResolver
             return null;
         }
 
+        if (is_string($date)) {
+            $text = trim($date);
+            if ($text === '' || str_starts_with($text, '0000-00-00')) {
+                return null;
+            }
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $text, $match) === 1) {
+                if ((int) substr($match[1], 0, 4) < 1) {
+                    return null;
+                }
+
+                return $match[1];
+            }
+        }
+
+        if ($date instanceof DateTimeInterface) {
+            // date キャストはアプリTZの暦日。UTC ISO へ変換しない（5.7/8・TZ差で日付がずれないようにする）
+            $year = (int) $date->format('Y');
+            if ($year < 1) {
+                return null;
+            }
+
+            return $date->format('Y-m-d');
+        }
+
         try {
-            return Carbon::parse($date)->toDateString();
+            $parsed = Carbon::parse($date);
+            if ((int) $parsed->year < 1) {
+                return null;
+            }
+
+            return $parsed->toDateString();
         } catch (\Throwable) {
             return null;
         }
@@ -38,32 +71,16 @@ class MasterPriceVersionResolver
         $asOf = $this->normalizeDate($asOfDate);
 
         if ($asOf !== null) {
-            $matched = (clone $query)
-                ->where(function (Builder $builder) use ($asOf) {
-                    $builder
-                        ->where(function (Builder $range) use ($asOf) {
-                            $range->where('validDateMin', '<=', $asOf)
-                                ->where('validDateMax', '>=', $asOf);
-                        })
-                        ->orWhere(function (Builder $legacy) {
-                            // 期間未設定の既存行は常に候補にする
-                            $legacy->whereNull('validDateMin')
-                                ->whereNull('validDateMax');
-                        });
-                })
-                ->orderByDesc('validDateMin')
-                ->orderByDesc('id')
-                ->first();
+            $matched = $this->applyLatestVersionOrder(
+                $this->applyAsOfRange((clone $query)->reorder(), $asOf)
+            )->first();
 
             if ($matched) {
                 return $matched;
             }
         }
 
-        return (clone $query)
-            ->orderByDesc('validDateMin')
-            ->orderByDesc('id')
-            ->first();
+        return $this->applyLatestVersionOrder((clone $query)->reorder())->first();
     }
 
     /**
@@ -73,10 +90,7 @@ class MasterPriceVersionResolver
      */
     public function latestByKey(Builder $query, string $businessKey): Collection
     {
-        return (clone $query)
-            ->reorder()
-            ->orderByDesc('validDateMin')
-            ->orderByDesc('id')
+        return $this->applyLatestVersionOrder((clone $query)->reorder())
             ->get()
             ->groupBy(function (Model $row) use ($businessKey) {
                 $value = $row->getAttribute($businessKey);
@@ -89,15 +103,29 @@ class MasterPriceVersionResolver
             ->values();
     }
 
-    public function serviceMaster(mixed $serviceId, mixed $asOfDate = null): ?ServiceMaster
+    public function serviceMaster(mixed $serviceId, mixed $asOfDate = null, mixed $productName = null): ?ServiceMaster
     {
-        if ($serviceId === null || $serviceId === '') {
+        if ($serviceId !== null && $serviceId !== '' && (int) $serviceId !== 0) {
+            /** @var ServiceMaster|null $master */
+            $master = $this->firstAsOf(
+                ServiceMaster::query()->where('serviceID', $serviceId),
+                $asOfDate
+            );
+            if ($master) {
+                return $master;
+            }
+        }
+
+        $name = trim((string) ($productName ?? ''));
+        if ($name === '') {
             return null;
         }
 
+        // 5.7 は PAD SPACE（末尾空白を無視）、8 の utf8mb4_0900 は NO PAD。
+        // TRIM 同士ならどちらでも同じ行に当たる。
         /** @var ServiceMaster|null $master */
         $master = $this->firstAsOf(
-            ServiceMaster::query()->where('serviceID', $serviceId),
+            ServiceMaster::query()->whereRaw('TRIM(productName) = ?', [$name]),
             $asOfDate
         );
 
@@ -160,12 +188,12 @@ class MasterPriceVersionResolver
             return [];
         }
 
-        return LoanerMaster::query()
-            ->where(function (Builder $query) use ($loanerId) {
+        return $this->applyLatestVersionOrder(
+            LoanerMaster::query()->where(function (Builder $query) use ($loanerId) {
                 $query->where('loanerID', $loanerId)
                     ->orWhere('id', $loanerId);
-            })
-            ->orderByDesc('validDateMin')
+            })->reorder()
+        )
             ->get(['loanerID', 'price', 'validDateMin', 'validDateMax'])
             ->map(fn (LoanerMaster $row) => [
                 'loanerID' => $row->loanerID,
@@ -175,5 +203,46 @@ class MasterPriceVersionResolver
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * 期間内、または期間未設定（NULL / 0000-00-00）。DATE() 比較で 5.7/8 の DATETIME 差を吸収する。
+     */
+    private function applyAsOfRange(Builder $query, string $asOf): Builder
+    {
+        $emptyMin = $this->sqlEmptyDate('validDateMin');
+        $emptyMax = $this->sqlEmptyDate('validDateMax');
+
+        return $query->where(function (Builder $builder) use ($asOf, $emptyMin, $emptyMax) {
+            $builder
+                ->where(function (Builder $range) use ($asOf, $emptyMin, $emptyMax) {
+                    $range
+                        ->whereRaw("NOT {$emptyMin}")
+                        ->whereRaw("NOT {$emptyMax}")
+                        ->whereRaw('DATE(validDateMin) <= ?', [$asOf])
+                        ->whereRaw('DATE(validDateMax) >= ?', [$asOf]);
+                })
+                ->orWhere(function (Builder $legacy) use ($emptyMin, $emptyMax) {
+                    $legacy->whereRaw($emptyMin)->whereRaw($emptyMax);
+                });
+        });
+    }
+
+    /**
+     * 最新版順。0000-00-00 は 5.7 では値、8 では NULL になりやすいので両方を「空」として末尾へ。
+     */
+    private function applyLatestVersionOrder(Builder $query): Builder
+    {
+        $emptyMin = $this->sqlEmptyDate('validDateMin');
+
+        return $query
+            ->orderByRaw("CASE WHEN {$emptyMin} THEN 0 ELSE 1 END DESC")
+            ->orderByRaw('DATE(validDateMin) DESC')
+            ->orderByDesc('id');
+    }
+
+    private function sqlEmptyDate(string $column): string
+    {
+        return "({$column} IS NULL OR {$column} = '0000-00-00' OR CAST({$column} AS CHAR) LIKE '0000-00-00%')";
     }
 }

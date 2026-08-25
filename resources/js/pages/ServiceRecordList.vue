@@ -3244,7 +3244,9 @@ function stopLogisticsAutoRefresh() {
 function resolveDetailFormAPrice(draft, parts = []) {
     if (!draft) return null
 
-    const asOfDate = draft.orderDate ?? null
+    const asOfRaw = draft.orderDate || null
+    const asOfMatch = asOfRaw ? String(asOfRaw).match(/(\d{4}-\d{2}-\d{2})/) : null
+    const asOfDate = asOfMatch ? asOfMatch[1] : (asOfRaw || null)
     const master = findServiceMaster(page.props.servicesMaster, {
         productName: draft.productName,
         entityID: draft.entityID,
