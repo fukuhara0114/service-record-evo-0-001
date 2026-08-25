@@ -44,7 +44,7 @@
                                                     :key="status.processID_new"
                                                     :value="status.processID_new"
                                                 >
-                                                    {{ loanerStatusOptionLabel(status) }}
+                                                    {{ statusSelectLabel(status) }}
                                                 </option>
                                             </select>
                                         </dd>
@@ -1014,6 +1014,16 @@ const statusOptions = computed(() => {
     }
     return page.props.statuses ?? []
 })
+
+function statusSelectLabel(row) {
+    if (isLoanerRecord.value) {
+        return loanerStatusOptionLabel(row)
+    }
+    const label = String(row?.status ?? '').trim()
+    const id = row?.processID_new
+    if (id == null || id === '') return label
+    return label ? `${label} (${id})` : String(id)
+}
 
 function loanerDetailUrl(orderId) {
     const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
@@ -3158,6 +3168,8 @@ defineExpose({
 
 .field-select option {
     font-weight: bold;
+    color: #1e293b;
+    background: #fff;
 }
 
 .status-empty {

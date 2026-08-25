@@ -15,10 +15,10 @@ use Illuminate\Support\Collection;
  * servicemaster / partmaster / loanermaster の価格版を解決する。
  *
  * MySQL 5.7 / 8 共通:
- * - 受注日あり: DATE(validDateMin) <= 受注日 <= DATE(validDateMax)
+ * - 受注日あり: validDateMin〜Max を Y-m-d 文字列で比較
  * - 期間未設定（NULL / 0000-00-00）は常に候補
  * - 受注日未定 or 該当なし: 最新版（validDateMin が最新）
- * - ウィンドウ関数は使わない
+ * - ウィンドウ関数・DATE('0000-00-00') は使わない（MySQL 8 error 1525）
  */
 class MasterPriceVersionResolver
 {
@@ -206,21 +206,24 @@ class MasterPriceVersionResolver
     }
 
     /**
-     * 期間内、または期間未設定（NULL / 0000-00-00）。DATE() 比較で 5.7/8 の DATETIME 差を吸収する。
+     * 期間内、または期間未設定（NULL / 0000-00-00）。
+     * DATE リテラル '0000-00-00' や DATE() は MySQL 8 (error 1525) で落ちるため、CHAR の先頭10桁で比較する。
      */
     private function applyAsOfRange(Builder $query, string $asOf): Builder
     {
         $emptyMin = $this->sqlEmptyDate('validDateMin');
         $emptyMax = $this->sqlEmptyDate('validDateMax');
+        $minYmd = $this->sqlDateYmd('validDateMin');
+        $maxYmd = $this->sqlDateYmd('validDateMax');
 
-        return $query->where(function (Builder $builder) use ($asOf, $emptyMin, $emptyMax) {
+        return $query->where(function (Builder $builder) use ($asOf, $emptyMin, $emptyMax, $minYmd, $maxYmd) {
             $builder
-                ->where(function (Builder $range) use ($asOf, $emptyMin, $emptyMax) {
+                ->where(function (Builder $range) use ($asOf, $emptyMin, $emptyMax, $minYmd, $maxYmd) {
                     $range
                         ->whereRaw("NOT {$emptyMin}")
                         ->whereRaw("NOT {$emptyMax}")
-                        ->whereRaw('DATE(validDateMin) <= ?', [$asOf])
-                        ->whereRaw('DATE(validDateMax) >= ?', [$asOf]);
+                        ->whereRaw("{$minYmd} <= ?", [$asOf])
+                        ->whereRaw("{$maxYmd} >= ?", [$asOf]);
                 })
                 ->orWhere(function (Builder $legacy) use ($emptyMin, $emptyMax) {
                     $legacy->whereRaw($emptyMin)->whereRaw($emptyMax);
@@ -229,20 +232,28 @@ class MasterPriceVersionResolver
     }
 
     /**
-     * 最新版順。0000-00-00 は 5.7 では値、8 では NULL になりやすいので両方を「空」として末尾へ。
+     * 最新版順。0000-00-00 / NULL は「空」として末尾へ。
      */
     private function applyLatestVersionOrder(Builder $query): Builder
     {
         $emptyMin = $this->sqlEmptyDate('validDateMin');
+        $minYmd = $this->sqlDateYmd('validDateMin');
 
         return $query
             ->orderByRaw("CASE WHEN {$emptyMin} THEN 0 ELSE 1 END DESC")
-            ->orderByRaw('DATE(validDateMin) DESC')
+            ->orderByRaw("{$minYmd} DESC")
             ->orderByDesc('id');
+    }
+
+    private function sqlDateYmd(string $column): string
+    {
+        return "LEFT(CAST({$column} AS CHAR), 10)";
     }
 
     private function sqlEmptyDate(string $column): string
     {
-        return "({$column} IS NULL OR {$column} = '0000-00-00' OR CAST({$column} AS CHAR) LIKE '0000-00-00%')";
+        $ymd = $this->sqlDateYmd($column);
+
+        return "({$column} IS NULL OR {$ymd} = '' OR {$ymd} = '0000-00-00')";
     }
 }
