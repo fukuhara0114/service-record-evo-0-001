@@ -1092,7 +1092,7 @@
                                     :class="{
                                         available: isLoanerUnitAvailable(unit),
                                         selected: isSelectedLoanerUnit(unit),
-                                        selectable: canSelectLoanerUnit(unit),
+                                        selectable: !isExcludedLoanerItem(unit?.item),
                                     }"
                                     :title="isLoanerUnitAvailable(unit) ? '在庫' : '貸出中等'"
                                     @click="selectLoanerUnit(unit)"
@@ -1416,10 +1416,10 @@ function isExcludedLoanerItem(itemText) {
 
 function loanerUnitStatusValue(unit) {
     const column = props.loanerStatusColumn || 'currentStatus'
-    if (unit?.[column] != null) return Number(unit[column])
-    if (unit?.currentStatus != null) return Number(unit.currentStatus)
-    if (unit?.current_status != null) return Number(unit.current_status)
-    return null
+    const raw = unit?.[column] ?? unit?.currentStatus ?? unit?.current_status
+    if (raw == null || raw === '') return null
+    const num = Number(raw)
+    return Number.isFinite(num) ? num : null
 }
 
 function isLoanerUnitAvailable(unit) {
@@ -1442,11 +1442,26 @@ function isSelectedLoanerUnit(unit) {
 }
 
 function selectLoanerUnit(unit) {
-    if (!canSelectLoanerUnit(unit) || isExcludedLoanerItem(unit?.item)) return
-    form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
-    form.SN = unit.SN ?? ''
+    if (isExcludedLoanerItem(unit?.item)) return
+
+    if (isLoanerUnitAvailable(unit)) {
+        form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
+        form.SN = unit.SN ?? ''
+        if (unit.item) form.item = unit.item
+        if (unit.productName) form.productName = unit.productName
+        waitingListAccepted.value = false
+        showWaitingConfirm.value = false
+        showLoanerStockDialog.value = false
+        return
+    }
+
+    // 非在庫を選んだときは waiting_list にする（個体は割り当てない）
+    form.loanerID = ''
+    form.SN = ''
     if (unit.item) form.item = unit.item
     if (unit.productName) form.productName = unit.productName
+    waitingListAccepted.value = false
+    showWaitingConfirm.value = true
     showLoanerStockDialog.value = false
 }
 
@@ -2385,13 +2400,27 @@ async function saveLoanerCase() {
         return
     }
 
-    if (loanerAvailability.value?.order_type === 'waiting_list' && !waitingListAccepted.value) {
-        showWaitingConfirm.value = true
+    const selected = selectedLoanerUnit.value
+    const selectedIsStock = !!(selected && isLoanerUnitAvailable(selected))
+    const anyStock = loanerUnitsForProduct.value.some(unit => isLoanerUnitAvailable(unit))
+
+    if (form.loanerID && !selectedIsStock) {
+        form.loanerID = ''
+        form.SN = ''
+        if (!waitingListAccepted.value) {
+            showWaitingConfirm.value = true
+            return
+        }
+    }
+
+    if (anyStock && !selectedIsStock && !waitingListAccepted.value) {
+        error.value = '在庫機を一覧から選択してください。在庫が無い行をクリックすると予約リストになります。'
+        showLoanerStockDialog.value = true
         return
     }
 
-    if (hasLoanerStock.value && !form.loanerID) {
-        error.value = '在庫機を一覧から選択してください。'
+    if (!anyStock && !waitingListAccepted.value) {
+        showWaitingConfirm.value = true
         return
     }
 
@@ -2422,7 +2451,8 @@ async function saveLoanerCase() {
                 enduser_SN: form.enduser_SN === '' || form.enduser_SN == null
                     ? null
                     : String(form.enduser_SN).trim(),
-                loanerID: form.loanerID === '' ? null : Number(form.loanerID),
+                loanerID: selectedIsStock && form.loanerID !== '' ? Number(form.loanerID) : null,
+                asWaitingList: waitingListAccepted.value && !selectedIsStock,
                 plannedSentDate: form.plannedSentDate || null,
                 plannedReturnedDate: form.plannedReturnedDate || null,
                 dealer: form.dealer || null,

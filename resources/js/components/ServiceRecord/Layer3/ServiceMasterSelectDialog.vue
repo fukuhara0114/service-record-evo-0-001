@@ -244,9 +244,9 @@ const selectedItem = computed(() =>
 )
 
 watch(
-    [kind, () => props.payload?.kind, () => props.payload?.dealer, () => props.payload?.productName, () => props.payload?.entityID, () => props.payload?.incident, () => props.record?.orderID],
+    [kind, () => props.payload?.kind, () => props.payload?.dealer, () => props.payload?.productName, () => props.payload?.entityID, () => props.payload?.incident, () => props.payload?.searchQuery, () => props.record?.orderID],
     () => {
-        searchQuery.value = ''
+        searchQuery.value = String(props.payload?.searchQuery ?? '').trim()
         error.value = ''
         displayLimit.value = DISPLAY_STEP
         if (kind.value === 'dealer') {

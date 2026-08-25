@@ -77,6 +77,23 @@ class LoanerMaster extends Model
         return str_contains($text, '使用不可') || str_contains($text, 'サービス終了');
     }
 
+    /**
+     * 在庫か。currentStatus が数値の 0 のときだけ true。
+     * 空文字 / null / 1（旧フラグ）は在庫ではない。
+     */
+    public static function isInStockStatus(mixed $value): bool
+    {
+        if ($value === null || $value === '') {
+            return false;
+        }
+
+        if (!is_numeric($value)) {
+            return false;
+        }
+
+        return (int) $value === 0;
+    }
+
     protected static bool $syncingSharedFields = false;
 
     protected static function booted(): void

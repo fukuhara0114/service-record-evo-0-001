@@ -6,6 +6,7 @@ use App\Models\AttachedLoaner;
 use App\Models\AttachedFile;
 use App\Models\AttachedNote;
 use App\Models\Dealer;
+use App\Models\IncidentMaster;
 use App\Models\Labor;
 use App\Models\LoanerMaster;
 use App\Models\MaintenanceContractMaster;
@@ -58,7 +59,7 @@ class LoanerRecordController extends Controller
             ->groupBy('productName')
             ->map(function ($rows, $productName) use ($statusColumn) {
                 $availableCount = $rows
-                    ->filter(fn ($row) => (int) ($row->{$statusColumn} ?? -1) === 0)
+                    ->filter(fn ($row) => LoanerMaster::isInStockStatus($row->{$statusColumn} ?? null))
                     ->count();
 
                 $item = $rows
@@ -245,6 +246,7 @@ class LoanerRecordController extends Controller
                 'deliveryDestination_zipcode',
                 'deliveryDestination_address1',
                 'deliveryDestination_address2',
+                'incident',
                 'promotion_ready_at',
                 'promotion_source_orderID',
             ]) + [
@@ -289,6 +291,10 @@ class LoanerRecordController extends Controller
             'statusFlow' => LoanerStatusFlow::meta(),
             'labors' => Labor::query()->orderBy('laborName')->get(['laborID', 'laborName']),
             'dealersMaster' => Dealer::orderBy('dealerName')->get(),
+            'incidentsMaster' => IncidentMaster::query()
+                ->select(['id', 'incidentNum', 'companyName', 'depart', 'customerNum'])
+                ->orderByDesc('incidentNum')
+                ->get(),
             // 価格計算用に同一 loanerID の全版を渡す（選択ダイアログ側で最新版に絞る）
             'loanerUnits' => LoanerMaster::query()
                 ->whereNotNull('loanerID')
@@ -452,8 +458,8 @@ class LoanerRecordController extends Controller
             return response()->json(['message' => 'loaner 案件のみ予約入替できます。'], 422);
         }
 
-        if (!$this->isSecuredStockStatus((int) $record->status)) {
-            return response()->json(['message' => 'status が「確保済み」の案件のみ予約入替できます。'], 422);
+        if (!$this->canSwapReservationStatus((int) $record->status)) {
+            return response()->json(['message' => 'status が 20 以上 150 未満の案件のみ予約入替できます。'], 422);
         }
 
         $productName = trim((string) ($record->productName ?? ''));
@@ -482,8 +488,8 @@ class LoanerRecordController extends Controller
             return response()->json(['message' => 'loaner 案件のみ予約入替できます。'], 422);
         }
 
-        if (!$this->isSecuredStockStatus((int) $loanerRecord->status)) {
-            return response()->json(['message' => 'status が「確保済み」の案件のみ予約入替できます。'], 422);
+        if (!$this->canSwapReservationStatus((int) $loanerRecord->status)) {
+            return response()->json(['message' => 'status が 20 以上 150 未満の案件のみ予約入替できます。'], 422);
         }
 
         $validated = $request->validate([
@@ -713,7 +719,7 @@ class LoanerRecordController extends Controller
         );
 
         $available = $latest
-            ->filter(fn (LoanerMaster $row) => (int) ($row->{$statusColumn} ?? -1) === 0)
+            ->filter(fn (LoanerMaster $row) => $this->isLoanerUnitInStock($row))
             ->values();
 
         // 繰上可: 返却元個体を候補先頭へ（在庫フラグ未更新でも選べるようにする）
@@ -958,6 +964,7 @@ class LoanerRecordController extends Controller
             'orderDate' => 'nullable|date',
             'poNum' => 'nullable|string|max:255',
             'coNum' => 'nullable|string|max:255',
+            'incident' => 'nullable',
             'shippingOut_requiredDate' => 'nullable|date',
             'receivedDate' => 'nullable|date',
             'dealer' => 'nullable|string|max:255',
@@ -1309,17 +1316,32 @@ class LoanerRecordController extends Controller
             'additionalFileIds.*' => 'integer',
             'enduser_SN' => 'nullable|string|max:255',
             'maintenanceContractId' => 'nullable|integer',
+            'asWaitingList' => 'nullable|boolean',
         ]);
 
-        $available = $this->findAvailableLoaner(
-            $validated['productName'],
-            isset($validated['loanerID']) ? (int) $validated['loanerID'] : null,
-        );
-        if (!empty($validated['loanerID']) && !$available) {
-            return response()->json([
-                'message' => '指定した貸出機は在庫として選択できません。一覧を更新してやり直してください。',
-            ], 422);
+        $forceWaitingList = $request->boolean('asWaitingList');
+
+        $requestedLoanerId = array_key_exists('loanerID', $validated) && $validated['loanerID'] !== null && $validated['loanerID'] !== ''
+            ? (int) $validated['loanerID']
+            : null;
+
+        $available = null;
+        if ($forceWaitingList) {
+            $available = null;
+        } elseif ($requestedLoanerId !== null) {
+            $requestedUnit = $this->latestLoanerUnitById($requestedLoanerId);
+            if (!$requestedUnit) {
+                return response()->json([
+                    'message' => '指定した貸出機が見つかりません。一覧を更新してやり直してください。',
+                ], 422);
+            }
+            if ($this->isLoanerUnitInStock($requestedUnit)) {
+                $available = $requestedUnit;
+            }
+        } else {
+            $available = $this->findAvailableLoaner($validated['productName']);
         }
+
         $orderType = $available ? 'loaner' : 'waiting_list';
         $user = $request->user();
         $linkMode = $validated['linkMode'];
@@ -2125,39 +2147,55 @@ class LoanerRecordController extends Controller
 
     private function findAvailableLoaner(string $productName, ?int $loanerId = null): ?LoanerMaster
     {
-        $statusColumn = $this->resolveStatusColumn();
+        if ($loanerId !== null) {
+            $selected = $this->latestLoanerUnitById($loanerId);
+
+            return $this->isLoanerUnitInStock($selected) ? $selected : null;
+        }
+
+        $name = trim($productName);
+        if ($name === '') {
+            return null;
+        }
 
         $latest = app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
-                ->where('loanerID', '!=', '')
-                ->where('productName', $productName),
+                ->where('loanerID', '!=', ''),
             'loanerID'
         );
 
-        if ($loanerId !== null) {
-            $selected = $latest->first(function (LoanerMaster $row) use ($loanerId) {
-                return (int) $row->loanerID === $loanerId;
-            });
-
-            if (!$selected) {
-                return null;
-            }
-
-            if (LoanerMaster::isExcludedFromProductSelect($selected->item ?? null)) {
-                return null;
-            }
-
-            return (int) ($selected->{$statusColumn} ?? -1) === 0 ? $selected : null;
-        }
-
-        return $latest->first(function (LoanerMaster $row) use ($statusColumn) {
-            if (LoanerMaster::isExcludedFromProductSelect($row->item ?? null)) {
+        return $latest->first(function (LoanerMaster $row) use ($name) {
+            if (strcasecmp(trim((string) ($row->productName ?? '')), $name) !== 0) {
                 return false;
             }
 
-            return (int) ($row->{$statusColumn} ?? -1) === 0;
+            return $this->isLoanerUnitInStock($row);
         });
+    }
+
+    private function latestLoanerUnitById(int $loanerId): ?LoanerMaster
+    {
+        return app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->where('loanerID', $loanerId),
+            'loanerID'
+        )->first();
+    }
+
+    private function isLoanerUnitInStock(?LoanerMaster $row): bool
+    {
+        if (!$row) {
+            return false;
+        }
+
+        if (LoanerMaster::isExcludedFromProductSelect($row->item ?? null)) {
+            return false;
+        }
+
+        $statusColumn = $this->resolveStatusColumn();
+
+        return LoanerMaster::isInStockStatus($row->getAttribute($statusColumn));
     }
 
     /**
@@ -2258,6 +2296,14 @@ class LoanerRecordController extends Controller
         $resolved = $this->resolveLoanerDetailByOrderId((int) $orderId, ['serviceRecord']);
 
         return [$resolved[0] ?? $attachedRow, $resolved[1] ?? null];
+    }
+
+    /**
+     * 予約入替できる status（processID_new >= 20 かつ < 150）。
+     */
+    private function canSwapReservationStatus(int $status): bool
+    {
+        return $status >= 20 && $status < 150;
     }
 
     /**

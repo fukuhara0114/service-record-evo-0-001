@@ -543,14 +543,16 @@ const activeSelectSearchQuery = computed(() => {
     return ''
 })
 
-function unitStatusValue(unit) {
-    if (unit.currentStatus != null) return Number(unit.currentStatus)
-    if (unit.current_status != null) return Number(unit.current_status)
-    return null
+function isAvailableUnit(unit) {
+    const value = unitStatusValue(unit)
+    return value === 0
 }
 
-function isAvailableUnit(unit) {
-    return unitStatusValue(unit) === 0
+function unitStatusValue(unit) {
+    const raw = unit?.currentStatus ?? unit?.current_status
+    if (raw == null || raw === '') return null
+    const num = Number(raw)
+    return Number.isFinite(num) ? num : null
 }
 
 function openSelectDialog(kind) {
@@ -805,6 +807,7 @@ async function save() {
                 status: 0,
                 returnCode: null,
                 SN: form.SN || null,
+                asWaitingList: availability.value?.order_type === 'waiting_list' && waitingListAccepted.value,
                 plannedSentDate: form.plannedSentDate || null,
                 plannedReturnedDate: form.plannedReturnedDate || null,
                 dealer: form.dealer || null,

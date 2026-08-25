@@ -2156,7 +2156,7 @@ class ServiceRecordController extends Controller
             ->groupBy('productName')
             ->map(function ($rows, $productName) use ($loanerStatusColumn) {
                 $availableCount = $rows
-                    ->filter(fn ($row) => (int) ($row->{$loanerStatusColumn} ?? -1) === 0)
+                    ->filter(fn ($row) => LoanerMaster::isInStockStatus($row->{$loanerStatusColumn} ?? null))
                     ->count();
 
                 $item = $rows

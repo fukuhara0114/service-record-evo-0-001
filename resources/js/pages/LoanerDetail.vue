@@ -270,7 +270,22 @@
                         <section class="panel person-panel">
                             <div class="panel-heading">
                                 <h2>依頼社</h2>
-                                <button type="button" class="select-btn" @click="activeSelectKind = 'dealer'">マスター選択</button>
+                                <div class="panel-heading-actions">
+                                    <button
+                                        type="button"
+                                        class="incidents-btn"
+                                        @click="openIncidentSelect"
+                                    >
+                                        Incidents
+                                    </button>
+                                    <input
+                                        v-model="form.incident"
+                                        type="text"
+                                        class="incidents-value"
+                                        placeholder="incident"
+                                    >
+                                    <button type="button" class="select-btn" @click="activeSelectKind = 'dealer'">マスター選択</button>
+                                </div>
                             </div>
                             <div class="person-stack">
                                 <label><span>会社名</span><input v-model="form.dealer" type="text"></label>
@@ -561,6 +576,14 @@
             :initial-value="activeSelectInitialValue"
             @close="activeSelectKind = null"
             @selected="onMasterSelected"
+        />
+
+        <ServiceMasterSelectDialog
+            v-if="showIncidentDialog"
+            :record="record"
+            :payload="incidentDialogPayload"
+            @close="showIncidentDialog = false"
+            @saved="onIncidentSelected"
         />
 
         <div
@@ -974,6 +997,7 @@ import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
+import ServiceMasterSelectDialog from '@/components/ServiceRecord/Layer3/ServiceMasterSelectDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
@@ -1014,6 +1038,7 @@ const props = defineProps({
     },
     labors: { type: Array, default: () => [] },
     dealersMaster: { type: Array, default: () => [] },
+    incidentsMaster: { type: Array, default: () => [] },
     loanerUnits: { type: Array, default: () => [] },
     availableUnits: { type: Array, default: () => [] },
     dateFields: { type: Object, required: true },
@@ -1050,6 +1075,7 @@ const fileDragDepth = ref(0)
 const filePendingDelete = ref(null)
 const notePendingDelete = ref(null)
 const activeSelectKind = ref(null)
+const showIncidentDialog = ref(false)
 const leftPaneSize = ref(49)
 const rightPaneSize = ref(51)
 const fileBusy = computed(() => uploading.value || deleting.value || fileSortSaving.value)
@@ -1218,6 +1244,7 @@ const form = reactive({
     enduser_SN: props.attached.enduser_SN != null && props.attached.enduser_SN !== ''
         ? String(props.attached.enduser_SN)
         : '',
+    incident: stringValue(props.record.incident),
 })
 
 const selectedUnit = computed(() => {
@@ -1395,12 +1422,13 @@ const currentStatusLabel = computed(() => {
 
 const canSwapReservation = computed(() => {
     if (props.record.order_type !== 'loaner') return false
-    return String(currentStatusLabel.value || '').includes('確保済み')
+    const status = Number(form.status)
+    return Number.isFinite(status) && status >= 20 && status < 150
 })
 
 const reservationSwapButtonTitle = computed(() => {
     if (canSwapReservation.value) return 'waiting_list と予約を入れ替えます'
-    return 'status が「確保済み」のときのみ予約入替できます'
+    return 'status が 20 以上 150 未満のときのみ予約入替できます'
 })
 
 const isLaborEditable = computed(() =>
@@ -1902,6 +1930,28 @@ function onMasterSelected(result) {
         void lookupZip('dealer')
     }
     activeSelectKind.value = null
+}
+
+function incidentDealerSearchQuery() {
+    const name = String(form.dealer ?? '').replace(/株式会社/g, '').trim()
+    return name.slice(0, 3)
+}
+
+const incidentDialogPayload = computed(() => ({
+    kind: 'incident',
+    incident: form.incident === '' ? null : form.incident,
+    searchQuery: incidentDealerSearchQuery(),
+}))
+
+function openIncidentSelect() {
+    showIncidentDialog.value = true
+}
+
+function onIncidentSelected(result) {
+    if (result && Object.prototype.hasOwnProperty.call(result, 'incident')) {
+        form.incident = result.incident == null ? '' : String(result.incident)
+    }
+    showIncidentDialog.value = false
 }
 
 function normalizeZipcode(value) {
@@ -2453,6 +2503,7 @@ async function save(options = {}) {
     }
 
     payload.discount_service = numericNullable(form.discount_service) ?? 0
+    payload.incident = numericNullable(form.incident)
     payload.price = basePrice.value
     Object.keys(payload).forEach((key) => {
         if (typeof payload[key] === 'string') payload[key] = nullable(payload[key])
@@ -3050,6 +3101,12 @@ a.btn {
 .panel { min-width: 0; min-height: 0; border: 1px solid #94a3b8; background: #fff; padding: 7px; overflow: visible; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
 .panel-heading h2 { margin: 0; }
+.panel-heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
 .delivery-heading {
     justify-content: flex-start;
 }
@@ -3568,6 +3625,31 @@ a.btn {
 .price-adjust-label { color: #475569; font-size: 13px; font-weight: bold; white-space: nowrap; }
 .price-adjust-value { font-size: 13px; color: #0f172a; }
 .price-adjust-btn { min-height: 24px; padding: 2px 10px; font-size: 11px; }
+.incidents-btn {
+    min-height: 24px;
+    padding: 2px 10px;
+    border: none;
+    border-top: 3px solid #3b82f6;
+    background: #4b5563;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.incidents-btn:hover {
+    background: #374151;
+}
+.incidents-value {
+    width: 88px;
+    min-width: 0;
+    height: 25px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 11px;
+}
 .price-adjust-delta strong { font-size: 12px; color: #0f172a; }
 .price-adjust-enduser-sn {
     margin-left: auto;
