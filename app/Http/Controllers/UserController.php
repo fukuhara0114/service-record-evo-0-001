@@ -27,7 +27,7 @@ class UserController extends Controller
     {
         return User::query()
             ->orderBy('userID')
-            ->get(['userID', 'name', 'kanji_name', 'email', 'permission', 'laborID', 'receive_info']);
+            ->get(['userID', 'name', 'kanji_name', 'email', 'permission', 'laborID', 'receive_info', 'signature']);
     }
 
     private function laborsPayload()
@@ -72,6 +72,7 @@ class UserController extends Controller
             'users.*.laborID' => ['nullable', 'integer'],
             'users.*.password' => ['nullable', 'string', 'max:255'],
             'users.*.receive_info' => ['nullable', 'boolean'],
+            'users.*.signature' => ['nullable', 'string', 'max:255'],
         ]);
 
         $rows = $validated['users'];
@@ -169,6 +170,7 @@ class UserController extends Controller
                         ? (int) $row['laborID']
                         : -1,
                     'receive_info' => ! empty($row['receive_info']) ? 1 : 0,
+                    'signature' => trim((string) ($row['signature'] ?? '')),
                 ];
 
                 $password = isset($row['password']) ? trim((string) $row['password']) : '';
@@ -208,6 +210,7 @@ class UserController extends Controller
             'permission' => ['nullable', 'string', 'max:255'],
             'laborID' => ['nullable', 'integer'],
             'receive_info' => ['nullable', 'boolean'],
+            'signature' => ['nullable', 'string', 'max:255'],
         ]);
 
         $email = trim((string) ($validated['email'] ?? ''));
@@ -229,6 +232,7 @@ class UserController extends Controller
                 ? (int) $validated['laborID']
                 : -1,
             'receive_info' => ! empty($validated['receive_info']) ? 1 : 0,
+            'signature' => trim((string) ($validated['signature'] ?? '')),
         ]);
 
         return response()->json(['message' => '登録しました', 'user' => $user]);

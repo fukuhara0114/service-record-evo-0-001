@@ -1,18 +1,20 @@
 <template>
-    <BaseDialog :title="dialogTitle" large @close="$emit('close')">
-        <CapturedImageGallery
-            ref="galleryRef"
-            :associatedID="resolvedAssociatedId"
-            :associated-id="resolvedAssociatedId"
-            :filter-by-associated="filterByAssociated"
-            :initial-captured-by="initialCapturedBy"
-            :selection-only="selectionOnly"
-            @select="(item) => $emit('select', item)"
-            @selection-change="(items) => $emit('selection-change', items)"
-            @associated="(payload) => $emit('associated', payload)"
-            @confirm-selection="(items) => $emit('confirm-selection', items)"
-        />
-    </BaseDialog>
+    <div class="gallery-dialog-host">
+        <BaseDialog :title="dialogTitle" large @close="$emit('close')">
+            <CapturedImageGallery
+                ref="galleryRef"
+                :associatedID="resolvedAssociatedId"
+                :associated-id="resolvedAssociatedId"
+                :filter-by-associated="filterByAssociated"
+                :initial-captured-by="initialCapturedBy"
+                :selection-only="selectionOnly"
+                @select="(item) => $emit('select', item)"
+                @selection-change="(items) => $emit('selection-change', items)"
+                @associated="(payload) => $emit('associated', payload)"
+                @confirm-selection="(items) => $emit('confirm-selection', items)"
+            />
+        </BaseDialog>
+    </div>
 </template>
 
 <script setup>
@@ -65,3 +67,24 @@ defineExpose({
     reload: (...args) => galleryRef.value?.reload?.(...args),
 })
 </script>
+
+<style scoped>
+.gallery-dialog-host :deep(.dialog-overlay) {
+    padding: 12px;
+    box-sizing: border-box;
+    align-items: center;
+    overflow: hidden;
+}
+
+.gallery-dialog-host :deep(.dialog-panel.large) {
+    height: 100%;
+    max-height: min(100%, calc(100dvh / 1.1 - 24px));
+    width: min(96vw, 1600px, 100%);
+    max-width: 100%;
+}
+
+.gallery-dialog-host :deep(.dialog-panel.large .dialog-body) {
+    overflow: hidden;
+    min-height: 0;
+}
+</style>

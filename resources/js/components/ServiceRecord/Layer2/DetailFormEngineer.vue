@@ -518,7 +518,7 @@ function resolveCompleteNextStatus(orderType, currentStatus) {
     if (currentStatus === 90) {
         return 180
     }
-    if (currentStatus === 180) {
+    if (currentStatus === 180 || currentStatus === 185) {
         return 190
     }
     return null
@@ -560,7 +560,7 @@ async function onComplete() {
     statusActionSaving.value = true
     actionMessage.value = ''
     try {
-        const extra = orderType !== 'loaner' && currentStatus === 180
+        const extra = orderType !== 'loaner' && currentStatus === 90
             ? buildWorkCompletionPayload()
             : {}
         await updateRecordStatus(nextStatus, extra)

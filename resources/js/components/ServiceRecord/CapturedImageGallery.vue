@@ -887,6 +887,7 @@ defineExpose({
     gap: 12px;
     min-height: 0;
     height: 100%;
+    overflow: hidden;
 }
 
 .gallery-toolbar {
@@ -895,6 +896,7 @@ defineExpose({
     justify-content: space-between;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .gallery-filters {
@@ -916,6 +918,7 @@ defineExpose({
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .associate-message {
@@ -1103,6 +1106,7 @@ defineExpose({
 .gallery-more {
     display: flex;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .action-btn {

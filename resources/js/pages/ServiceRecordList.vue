@@ -207,6 +207,13 @@
                         @click="toggleEngineerQuoteCoMode"
                     >Quote/CO</button>
                     <button
+                        v-if="mode === 'engineer'"
+                        type="button"
+                        class="sm-mode-btn"
+                        :class="{ active: engineerDailyReportMode }"
+                        @click="toggleEngineerDailyReportMode"
+                    >Daily Report</button>
+                    <button
                         v-if="!isRestrictedListMode"
                         type="button"
                         class="sm-mode-btn"
@@ -506,8 +513,21 @@
                 </button>
                 <span v-if="shippingExcelCopyMessage" class="abroad-excel-message">{{ shippingExcelCopyMessage }}</span>
             </div>
+            <!-- Engineer: Daily Report -->
+            <div v-if="mode === 'engineer' && engineerDailyReportMode" class="abroad-toolbar abroad-toolbar-sm">
+                <div class="abroad-toolbar-main">
+                    <button
+                        type="button"
+                        class="abroad-excel-btn"
+                        :disabled="filteredRecords.length === 0"
+                        @click="openDailyReportEmailPreview"
+                    >
+                        メール・プレビュー{{ dailyReportPreviewCount > 0 ? ` (${dailyReportPreviewCount})` : '' }}
+                    </button>
+                </div>
+            </div>
             <!-- Engineer: Quote/CO → smsync -->
-            <div v-if="mode === 'engineer' && engineerQuoteCoMode" class="abroad-toolbar abroad-toolbar-sm">
+            <div v-else-if="mode === 'engineer' && engineerQuoteCoMode" class="abroad-toolbar abroad-toolbar-sm">
                 <div class="abroad-toolbar-main">
                     <button
                         type="button"
@@ -545,9 +565,29 @@
                     </span>
                 </label>
             </div>
-            <table id="myLargeTable">
+            <table id="myLargeTable" :class="{ 'daily-report-table': engineerDailyReportMode }">
                 <thead>
-                    <tr v-if="mode === 'engineer'">
+                    <tr v-if="mode === 'engineer' && engineerDailyReportMode">
+                        <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">orderID</SortableTh>
+                        <th style="width: 44px; text-align: center;">
+                            <input
+                                type="checkbox"
+                                :checked="abroadAllVisibleSelected"
+                                :indeterminate.prop="abroadSomeVisibleSelected && !abroadAllVisibleSelected"
+                                title="表示中を全選択"
+                                @click.stop
+                                @change="toggleAbroadSelectAll($event)"
+                            >
+                        </th>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Date</SortableTh>
+                        <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA</SortableTh>
+                        <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">Product</SortableTh>
+                        <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                        <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">販売店</SortableTh>
+                        <th>対応内容</th>
+                        <th>Service Type</th>
+                    </tr>
+                    <tr v-else-if="mode === 'engineer'">
                         <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
                         <th v-if="engineerQuoteCoMode" style="width: 44px; text-align: center;">
                             <input
@@ -713,9 +753,75 @@
                         }"
                         :title="promotionRowTitle(r)"
                         @click="selectedOrderId = r.orderID"
-                        @dblclick="openSecondLayer(r)"
+                        @dblclick="onListRowDblClick(r)"
                     >
-                        <template v-if="mode === 'engineer'">
+                        <template v-if="mode === 'engineer' && engineerDailyReportMode">
+                            <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                            <td style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    type="checkbox"
+                                    :checked="isAbroadSelected(r.orderID)"
+                                    @change="toggleAbroadSelect(r.orderID, $event)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="date"
+                                    class="daily-report-input daily-report-input-date"
+                                    :value="toDateInputValue(dailyReportDraft(r).date)"
+                                    @input="updateDailyReportDraft(r.orderID, 'date', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input"
+                                    :value="dailyReportDraft(r).rma"
+                                    @input="updateDailyReportDraft(r.orderID, 'rma', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input daily-report-input-product"
+                                    :value="dailyReportDraft(r).product"
+                                    @input="updateDailyReportDraft(r.orderID, 'product', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input daily-report-input-sn"
+                                    :value="dailyReportDraft(r).sn"
+                                    @input="updateDailyReportDraft(r.orderID, 'sn', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input"
+                                    :value="dailyReportDraft(r).dealer"
+                                    @input="updateDailyReportDraft(r.orderID, 'dealer', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input daily-report-input-response"
+                                    :value="dailyReportDraft(r).response"
+                                    @input="updateDailyReportDraft(r.orderID, 'response', $event.target.value)"
+                                >
+                            </td>
+                            <td @click.stop @dblclick.stop>
+                                <input
+                                    type="text"
+                                    class="daily-report-input daily-report-input-service-type"
+                                    :value="dailyReportDraft(r).serviceType"
+                                    @input="updateDailyReportDraft(r.orderID, 'serviceType', $event.target.value)"
+                                >
+                            </td>
+                        </template>
+                        <template v-else-if="mode === 'engineer'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
                             <td v-if="engineerQuoteCoMode" style="text-align: center;" @click.stop @dblclick.stop>
                                 <input
@@ -1135,6 +1241,12 @@
             @close="closeDialog"
             @saved="onDialogSaved"
         />
+        <DailyReportEmailPreviewDialog
+            v-if="showDailyReportEmailPreview"
+            :rows="dailyReportPreviewRows"
+            :subject="dailyReportEmailSubject"
+            @close="showDailyReportEmailPreview = false"
+        />
         </div>
     </div>
 </template>
@@ -1165,6 +1277,7 @@ import PartSelectDialog from '@/components/ServiceRecord/Layer3/PartSelectDialog
 import StockedPartSelectDialog from '@/components/ServiceRecord/Layer3/StockedPartSelectDialog.vue'
 import StockedPartQuantityDialog from '@/components/ServiceRecord/Layer3/StockedPartQuantityDialog.vue'
 import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/UnregisteredEmailNoteLinkDialog.vue'
+import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/DailyReportEmailPreviewDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
 
@@ -1452,6 +1565,9 @@ const smListAutoRefreshTimer = ref(null)
 const smListAutoRefreshing = ref(false)
 const engineerQuoteCoMode = ref(false)
 const engineerQuoteCoBusy = ref(false)
+const engineerDailyReportMode = ref(false)
+const engineerDailyReportDrafts = ref({})
+const showDailyReportEmailPreview = ref(false)
 const SM_LIST_AUTO_REFRESH_MS = 60 * 1000
 /** 詳細オープン直後の誤 close（dblclick の残存 click / Inertia 競合）を無視する */
 const detailCloseGuardUntil = ref(0)
@@ -1551,6 +1667,25 @@ function matchesEngineerQuoteCoSmQuote(record) {
     if (smQuoteRaw === null || smQuoteRaw === undefined) return true
     const smQuote = Number(smQuoteRaw)
     return Number.isFinite(smQuote) && smQuote < 100000
+}
+
+function matchesEngineerListStatus(record) {
+    const orderType = record?.order_type ?? 'service'
+    const status = Number(record?.status)
+    if (orderType === 'service' || orderType === '' || orderType == null) {
+        return Number.isFinite(status) && status >= 90 && status <= 185
+    }
+    if (orderType === 'loaner') {
+        return status === 396
+    }
+    return false
+}
+
+function matchesDailyReportStatus(record) {
+    const orderType = record?.order_type ?? 'service'
+    const status = Number(record?.status)
+    return (orderType === 'service' || orderType === '' || orderType == null)
+        && (status === 90 || status === 180 || status === 185)
 }
 
 function onEntityIdFocus(record, event) {
@@ -1743,11 +1878,96 @@ function onCheckSmHeaderClick() {
 
 function toggleEngineerQuoteCoMode() {
     engineerQuoteCoMode.value = !engineerQuoteCoMode.value
-    if (!engineerQuoteCoMode.value) {
-        clearAbroadSelection()
-    } else {
+    if (engineerQuoteCoMode.value) {
+        engineerDailyReportMode.value = false
+        showDailyReportEmailPreview.value = false
         abroadSelectedIds.value = new Set()
+    } else {
+        clearAbroadSelection()
     }
+}
+
+function toDateInputValue(value) {
+    if (value == null || value === '') return ''
+    const ymd = formatListDate(value).replace(/\./g, '-')
+    return /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : ''
+}
+
+function formatDailyReportDateDisplay(value) {
+    const ymd = toDateInputValue(value)
+    return ymd ? ymd.replace(/-/g, '.') : ''
+}
+
+function formatDailyReportResponse(value) {
+    const text = String(value ?? '').trim()
+    if (!text) return ''
+    if (text.includes('再校正')) return 'Certification'
+    if (text.includes('修理')) return 'Repair'
+    return text
+}
+
+function buildDailyReportDraft(record) {
+    return {
+        date: toDateInputValue(record?.work_completion_date || record?.receivedDate),
+        rma: String(record?.RMA ?? ''),
+        product: String(record?.productName ?? ''),
+        sn: String(record?.SN ?? ''),
+        dealer: String(record?.dealer ?? ''),
+        response: formatDailyReportResponse(record?.return_code_master?.description || record?.symptoms || ''),
+        serviceType: '',
+    }
+}
+
+function dailyReportDraft(record) {
+    const id = String(record?.orderID ?? '')
+    return engineerDailyReportDrafts.value[id] ?? buildDailyReportDraft(record)
+}
+
+function updateDailyReportDraft(orderID, field, value) {
+    const id = String(orderID ?? '')
+    if (!id) return
+    const record = (filteredRecords.value ?? []).find((r) => String(r.orderID) === id)
+    const current = engineerDailyReportDrafts.value[id] ?? buildDailyReportDraft(record ?? { orderID })
+    engineerDailyReportDrafts.value = {
+        ...engineerDailyReportDrafts.value,
+        [id]: { ...current, [field]: value },
+    }
+}
+
+function seedDailyReportDrafts(records) {
+    const next = { ...engineerDailyReportDrafts.value }
+    let changed = false
+    for (const record of records ?? []) {
+        const id = String(record?.orderID ?? '')
+        if (!id || next[id]) continue
+        next[id] = buildDailyReportDraft(record)
+        changed = true
+    }
+    if (changed) {
+        engineerDailyReportDrafts.value = next
+    }
+}
+
+function toggleEngineerDailyReportMode() {
+    engineerDailyReportMode.value = !engineerDailyReportMode.value
+    if (engineerDailyReportMode.value) {
+        engineerQuoteCoMode.value = false
+        abroadSelectedIds.value = new Set()
+        showDailyReportEmailPreview.value = false
+    } else {
+        clearAbroadSelection()
+        showDailyReportEmailPreview.value = false
+    }
+}
+
+function onListRowDblClick(record) {
+    if (engineerDailyReportMode.value) return
+    openSecondLayer(record)
+}
+
+function openDailyReportEmailPreview() {
+    if (!filteredRecords.value.length) return
+    showDailyReportEmailPreview.value = true
 }
 
 function quoteCoStockedPartsFromAttachment(stockedParts) {
@@ -2169,7 +2389,9 @@ const filteredRecords = computed(() => {
     let records = props.initialRecords ?? []
 
     if (props.mode === 'engineer') {
-        if (engineerQuoteCoMode.value) {
+        if (engineerDailyReportMode.value) {
+            records = records.filter((r) => matchesDailyReportStatus(r))
+        } else if (engineerQuoteCoMode.value) {
             records = records.filter((r) => {
                 const orderType = r?.order_type ?? 'service'
                 const status = Number(r?.status)
@@ -2178,17 +2400,7 @@ const filteredRecords = computed(() => {
                     && matchesEngineerQuoteCoSmQuote(r)
             })
         } else {
-            records = records.filter((r) => {
-                const orderType = r?.order_type ?? 'service'
-                const status = Number(r?.status)
-                if (orderType === 'service' || orderType === '' || orderType == null) {
-                    return Number.isFinite(status) && status >= 90 && status <= 180
-                }
-                if (orderType === 'loaner') {
-                    return status === 396
-                }
-                return false
-            })
+            records = records.filter((r) => matchesEngineerListStatus(r))
         }
     } else if (!isBoardMode.value) {
         records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
@@ -2250,6 +2462,7 @@ const filteredRecords = computed(() => {
                     r.promotion_ready_at,
                     r.promotion_source_orderID?.toString(),
                     isPromotionReady(r) ? '繰上可' : '',
+                    ...(engineerDailyReportMode.value ? Object.values(dailyReportDraft(r)) : []),
                 ]
                     .filter(Boolean)
                     .join(' ')
@@ -2292,6 +2505,27 @@ const abroadSomeVisibleSelected = computed(() => {
     const rows = filteredRecords.value
     if (!rows.length) return false
     return rows.some((r) => abroadSelectedIds.value.has(r.orderID))
+})
+
+const dailyReportSelectedRows = computed(() => {
+    const rows = filteredRecords.value
+    const selected = rows.filter((r) => isAbroadSelected(r.orderID))
+    return selected.length ? selected : rows
+})
+const dailyReportPreviewCount = computed(() => dailyReportSelectedRows.value.length)
+const dailyReportPreviewRows = computed(() =>
+    dailyReportSelectedRows.value.map((r) => {
+        const draft = dailyReportDraft(r)
+        return {
+            orderID: r.orderID,
+            ...draft,
+            date: formatDailyReportDateDisplay(draft.date),
+        }
+    }),
+)
+const dailyReportEmailSubject = computed(() => {
+    const today = formatDailyReportDateDisplay(new Date())
+    return `Daily Report ${today}`
 })
 
 function isAbroadSelected(orderID) {
@@ -2688,6 +2922,15 @@ watch(arrivalFilter, (value) => {
         syncArrivalQuery(value)
     }
 })
+
+watch(
+    () => [engineerDailyReportMode.value, filteredRecords.value],
+    () => {
+        if (!engineerDailyReportMode.value) return
+        seedDailyReportDrafts(filteredRecords.value)
+    },
+    { immediate: true },
+)
 
 function matchesAbroadFilter(record) {
     return Number(record?.rmaNumOverSea) === 123
@@ -3811,6 +4054,55 @@ async function saveRecord() {
 .entity-id-input:disabled {
     opacity: 0.65;
     cursor: wait;
+}
+
+.daily-report-input {
+    width: 100%;
+    min-width: 72px;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #fff;
+    color: #111827;
+}
+
+.daily-report-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.daily-report-input-date {
+    min-width: 138px;
+    width: 148px;
+}
+
+.daily-report-input-product {
+    min-width: 96px;
+}
+
+.daily-report-input-sn {
+    min-width: 120px;
+}
+
+.daily-report-input-response {
+    min-width: 220px;
+}
+
+.daily-report-input-service-type {
+    min-width: 88px;
+    width: 100px;
+}
+
+#myLargeTable.daily-report-table thead th {
+    background: #111 !important;
+}
+
+#myLargeTable.daily-report-table td {
+    overflow: visible;
 }
 
 .home-link-area {

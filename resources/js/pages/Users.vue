@@ -33,6 +33,7 @@
                             <th>権限</th>
                             <th>laborID</th>
                             <th class="col-receive">receive_info</th>
+                            <th>signature</th>
                             <th>パスワード</th>
                             <th class="col-actions"></th>
                         </tr>
@@ -77,6 +78,9 @@
                                 <input v-model="row.receive_info" type="checkbox" class="receive-check">
                             </td>
                             <td>
+                                <input v-model="row.signature" type="text" autocomplete="off">
+                            </td>
+                            <td>
                                 <input
                                     v-model="row.password"
                                     type="password"
@@ -113,12 +117,13 @@
                             <th>権限</th>
                             <th>laborID</th>
                             <th class="col-receive">receive_info</th>
+                            <th>signature</th>
                             <th>パスワード</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="existingRows.length === 0">
-                            <td colspan="8" class="empty">データがありません。「新規追加」でユーザーを作成できます。</td>
+                            <td colspan="9" class="empty">データがありません。「新規追加」でユーザーを作成できます。</td>
                         </tr>
                         <tr v-for="row in existingRows" :key="row._key">
                             <td class="col-id">{{ row.userID }}</td>
@@ -157,6 +162,9 @@
                             </td>
                             <td class="col-receive">
                                 <input v-model="row.receive_info" type="checkbox" class="receive-check">
+                            </td>
+                            <td>
+                                <input v-model="row.signature" type="text" autocomplete="off">
                             </td>
                             <td>
                                 <input
@@ -207,6 +215,7 @@ function toRow(user = null) {
         permission: user?.permission ?? '',
         laborID: String(user?.laborID ?? -1),
         receive_info: Number(user?.receive_info ?? 0) === 1,
+        signature: user?.signature ?? '',
         password: '',
     }
 }
@@ -267,6 +276,7 @@ function serializeRow(row) {
         permission: nullableTrim(row.permission),
         laborID: row.laborID === '' || row.laborID == null ? -1 : Number(row.laborID),
         receive_info: !!row.receive_info,
+        signature: String(row.signature ?? '').trim(),
         password: String(row.password ?? ''),
     }
 }

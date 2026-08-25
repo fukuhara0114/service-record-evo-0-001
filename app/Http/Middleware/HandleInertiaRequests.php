@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $request->user()->name,
                 'kanji_name' => $request->user()->kanji_name,
                 'laborID' => $request->user()->laborID,
+                'signature' => $request->user()->signature,
             ] : null,
             'msip' => [
                 'publicLabelId' => config('services.msip.public_label_id'),
