@@ -1180,37 +1180,20 @@ class LoanerRecordController extends Controller
                 $oldStatus = (int) $previousStatus;
                 $newLoanerId = $record->loanerID ?? $attached->loanerID;
 
-                // loanerID 変更時は旧個体を在庫へ戻し、新個体はアクティブ案件なら貸出中フラグへ
+                // 個体を差し替えたときは旧個体を在庫(0)へ戻す
                 if (
                     $previousLoanerId !== null && $previousLoanerId !== ''
                     && (string) $previousLoanerId !== (string) ($newLoanerId ?? '')
                 ) {
                     $this->setLoanerInventoryStatus($previousLoanerId, 0);
-                    if ($newLoanerId !== null && $newLoanerId !== '') {
-                        $this->setLoanerInventoryStatus(
-                            $newLoanerId,
-                            LoanerStatusFlow::isActiveListStatus($newStatus) ? 1 : 0,
-                        );
-                    }
                 }
 
-                // status が 400（貸出中）以降へ進んだ時点で機材を在庫復帰し、waiting_list を確認
-                $crossedToInactive = LoanerStatusFlow::crossedToInactiveList($oldStatus, $newStatus);
+                // 詳細の status（processID_new）を loanermaster.currentStatus へ同期
+                $this->syncLoanerMasterCurrentStatus($record, $newLoanerId);
 
-                if ($crossedToInactive) {
-                    if ($newLoanerId !== null && $newLoanerId !== '') {
-                        $this->setLoanerInventoryStatus($newLoanerId, 0);
-                    }
+                if (LoanerStatusFlow::crossedToInactiveList($oldStatus, $newStatus)) {
                     $promotionTriggered = true;
                     $promotionCandidates = $this->markPromotionCandidatesForReturnedLoaner($record);
-                } elseif (
-                    !LoanerStatusFlow::isActiveListStatus($oldStatus)
-                    && LoanerStatusFlow::isActiveListStatus($newStatus)
-                    && $newLoanerId !== null
-                    && $newLoanerId !== ''
-                ) {
-                    // 完了後ステータスからアクティブへ戻した場合は再確保
-                    $this->setLoanerInventoryStatus($newLoanerId, 1);
                 }
             }
         });
@@ -1809,6 +1792,12 @@ class LoanerRecordController extends Controller
                     $record->lastEditPerson = $request->user()?->kanji_name;
                     $record->lastEditDate = now();
                     $record->save();
+                    if ($isLoaner && array_key_exists('status', $validated)) {
+                        $this->syncLoanerMasterCurrentStatus(
+                            $record,
+                            $record->loanerID ?? $attached->loanerID,
+                        );
+                    }
                 }
             }
         });
@@ -2172,8 +2161,30 @@ class LoanerRecordController extends Controller
     }
 
     /**
+     * 貸出詳細の status（servicerecord.status = processID_new）を
+     * loanermaster.currentStatus へ同期する。
+     */
+    private function syncLoanerMasterCurrentStatus(ServiceRecord $record, mixed $loanerId = null): void
+    {
+        if ($record->order_type !== 'loaner') {
+            return;
+        }
+
+        $id = $loanerId ?? $record->loanerID;
+        if ($id === null || $id === '' || (int) $id === 0) {
+            return;
+        }
+
+        if ($record->status === null || $record->status === '') {
+            return;
+        }
+
+        $this->setLoanerInventoryStatus($id, (int) $record->status);
+    }
+
+    /**
      * loanermaster.currentStatus を全版へ反映する。
-     * statusmaster_loaner.processID_new の値を設定する（例: 0=確保済み, 20=案件未登録）。
+     * 値は statusmaster_loaner.processID_new（詳細画面の status と同じ）。
      */
     private function setLoanerInventoryStatus(mixed $loanerId, int $status): void
     {

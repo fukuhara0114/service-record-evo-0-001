@@ -17,8 +17,6 @@
                 >
                     {{ item.label }}
                 </button>
-            </div>
-            <div class="header-actions">
                 <div class="quick-filter">
                     <label class="quick-filter-label" for="loanerMasterQuickFilter">Quick Filter</label>
                     <input
@@ -31,6 +29,8 @@
                     >
                     <span class="quick-filter-count" aria-live="polite">{{ filteredRows.length }}件</span>
                 </div>
+            </div>
+            <div class="header-actions">
                 <form class="search-form" @submit.prevent="runSearch">
                     <input
                         v-model="searchInput"
@@ -224,7 +224,6 @@ const scopeButtons = [
     { id: 'all', label: '全件' },
     { id: 'stock', label: '在庫' },
     { id: 'non_stock', label: '非在庫' },
-    { id: 'unregistered', label: '未登録' },
     { id: 'reserved', label: '確保済み' },
     { id: 'lending', label: '貸出中' },
     { id: 'returning', label: '返却処理中' },
@@ -369,8 +368,9 @@ function goToPage(url) {
 
 .scope-bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
+    align-items: center;
     gap: 8px;
     min-width: 0;
 }
@@ -400,9 +400,10 @@ function goToPage(url) {
     display: flex;
     align-items: center;
     gap: 6px;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    margin-left: 50px;
     min-width: 160px;
-    max-width: 420px;
+    max-width: 360px;
 }
 
 .quick-filter-label {

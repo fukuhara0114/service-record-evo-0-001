@@ -6,7 +6,8 @@
  */
 export function loanerStatusLabel(row) {
     if (!row) return ''
-    return String(row.status_new ?? '').trim()
+    const value = row.status_new ?? row.statusNew ?? row.STATUS_NEW ?? ''
+    return String(value).trim()
 }
 
 /**

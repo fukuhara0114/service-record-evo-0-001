@@ -185,7 +185,7 @@ class LoanerMasterController extends Controller
 
     private function normalizeScope(string $scope): string
     {
-        $allowed = ['all', 'stock', 'non_stock', 'unregistered', 'reserved', 'lending', 'returning', 'other'];
+        $allowed = ['all', 'stock', 'non_stock', 'reserved', 'lending', 'returning', 'other'];
 
         return in_array($scope, $allowed, true) ? $scope : 'all';
     }
@@ -200,19 +200,11 @@ class LoanerMasterController extends Controller
         }
 
         $statusExpr = 'CAST('.$statusColumn.' AS SIGNED)';
-        $associatedExpr = Schema::hasColumn((new LoanerMaster)->getTable(), 'associatedID')
-            ? 'CAST(COALESCE(associatedID, 0) AS SIGNED)'
-            : null;
 
         match ($scope) {
             'stock' => $query->whereRaw("{$statusExpr} = 0"),
-            'non_stock' => $query->whereRaw("NOT ({$statusExpr} <=> 0)"),
-            'unregistered' => $query
-                ->whereRaw("{$statusExpr} > 0 AND {$statusExpr} < 388")
-                ->when($associatedExpr, fn ($q) => $q->whereRaw("{$associatedExpr} = 0")),
-            'reserved' => $query
-                ->whereRaw("{$statusExpr} > 0 AND {$statusExpr} < 388")
-                ->when($associatedExpr, fn ($q) => $q->whereRaw("{$associatedExpr} > 0")),
+            'non_stock' => $query->whereRaw("{$statusExpr} != 0"),
+            'reserved' => $query->whereRaw("{$statusExpr} >= 20 AND {$statusExpr} < 388"),
             'lending' => $query->whereRaw("{$statusExpr} = 388"),
             'returning' => $query->whereRaw("{$statusExpr} > 388 AND {$statusExpr} < 400"),
             'other' => $query->whereRaw("{$statusExpr} > 400"),

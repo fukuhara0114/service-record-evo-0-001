@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 
 class StatusLoaner extends Model
 {
@@ -16,9 +15,6 @@ class StatusLoaner extends Model
     public $timestamps = false;
 
     public $incrementing = false;
-
-    /** @var array<int, string>|null */
-    private static ?array $selectColumnsCache = null;
 
     public function serviceRecords(): HasMany
     {
@@ -42,26 +38,19 @@ class StatusLoaner extends Model
             return null;
         }
 
-        $statusNew = trim((string) (data_get($row, 'status_new') ?? ''));
+        $statusNew = static::extractStatusNew($row);
 
         return $statusNew !== '' ? $statusNew : null;
     }
 
     /**
+     * MySQL 5.7 / 8 共通。Schema::hasColumn に依存しない（5.7 で列検出が外れるため）。
+     *
      * @return array<int, string>
      */
     public static function selectColumnsForDisplay(): array
     {
-        if (self::$selectColumnsCache !== null) {
-            return self::$selectColumnsCache;
-        }
-
-        $columns = ['processID_new'];
-        if (Schema::hasTable('statusmaster_loaner') && Schema::hasColumn('statusmaster_loaner', 'status_new')) {
-            $columns[] = 'status_new';
-        }
-
-        return self::$selectColumnsCache = $columns;
+        return ['processID_new', 'status_new'];
     }
 
     /**
@@ -73,6 +62,7 @@ class StatusLoaner extends Model
     {
         $array = parent::toArray();
         $label = $this->displayLabel();
+        unset($array['status']);
         $array['status_new'] = $label;
         $array['status'] = $label;
 
@@ -86,13 +76,13 @@ class StatusLoaner extends Model
      */
     public function toDisplayArray(): array
     {
-        $payload = $this->only(static::selectColumnsForDisplay());
         $label = $this->displayLabel();
-        $payload['status_new'] = $label;
-        // 既存フロントの status 参照向け互換（値は status_new と同値）
-        $payload['status'] = $label;
 
-        return $payload;
+        return [
+            'processID_new' => $this->getAttribute('processID_new'),
+            'status_new' => $label,
+            'status' => $label,
+        ];
     }
 
     /**
@@ -104,5 +94,36 @@ class StatusLoaner extends Model
         return collect($rows)->map(
             fn (self $row) => $row->toDisplayArray(),
         )->values();
+    }
+
+    /**
+     * PDO / MySQL 5.7 でキーの大文字小文字が揺れる場合も status_new だけ拾う。
+     */
+    private static function extractStatusNew(mixed $row): string
+    {
+        if (is_object($row) && method_exists($row, 'getAttributes')) {
+            foreach ($row->getAttributes() as $key => $value) {
+                if (strcasecmp((string) $key, 'status_new') === 0) {
+                    return trim((string) ($value ?? ''));
+                }
+            }
+        }
+
+        foreach (['status_new', 'statusNew', 'STATUS_NEW'] as $key) {
+            $value = data_get($row, $key);
+            if ($value !== null && $value !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        if (is_array($row)) {
+            foreach ($row as $key => $value) {
+                if (strcasecmp((string) $key, 'status_new') === 0) {
+                    return trim((string) ($value ?? ''));
+                }
+            }
+        }
+
+        return '';
     }
 }
