@@ -8,8 +8,18 @@
 
 function normalizeDate(value) {
     if (value == null || value === '') return null
-    const text = String(value)
-    return text.length >= 10 ? text.slice(0, 10) : text
+    if (typeof value === 'object') {
+        const nested = value.date ?? value.validDateMin ?? value.validDateMax
+        if (nested != null && nested !== value) return normalizeDate(nested)
+    }
+    const text = String(value).trim()
+    if (text === '' || text === '[object Object]') return null
+    const match = text.match(/(\d{4}-\d{2}-\d{2})/)
+    return match ? match[1] : (text.length >= 10 ? text.slice(0, 10) : text)
+}
+
+function normalizeProductName(value) {
+    return String(value ?? '').trim()
 }
 
 function inDateRange(row, asOf) {
@@ -72,7 +82,8 @@ export function latestMastersByKey(rows, key) {
 
 /**
  * 製品マスタと returnCode から作業価格を解決する。
- * 1, 9 → priceC_0 / 2 → priceR_0 / 12 → priceR_onSite / その他 → 0
+ * 1（再校正）, 9（新台/校正） → 受注日版の priceC_0
+ * 2 → priceR_0 / 12 → priceR_onSite / その他 → 0
  */
 export function resolveServiceWorkPrice(master, returnCode) {
     if (!master) return 0
@@ -104,9 +115,9 @@ export function findServiceMaster(servicesMaster, criteria = {}, asOfDate = null
 
     let identityRows = null
 
-    const productName = criteria?.productName
-    if (productName != null && productName !== '') {
-        const byName = list.filter(item => String(item.productName) === String(productName))
+    const productName = normalizeProductName(criteria?.productName)
+    if (productName !== '') {
+        const byName = list.filter(item => normalizeProductName(item.productName) === productName)
         if (byName.length) identityRows = byName
     }
 
@@ -136,8 +147,12 @@ export function findServiceMaster(servicesMaster, criteria = {}, asOfDate = null
 
     if (!identityRows?.length) return null
 
-    // 価格版のキーは serviceID。同一 serviceID の版だけに絞る。
-    const serviceID = identityRows[0]?.serviceID
+    // 価格版のキーは serviceID。案件に非ゼロ serviceID があればそれを優先。
+    const criteriaServiceID = criteria?.serviceID
+    const rowServiceID = [...identityRows].sort(compareVersionDesc)[0]?.serviceID
+    const serviceID = (criteriaServiceID != null && criteriaServiceID !== '' && Number(criteriaServiceID) !== 0)
+        ? criteriaServiceID
+        : rowServiceID
     const versions = (serviceID != null && serviceID !== '' && Number(serviceID) !== 0)
         ? list.filter(item => String(item.serviceID) === String(serviceID))
         : identityRows

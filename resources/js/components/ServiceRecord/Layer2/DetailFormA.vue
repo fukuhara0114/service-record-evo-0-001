@@ -908,10 +908,13 @@ const props = defineProps({
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
-/** 受注日あり: その日の版 / 未定: 最新版 */
-const priceAsOfDate = computed(() =>
-    props.draftRecord?.orderDate ?? props.record?.orderDate ?? null,
-)
+/** 受注日あり: その日の版 / 未定: 最新版（空文字は未定扱い） */
+const priceAsOfDate = computed(() => {
+    const raw = props.draftRecord?.orderDate || props.record?.orderDate || null
+    if (raw == null || raw === '') return null
+    const match = String(raw).match(/(\d{4}-\d{2}-\d{2})/)
+    return match ? match[1] : String(raw)
+})
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
@@ -1381,6 +1384,7 @@ const selectedServiceMaster = computed(() => {
 })
 
 const workPrice = computed(() => {
+    // 1=再校正 / 9=新台/校正 → servicemaster の受注日版 priceC_0
     const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
     return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
 })
