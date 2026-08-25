@@ -205,7 +205,8 @@ import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
-const LOGISTICS_COMPLETE_STATUS = 360
+const LOGISTICS_COMPLETE_STATUS = 385
+const LOGISTICS_COMPLETE_LABEL = '貸出機出荷完了＿最終処理(Mappics)'
 
 const props = defineProps({
     record: Object,
@@ -341,7 +342,13 @@ function deliveryPayload() {
 
 async function onComplete() {
     if (statusActionSaving.value) return
-    if (!window.confirm(`この案件を完了（status=${LOGISTICS_COMPLETE_STATUS}）にしますか？`)) return
+    const orderType = props.record?.order_type ?? props.draftRecord?.order_type ?? ''
+    const row = orderType === 'loaner'
+        ? (page.props.statusesLoaner ?? []).find(item => Number(item.processID_new) === LOGISTICS_COMPLETE_STATUS)
+        : (page.props.statuses ?? []).find(item => Number(item.processID_new) === LOGISTICS_COMPLETE_STATUS)
+    const label = String(row?.status_new ?? row?.status ?? LOGISTICS_COMPLETE_LABEL).trim()
+        || LOGISTICS_COMPLETE_LABEL
+    if (!window.confirm(`「${label}」に変更（status=${LOGISTICS_COMPLETE_STATUS}）しますか？`)) return
 
     statusActionSaving.value = true
     actionMessage.value = ''
