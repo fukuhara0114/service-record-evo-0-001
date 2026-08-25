@@ -19,6 +19,18 @@
                 </button>
             </div>
             <div class="header-actions">
+                <div class="quick-filter">
+                    <label class="quick-filter-label" for="loanerMasterQuickFilter">Quick Filter</label>
+                    <input
+                        id="loanerMasterQuickFilter"
+                        v-model="quickFilter"
+                        type="text"
+                        class="quick-filter-input"
+                        placeholder="スペース区切りで複数検索"
+                        :disabled="loading"
+                    >
+                    <span class="quick-filter-count" aria-live="polite">{{ filteredRows.length }}件</span>
+                </div>
                 <form class="search-form" @submit.prevent="runSearch">
                     <input
                         v-model="searchInput"
@@ -28,6 +40,14 @@
                         :disabled="loading"
                     >
                     <button type="submit" class="search-btn" :disabled="loading">検索</button>
+                    <button
+                        type="button"
+                        class="clear-btn"
+                        :disabled="loading"
+                        @click="clearSearch"
+                    >
+                        クリア
+                    </button>
                 </form>
                 <CloseToHomeButton :href="homeUrl" />
             </div>
@@ -70,11 +90,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-if="rows.length === 0">
+                        <tr v-if="filteredRows.length === 0">
                             <td :colspan="columns.length || 1" class="empty">データがありません。</td>
                         </tr>
                         <tr
-                            v-for="row in rows"
+                            v-for="row in filteredRows"
                             :key="row.id"
                             class="data-row"
                             :class="{ selected: Number(selectedId) === Number(row.id) }"
@@ -160,6 +180,7 @@ const loading = ref(false)
 const savingStatus = ref(false)
 const selectedId = ref(null)
 const searchInput = ref(props.q || '')
+const quickFilter = ref('')
 watch(() => props.q, (value) => {
     searchInput.value = value || ''
 })
@@ -171,6 +192,34 @@ const currentDirection = computed(() => props.direction === 'desc' ? 'desc' : 'a
 const currentScope = computed(() => props.scope || 'all')
 const currentSearch = computed(() => props.q || '')
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/master`)
+const filteredRows = computed(() => {
+    const queries = String(quickFilter.value || '')
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)
+        .filter((q) => q.length > 0)
+
+    if (queries.length === 0) {
+        return rows.value
+    }
+
+    return rows.value.filter((row) => {
+        const rowText = (props.columns ?? [])
+            .map((column) => {
+                const value = row?.[column]
+                if (value == null || value === '') return ''
+                if (column === props.statusColumn) {
+                    const opt = uniqueStatusOptions.value.find((o) => String(o.id) === String(value))
+                    return opt ? `${opt.label} ${opt.id}` : String(value)
+                }
+                return String(value)
+            })
+            .join(' ')
+            .toLowerCase()
+
+        return queries.every((q) => rowText.includes(q))
+    })
+})
 const scopeButtons = [
     { id: 'all', label: '全件' },
     { id: 'stock', label: '在庫' },
@@ -268,6 +317,13 @@ function runSearch() {
     runListQuery(listQuery({ q: searchInput.value }))
 }
 
+function clearSearch() {
+    if (loading.value) return
+    searchInput.value = ''
+    quickFilter.value = ''
+    runListQuery(listQuery({ q: '', scope: 'all' }))
+}
+
 function selectRow(row) {
     selectedId.value = row?.id ?? null
 }
@@ -335,9 +391,49 @@ function goToPage(url) {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
     flex-wrap: wrap;
+}
+
+.quick-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 160px;
+    max-width: 420px;
+}
+
+.quick-filter-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #334155;
+}
+
+.quick-filter-input {
+    flex: 1 1 auto;
+    min-width: 120px;
+    padding: 7px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #1e293b;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.quick-filter-input:disabled {
+    opacity: 0.7;
+}
+
+.quick-filter-count {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #475569;
 }
 
 .search-form {
@@ -378,6 +474,24 @@ function goToPage(url) {
 }
 
 .search-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.clear-btn {
+    padding: 7px 12px;
+    border: 1px solid #64748b;
+    border-radius: 6px;
+    background: #64748b;
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.clear-btn:disabled {
     cursor: not-allowed;
     opacity: 0.7;
 }

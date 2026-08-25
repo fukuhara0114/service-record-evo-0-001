@@ -1,18 +1,16 @@
 /**
- * statusmaster_loaner の表記名。status_new を優先し、空なら status。
+ * statusmaster_loaner の表記名。status_new のみを参照する。
  *
- * @param {{ status?: string|null, status_new?: string|null }|null|undefined} row
+ * @param {{ status_new?: string|null }|null|undefined} row
  * @returns {string}
  */
 export function loanerStatusLabel(row) {
     if (!row) return ''
-    const statusNew = String(row.status_new ?? '').trim()
-    if (statusNew) return statusNew
-    return String(row.status ?? '').trim()
+    return String(row.status_new ?? '').trim()
 }
 
 /**
- * @param {{ processID_new?: number|string|null, status?: string|null, status_new?: string|null }|null|undefined} row
+ * @param {{ processID_new?: number|string|null, status_new?: string|null }|null|undefined} row
  * @returns {string}
  */
 export function loanerStatusOptionLabel(row) {

@@ -427,9 +427,7 @@
 
     function loanerStatusLabelRow(row) {
         if (!row) return '';
-        const statusNew = String(row.status_new ?? '').trim();
-        if (statusNew) return statusNew;
-        return String(row.status ?? '').trim();
+        return String(row.status_new ?? '').trim();
     }
 
     function statusLabel(r) {

@@ -317,7 +317,7 @@ class ServiceRecordController extends Controller
         ];
         if ($mode === 'admin') {
             $returnedStatusId = \App\Models\StatusLoaner::query()
-                ->where('status', '返却')
+                ->where('status_new', '返却')
                 ->value('processID_new');
 
             $tabBadgeCounts['loanerReturned'] = $returnedStatusId !== null

@@ -26,7 +26,7 @@ class StatusLoaner extends Model
     }
 
     /**
-     * 画面表記用ラベル。status_new を優先し、空なら status にフォールバックする。
+     * 画面表記用ラベル。statusmaster_loaner.status_new のみを使う。
      */
     public function displayLabel(): ?string
     {
@@ -43,13 +43,8 @@ class StatusLoaner extends Model
         }
 
         $statusNew = trim((string) (data_get($row, 'status_new') ?? ''));
-        if ($statusNew !== '') {
-            return $statusNew;
-        }
 
-        $status = trim((string) (data_get($row, 'status') ?? ''));
-
-        return $status !== '' ? $status : null;
+        return $statusNew !== '' ? $statusNew : null;
     }
 
     /**
@@ -61,7 +56,7 @@ class StatusLoaner extends Model
             return self::$selectColumnsCache;
         }
 
-        $columns = ['processID_new', 'status'];
+        $columns = ['processID_new'];
         if (Schema::hasTable('statusmaster_loaner') && Schema::hasColumn('statusmaster_loaner', 'status_new')) {
             $columns[] = 'status_new';
         }
@@ -70,7 +65,7 @@ class StatusLoaner extends Model
     }
 
     /**
-     * JSON 化時も表記名（status_new 優先）を status に載せる。
+     * JSON 化時も表記名は status_new のみ。互換のため status キーにも同値を載せる。
      *
      * @return array<string, mixed>
      */
@@ -78,22 +73,24 @@ class StatusLoaner extends Model
     {
         $array = parent::toArray();
         $label = $this->displayLabel();
-        if ($label !== null) {
-            $array['status'] = $label;
-        }
+        $array['status_new'] = $label;
+        $array['status'] = $label;
 
         return $array;
     }
 
     /**
-     * API / Inertia 向け: status キーを表記名（status_new 優先）に差し替える。
+     * API / Inertia 向け: status_new のみを表記名とする。
      *
      * @return array<string, mixed>
      */
     public function toDisplayArray(): array
     {
         $payload = $this->only(static::selectColumnsForDisplay());
-        $payload['status'] = $this->displayLabel();
+        $label = $this->displayLabel();
+        $payload['status_new'] = $label;
+        // 既存フロントの status 参照向け互換（値は status_new と同値）
+        $payload['status'] = $label;
 
         return $payload;
     }

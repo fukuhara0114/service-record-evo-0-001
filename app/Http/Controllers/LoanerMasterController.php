@@ -106,7 +106,7 @@ class LoanerMasterController extends Controller
 
         $map = [];
         foreach (StatusLoaner::query()->get(array_values(array_unique($select))) as $row) {
-            // 画面表記は statusmaster_loaner.status_new（無ければ status）
+            // 画面表記は statusmaster_loaner.status_new のみ
             $label = trim((string) (StatusLoaner::resolveLabel($row) ?? ''));
             if ($label === '') {
                 continue;

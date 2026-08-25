@@ -2217,12 +2217,7 @@ class LoanerRecordController extends Controller
 
         return StatusLoaner::query()
             ->select(StatusLoaner::selectColumnsForDisplay())
-            ->where(function ($query) {
-                $query->where('status', 'like', '%未登録%');
-                if (Schema::hasColumn('statusmaster_loaner', 'status_new')) {
-                    $query->orWhere('status_new', 'like', '%未登録%');
-                }
-            })
+            ->where('status_new', 'like', '%未登録%')
             ->orderBy('processID_new')
             ->first();
     }
