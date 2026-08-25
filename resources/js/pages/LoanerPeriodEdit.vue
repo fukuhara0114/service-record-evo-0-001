@@ -1192,7 +1192,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 .page-header h1 {
     margin: 0 0 4px;
     font-size: 22px;
-    color: #1e293b;
+    color: #ffffff;
 }
 
 .subtitle {
@@ -1298,7 +1298,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 
 .period-dates-row .field {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-width: 0;
     flex-direction: row;
     align-items: center;
@@ -1310,9 +1310,16 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
     white-space: nowrap;
 }
 
-.period-dates-row .field input {
-    flex: 1 1 auto;
-    min-width: 0;
+.period-dates-row :deep(.date-input-with-today) {
+    width: auto;
+    max-width: none;
+}
+
+.period-dates-row :deep(.date-input-with-today > input[type="date"]) {
+    flex: 0 0 200px;
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
 }
 
 .period-status-row {
