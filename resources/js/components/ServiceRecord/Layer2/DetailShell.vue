@@ -92,7 +92,7 @@
                 :class="{
                     'detail-body-engineer': mode === 'engineer',
                     'detail-body-closing': layout === 'closing' || layout === 'invoice' || layout === 'logistics' || mode === 'logistics',
-                    'detail-body-form-a': layout === 'A',
+                    'detail-body-form-a': layout === 'A' || layout === 'B',
                 }"
             >
                 <DetailFormEngineer

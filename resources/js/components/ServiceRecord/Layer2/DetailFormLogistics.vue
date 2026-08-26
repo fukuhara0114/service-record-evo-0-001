@@ -563,6 +563,10 @@ async function patchFileSort(fileId, sortNum) {
     gap: 8px;
 }
 
+.files-body {
+    overflow: hidden;
+}
+
 .captured-images-panel {
     flex: 0 0 auto;
     border: 1px solid #cbd5e1;

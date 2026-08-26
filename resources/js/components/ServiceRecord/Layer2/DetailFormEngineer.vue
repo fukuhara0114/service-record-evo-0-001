@@ -34,7 +34,7 @@
                         <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
                     </div>
 
-                    <div class="files-list">
+                    <div class="files-list files-list-wrap">
                         <AttachedFileItem
                             v-for="(file, index) in sortedFiles"
                             :key="file.id"
@@ -737,6 +737,8 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
 .engineer-splitpanes {
     flex: 1;
     min-height: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 .engineer-pane {
@@ -744,6 +746,7 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     min-height: 0;
     display: flex;
     height: 100%;
+    overflow: hidden;
 }
 
 .panel {

@@ -208,20 +208,36 @@ const emit = defineEmits(['select', 'move', 'sort-num-change'])
 
 const rootEl = ref(null)
 
-function findScrollParent(el) {
-    let node = el?.parentElement
+function isOverflowYScrollable(node) {
+    const overflowY = getComputedStyle(node).overflowY
+    return overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay'
+}
+
+function findOverflowingAncestor(start) {
+    let node = start
     while (node && node !== document.body) {
-        const style = getComputedStyle(node)
-        const overflowY = style.overflowY
-        if (
-            (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
-            && node.scrollHeight > node.clientHeight + 1
-        ) {
+        if (isOverflowYScrollable(node) && node.scrollHeight > node.clientHeight + 1) {
             return node
         }
         node = node.parentElement
     }
     return null
+}
+
+function findScrollParent(el) {
+    const list = el?.closest?.('.files-list, .files-list-wrap')
+    if (list && isOverflowYScrollable(list)) {
+        return list
+    }
+    return findOverflowingAncestor(el?.parentElement)
+}
+
+function cssPixelScaleY(el) {
+    const layoutHeight = el.offsetHeight
+    if (!layoutHeight) return 1
+    const visualHeight = el.getBoundingClientRect().height
+    if (!visualHeight) return 1
+    return visualHeight / layoutHeight
 }
 
 function scrollToAdjacent(direction) {
@@ -239,9 +255,10 @@ function scrollToAdjacent(direction) {
 
     const scrollParent = findScrollParent(el)
     if (scrollParent) {
+        const scaleY = cssPixelScaleY(scrollParent)
         const parentRect = scrollParent.getBoundingClientRect()
         const targetRect = target.getBoundingClientRect()
-        const nextTop = scrollParent.scrollTop + (targetRect.top - parentRect.top)
+        const nextTop = scrollParent.scrollTop + (targetRect.top - parentRect.top) / scaleY
         scrollParent.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' })
         return
     }

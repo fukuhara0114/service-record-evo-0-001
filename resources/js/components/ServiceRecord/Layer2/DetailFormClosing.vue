@@ -1448,6 +1448,7 @@ watch(
     padding: 10px;
     box-sizing: border-box;
     height: 100%;
+    overflow: hidden;
 }
 
 .files-actions {
