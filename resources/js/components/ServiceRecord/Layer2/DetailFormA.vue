@@ -119,6 +119,7 @@
                                             >
                                                 保守検索
                                             </button>
+                                            <span class="work-price-inline">{{ formatPrice(workPrice) }}</span>
                                         </dd>
                                     </dl>
                                 </section>
@@ -284,16 +285,13 @@
                             <section
                                 v-if="showLinkedLoaners"
                                 class="section-card detail-card linked-loaner-card"
-                                :class="{ 'linked-loaner-card-has-items': loaners.length > 0 }"
+                                :class="{ 'linked-loaner-card-has-items': hasLinkedLoanerDisplay }"
                             >
                                 <div class="section-header">
-                                    <h3>loaner案件（{{ loaners.length }}件）</h3>
+                                    <h3>loaner（{{ linkedLoanerDisplayCount }}件）</h3>
                                 </div>
-                                <!-- <p class="linked-loaner-help">
-                                    parentID = この service 案件の orderID（{{ record?.orderID }}）の loaner / waiting_list
-                                </p> -->
-                                <div v-if="loaners.length" class="attachment-table-wrap">
-                                    <table class="data-table">
+                                <div v-if="hasLinkedLoanerDisplay" class="attachment-table-wrap">
+                                    <table v-if="loaners.length" class="data-table loaner-case-table">
                                         <thead>
                                             <tr>
                                                 <th>orderID</th>
@@ -307,7 +305,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="loaner in loaners" :key="loaner.orderID">
+                                            <tr v-for="loaner in loaners" :key="`case-${loaner.orderID}`">
                                                 <td>{{ loaner.orderID }}</td>
                                                 <td>{{ loaner.order_type || '—' }}</td>
                                                 <td>
@@ -340,8 +338,32 @@
                                             </tr>
                                         </tbody>
                                     </table>
+                                    <table v-if="attachedLoaners.length" class="data-table attached-loaner-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Name</th>
+                                                <th>SN</th>
+                                                <th>J num</th>
+                                                <th>Prc</th>
+                                                <th>Asc ID</th>
+                                                <th>Sent</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="loaner in attachedLoaners" :key="`attached-${loaner.id ?? loaner.loanerID}`">
+                                                <td>{{ displayDash(loaner.loanerID ?? loaner.id) }}</td>
+                                                <td>{{ displayDash(loaner.productName) }}</td>
+                                                <td>{{ displayDash(loaner.SN) }}</td>
+                                                <td>{{ displayDash(loaner.manageNum) }}</td>
+                                                <td>{{ formatYenPrice(loaner.price) }}</td>
+                                                <td>{{ displayDash(loaner.associatedID) }}</td>
+                                                <td>{{ displayDash(loaner.sentDate) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <p v-else class="empty-message">関連loaner案件はありません。</p>
+                                <p v-else class="empty-message">関連loanerはありません。</p>
                             </section>
                     </div>
 
@@ -901,6 +923,7 @@ const props = defineProps({
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     loaners: { type: Array, default: () => [] },
+    attachedLoaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
     currentUserKanji: { type: String, default: '' },
@@ -1008,6 +1031,12 @@ const isServiceRecord = computed(() =>
     || recordOrderType.value === '',
 )
 const showLinkedLoaners = computed(() => isServiceRecord.value)
+const hasLinkedLoanerDisplay = computed(() =>
+    (props.loaners?.length ?? 0) > 0 || (props.attachedLoaners?.length ?? 0) > 0,
+)
+const linkedLoanerDisplayCount = computed(() =>
+    (props.loaners?.length ?? 0) + (props.attachedLoaners?.length ?? 0),
+)
 const statusOptions = computed(() => {
     if (isLoanerRecord.value) {
         return page.props.statusesLoaner ?? []
@@ -2023,6 +2052,17 @@ function formatPrice(value) {
     return num.toLocaleString('ja-JP')
 }
 
+function formatYenPrice(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return '¥0'
+    return `¥${num.toLocaleString('ja-JP')}`
+}
+
+function displayDash(value) {
+    if (value == null || String(value).trim() === '') return '-'
+    return value
+}
+
 const PAID_LOANER_RETURN_CODES_LOCAL = PAID_LOANER_RETURN_CODES
 const currentReturnCode = computed(() => {
     const value = props.draftRecord?.returnCode ?? props.record?.returnCode
@@ -2469,6 +2509,13 @@ defineExpose({
     flex-wrap: wrap;
 }
 
+.work-price-inline {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+}
+
 .maintenance-search-btn {
     min-width: 88px;
     padding: 6px 12px;
@@ -2722,21 +2769,26 @@ defineExpose({
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .linked-loaner-card .data-table {
     min-width: 0;
-    table-layout: fixed;
+    table-layout: auto;
+    width: 100%;
+    border-collapse: collapse;
 }
 
-.linked-loaner-card .data-table thead th {
+.linked-loaner-card .loaner-case-table thead th {
     position: sticky;
     top: 0;
     z-index: 1;
 }
 
-.linked-loaner-card .data-table th,
-.linked-loaner-card .data-table td {
+.linked-loaner-card .loaner-case-table th,
+.linked-loaner-card .loaner-case-table td {
     padding: 4px 6px;
     font-size: 12px;
     white-space: nowrap;
@@ -2744,13 +2796,37 @@ defineExpose({
     text-overflow: ellipsis;
 }
 
-.linked-loaner-card .data-table tbody td {
+.linked-loaner-card .loaner-case-table tbody td {
     background: #fff;
 }
 
-.linked-loaner-card .data-table th:last-child,
-.linked-loaner-card .data-table td:last-child {
+.linked-loaner-card .loaner-case-table th:last-child,
+.linked-loaner-card .loaner-case-table td:last-child {
     width: 48px;
+}
+
+.linked-loaner-card .attached-loaner-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #1e3a8a;
+    color: #fff;
+    font-weight: 700;
+    text-align: center;
+}
+
+.linked-loaner-card .attached-loaner-table th,
+.linked-loaner-card .attached-loaner-table td {
+    padding: 4px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    text-align: center;
+    border: 1px solid #94a3b8;
+}
+
+.linked-loaner-card .attached-loaner-table tbody td {
+    background: #e5e7eb;
+    color: #0f172a;
 }
 
 .linked-loaner-help {

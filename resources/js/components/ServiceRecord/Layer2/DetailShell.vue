@@ -176,6 +176,7 @@
                     :captured-images="capturedImages"
                     :parts="parts"
                     :loaners="loaners"
+                    :attached-loaners="attachedLoaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     :current-user-kanji="currentUserKanji"
@@ -247,6 +248,10 @@ const props = defineProps({
         default: () => [],
     },
     loaners: {
+        type: Array,
+        default: () => [],
+    },
+    attachedLoaners: {
         type: Array,
         default: () => [],
     },

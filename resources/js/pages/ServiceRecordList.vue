@@ -1165,6 +1165,7 @@
             :parts="activeParts"
             :stocked-parts="activeStockedParts"
             :loaners="activeLoaners"
+            :attached-loaners="activeAttachedLoaners"
             :attachments-loading="attachmentsLoading"
             :attachments-error="attachmentsError"
             :saving-record="isSavingRecord"
@@ -3099,6 +3100,7 @@ const activeCapturedImages = ref([])
 const activeParts = ref([])
 const activeStockedParts = ref([])
 const activeLoaners = ref([])
+const activeAttachedLoaners = ref([])
 const attachmentsLoading = ref(false)
 const attachmentsError = ref('')
 const isSavingRecord = ref(false)
@@ -3134,6 +3136,7 @@ function applyAttachmentData(data) {
         activeParts.value = []
         activeStockedParts.value = []
         activeLoaners.value = []
+        activeAttachedLoaners.value = []
         return
     }
 
@@ -3145,6 +3148,7 @@ function applyAttachmentData(data) {
         activeParts.value = []
         activeStockedParts.value = []
         activeLoaners.value = []
+        activeAttachedLoaners.value = []
         return
     }
 
@@ -3155,6 +3159,7 @@ function applyAttachmentData(data) {
     activeParts.value = data.parts ?? []
     activeStockedParts.value = data.stockedParts ?? []
     activeLoaners.value = data.loaners ?? (data.loaner ? [data.loaner] : [])
+    activeAttachedLoaners.value = data.attachedLoaners ?? []
 }
 
 function onFilesUpdated(nextFiles) {
@@ -3180,6 +3185,7 @@ async function loadAttachments(orderID) {
     activeParts.value = []
     activeStockedParts.value = []
     activeLoaners.value = []
+    activeAttachedLoaners.value = []
 
     try {
         const url = `${window.location.origin}${getBasePath()}/attachments/${orderID}`
@@ -3324,6 +3330,7 @@ function resetDetailState() {
     activeParts.value = []
     activeStockedParts.value = []
     activeLoaners.value = []
+    activeAttachedLoaners.value = []
     attachmentsLoading.value = false
     attachmentsError.value = ''
     detailLoading.value = false

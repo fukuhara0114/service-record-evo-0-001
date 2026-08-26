@@ -2258,6 +2258,12 @@ class ServiceRecordController extends Controller
                 ->map(fn (CapturedImage $item) => $this->serializeCapturedImage($item))
                 ->values();
 
+            $caseAttachedLoaners = $this->serializeCaseAttachedLoaners(
+                [$orderID],
+                $resolver,
+                $asOfDate,
+            );
+
             $parts = AttachedPart::where('associatedID', $orderID)
                 ->orderBy('id')
                 ->get()
@@ -2296,6 +2302,7 @@ class ServiceRecordController extends Controller
                     ->get(),
                 'loaner' => $linkedLoanerPayload->first(),
                 'loaners' => $linkedLoanerPayload,
+                'attachedLoaners' => $caseAttachedLoaners,
                 'priceAsOfDate' => $resolver->normalizeDate($asOfDate),
             ];
         } catch (\Throwable $e) {
@@ -2309,9 +2316,55 @@ class ServiceRecordController extends Controller
                 'stockedParts' => [],
                 'loaner' => null,
                 'loaners' => [],
+                'attachedLoaners' => [],
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * 案件 orderID と associatedID が一致する attachedloaners と、紐づく loaner マスタ。
+     *
+     * @param  array<int|string>  $associatedIds
+     */
+    private function serializeCaseAttachedLoaners(array $associatedIds, MasterPriceVersionResolver $resolver, mixed $asOfDate): array
+    {
+        $ids = collect($associatedIds)
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return AttachedLoaner::query()
+            ->whereIn('associatedID', $ids)
+            ->orderBy('id')
+            ->get()
+            ->map(function (AttachedLoaner $attached) use ($resolver, $asOfDate) {
+                $master = $resolver->loanerMaster($attached->loanerID, $asOfDate);
+                $sent = $attached->sentDate ?? $attached->plannedSentDate;
+                $productName = trim((string) ($attached->productName ?: ($master?->productName ?? '')));
+                $sn = trim((string) ($master?->SN ?? ''));
+                $manageNum = trim((string) ($master?->manageNum ?? ''));
+                $price = $master?->price;
+                $priceValue = is_numeric($price) ? (float) $price : null;
+
+                return [
+                    'id' => $attached->id,
+                    'loanerID' => $attached->loanerID ?? $master?->loanerID,
+                    'productName' => $productName !== '' ? $productName : null,
+                    'SN' => $sn !== '' ? $sn : null,
+                    'manageNum' => $manageNum !== '' ? $manageNum : null,
+                    'price' => $priceValue,
+                    'associatedID' => $attached->associatedID,
+                    'sentDate' => optional($sent)->format('Y-m-d'),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function fetchUnregisteredFiles()
