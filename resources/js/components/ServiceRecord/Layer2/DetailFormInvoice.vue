@@ -330,6 +330,46 @@
                 </div>
             </Pane>
         </Splitpanes>
+
+        <div
+            v-if="showCompleteConfirmDialog"
+            class="confirm-overlay"
+            @click.self="cancelComplete"
+        >
+            <div
+                class="confirm-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="invoice-complete-title"
+                @click.stop
+            >
+                <div class="confirm-header">
+                    <h3 id="invoice-complete-title">完了の確認</h3>
+                </div>
+                <div class="confirm-body">
+                    <p>完了してよろしいですか？</p>
+                    <p class="confirm-detail">{{ completeConfirmDetail }}</p>
+                </div>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="action-btn"
+                        :disabled="statusActionSaving"
+                        @click="cancelComplete"
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="action-btn action-btn-primary"
+                        :disabled="statusActionSaving"
+                        @click="confirmComplete"
+                    >
+                        {{ statusActionSaving ? '処理中...' : '確定' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -345,6 +385,7 @@ import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
+import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     record: Object,
@@ -403,6 +444,8 @@ const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
+const showCompleteConfirmDialog = ref(false)
+const pendingCompleteStatus = ref(null)
 const fileSortSaving = ref(false)
 const fileDropInputEl = ref(null)
 const showFileDropzone = ref(false)
@@ -933,13 +976,50 @@ async function updateRecordFields(payload) {
     return result.data
 }
 
-async function onComplete() {
+function resolveCompleteStatusLabel(nextStatus, orderType) {
+    const id = String(nextStatus)
+    const type = String(orderType ?? 'service').trim().toLowerCase()
+    if (type === 'loaner') {
+        const row = (page.props.statusesLoaner ?? []).find(
+            status => String(status.processID_new) === id,
+        )
+        return loanerStatusLabel(row) || `status=${id}`
+    }
+    const row = (page.props.statuses ?? []).find(
+        status => String(status.processID_new) === id,
+    )
+    return String(row?.status ?? '').trim() || `status=${id}`
+}
+
+const completeConfirmDetail = computed(() => {
+    const nextStatus = pendingCompleteStatus.value
+    if (nextStatus == null) return ''
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
+    const label = resolveCompleteStatusLabel(nextStatus, orderType)
+    return `「${label}」に変更（status=${nextStatus}）します。`
+})
+
+function onComplete() {
     if (statusActionSaving.value || !props.draftRecord) return
 
     const currentStatus = props.draftRecord?.status ?? props.record?.status
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
     const rma = props.draftRecord?.RMA ?? props.record?.RMA
-    const nextStatus = resolveInvoiceCompleteStatus(currentStatus, orderType, rma)
+    pendingCompleteStatus.value = resolveInvoiceCompleteStatus(currentStatus, orderType, rma)
+    actionMessage.value = ''
+    showCompleteConfirmDialog.value = true
+}
+
+function cancelComplete() {
+    if (statusActionSaving.value) return
+    showCompleteConfirmDialog.value = false
+    pendingCompleteStatus.value = null
+}
+
+async function confirmComplete() {
+    if (statusActionSaving.value || !props.draftRecord) return
+    const nextStatus = pendingCompleteStatus.value
+    if (nextStatus == null) return
 
     statusActionSaving.value = true
     actionMessage.value = ''
@@ -954,6 +1034,8 @@ async function onComplete() {
             price: props.draftRecord.price,
             discount_service: props.draftRecord.discount_service,
         })
+        showCompleteConfirmDialog.value = false
+        pendingCompleteStatus.value = null
         emit('workflow-done', {
             action: 'complete',
             status: nextStatus,
@@ -995,6 +1077,8 @@ watch(
         actionMessage.value = ''
         selectedFileId.value = null
         selectedNoteId.value = null
+        showCompleteConfirmDialog.value = false
+        pendingCompleteStatus.value = null
         closeFileDropzone()
     },
 )
@@ -1524,6 +1608,59 @@ watch(
     margin: 0;
     color: #64748b;
     font-size: 13px;
+}
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 520;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.confirm-panel {
+    width: min(440px, 100%);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.confirm-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.confirm-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.confirm-body {
+    padding: 16px;
+}
+
+.confirm-body p {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.confirm-detail {
+    font-weight: 600 !important;
+    color: #334155 !important;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px 16px;
 }
 
 @media (max-width: 960px) {

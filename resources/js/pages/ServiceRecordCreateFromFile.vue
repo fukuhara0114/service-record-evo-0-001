@@ -463,7 +463,7 @@
                                 <select v-model="form.status" class="w-status">
                                     <option value="">status</option>
                                     <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
-                                        {{ loanerStatusOptionLabel(status) }}
+                                        {{ statusMasterOptionLabel(status) }}
                                     </option>
                                 </select>
                                 <select v-model="form.returnCode" class="w-return">
@@ -1128,7 +1128,7 @@ import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
-import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
+import { statusMasterOptionLabel } from '@/utils/loanerStatusLabel'
 import { startFileImport } from '@/utils/startFileImport'
 import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'

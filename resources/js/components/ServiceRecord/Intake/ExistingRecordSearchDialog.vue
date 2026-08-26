@@ -170,7 +170,7 @@
                                     :key="status.processID_new"
                                     :value="String(status.processID_new)"
                                 >
-                                    {{ loanerStatusOptionLabel(status) }}
+                                    {{ statusMasterOptionLabel(status) }}
                                 </option>
                             </select>
                         </label>
@@ -192,7 +192,7 @@ import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
+import { loanerStatusLabel, statusMasterOptionLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
     records: {
@@ -702,6 +702,11 @@ function confirmLink() {
     border-radius: 4px;
     background: #fff;
     color: #1e293b;
+}
+
+.field select option {
+    color: #1e293b;
+    background-color: #fff;
 }
 
 .field input[readonly] {
