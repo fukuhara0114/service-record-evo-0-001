@@ -1324,6 +1324,7 @@ const currentUserKanji = computed(() => {
     }
     return ''
 })
+const currentUserSignature = computed(() => String(page.props.authUser?.signature ?? '').trim())
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const shippingCalendarUrl = computed(() => {
     const base = getBasePath()
@@ -2036,6 +2037,7 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
 
         jsonData.push({
             orderid: orderID,
+            signature: currentUserSignature.value,
             sm_workorder,
             entityid: entityID,
             sn,
