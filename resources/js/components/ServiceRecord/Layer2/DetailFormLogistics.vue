@@ -157,6 +157,61 @@
                     </div>
                 </section>
 
+                <section class="panel panel-price">
+                    <table class="price-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="col-amount">Price</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <span
+                                        v-if="isLoanerRecord"
+                                        class="loaner-case-badge"
+                                    >貸出機案件</span>
+                                    <template v-else>{{ returnCodeLabel }}</template>
+                                </td>
+                                <td class="col-amount">{{ formatPrice(workPrice) }}</td>
+                                <td>作業内容</td>
+                            </tr>
+                            <tr>
+                                <td>a2la{{ isA2laOn ? '' : '（OFF）' }}</td>
+                                <td class="col-amount">{{ formatPrice(a2laPrice) }}</td>
+                                <td>添付書類</td>
+                            </tr>
+                            <tr v-if="loanerPrice > 0">
+                                <td>貸出機</td>
+                                <td class="col-amount">{{ formatPrice(loanerPrice) }}</td>
+                                <td>{{ loanerLabel }}</td>
+                            </tr>
+                            <tr v-for="part in parts" :key="part.id ?? part.partID">
+                                <td>アクセサリ</td>
+                                <td class="col-amount">{{ formatPrice(partVersionPrice(part)) }}</td>
+                                <td>{{ partDisplayName(part) }}</td>
+                            </tr>
+                            <tr class="row-summary">
+                                <td>小計</td>
+                                <td class="col-amount">{{ formatPrice(subtotal) }}</td>
+                                <td />
+                            </tr>
+                            <tr class="row-summary">
+                                <td>調整</td>
+                                <td class="col-amount">{{ formatSignedAmount(adjustmentAmount) }}</td>
+                                <td />
+                            </tr>
+                            <tr class="row-total">
+                                <td>計</td>
+                                <td class="col-amount">{{ formatPrice(grandTotal) }}</td>
+                                <td />
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
                 <section class="panel panel-notes">
                     <div class="panel-header">
                         <h3>Notes（{{ sharedNotes.length }}件）</h3>
@@ -203,6 +258,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
@@ -214,6 +270,8 @@ const props = defineProps({
     notes: { type: Array, default: () => [] },
     files: { type: Array, default: () => [] },
     capturedImages: { type: Array, default: () => [] },
+    parts: { type: Array, default: () => [] },
+    loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
@@ -279,8 +337,112 @@ function isPersonalNote(note) {
 
 function fieldValue(field) {
     const draft = props.draftRecord?.[field]
-    if (draft !== undefined && draft !== null) return draft
-    return props.record?.[field] ?? ''
+    if (draft !== undefined && draft !== null && draft !== '') return String(draft)
+    const value = props.record?.[field]
+    if (value !== undefined && value !== null && value !== '') return String(value)
+    return ''
+}
+
+const priceAsOfDate = computed(() => {
+    const raw = props.draftRecord?.orderDate || props.record?.orderDate || null
+    if (raw == null || raw === '') return null
+    const match = String(raw).match(/(\d{4}-\d{2}-\d{2})/)
+    return match ? match[1] : String(raw)
+})
+
+const isLoanerRecord = computed(() => {
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type
+    return orderType === 'loaner'
+})
+
+const returnCodeLabel = computed(() => {
+    const master = props.record?.return_code_master?.description
+    if (master) return master
+    const id = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const found = (page.props.returnCodes ?? []).find((item) => String(item.id) === String(id))
+    return found?.description || '修理'
+})
+
+const isA2laOn = computed(() => {
+    const value = props.draftRecord?.a2la ?? props.record?.a2la
+    return value === 1 || value === '1' || value === true
+})
+
+const selectedServiceMaster = computed(() => findServiceMaster(page.props.servicesMaster, {
+    productName: props.draftRecord?.productName ?? props.record?.productName,
+    entityID: props.draftRecord?.entityID ?? props.record?.entityID,
+    serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
+}, props.draftRecord?.orderDate ?? props.record?.orderDate ?? null))
+
+const workPrice = computed(() => {
+    const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const resolved = resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+    if (Number.isFinite(resolved) && resolved !== 0) return resolved
+    const stored = Number(props.draftRecord?.price ?? props.record?.price)
+    return Number.isFinite(stored) ? stored : 0
+})
+
+const a2laPrice = computed(() => {
+    if (!isA2laOn.value) return 0
+    const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
+    return Number.isFinite(value) ? value : 0
+})
+
+function resolvedPartMaster(part) {
+    return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
+        ?? part.part_master
+        ?? part.partMaster
+        ?? null
+}
+
+function partVersionPrice(part) {
+    const raw = resolvedPartMaster(part)?.price_discounted
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : 0
+}
+
+function partDisplayName(part) {
+    return resolvedPartMaster(part)?.partName || part.partID || '—'
+}
+
+const partsPriceTotal = computed(() =>
+    (props.parts ?? []).reduce((sum, part) => sum + partVersionPrice(part), 0),
+)
+
+const loanerLabel = computed(() => {
+    const first = (props.loaners ?? [])[0]
+    if (!first) return '—'
+    return first.loanerID || first.productName || first.SN || first.orderID || '—'
+})
+
+const loanerPrice = computed(() => {
+    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
+    if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+    return (props.loaners ?? []).reduce((sum, loaner) => {
+        const value = Number(loaner?.price ?? loaner?.masterPrice ?? 0)
+        return sum + (Number.isFinite(value) ? value : 0)
+    }, 0)
+})
+
+const adjustmentAmount = computed(() => {
+    const value = Number(props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
+    return Number.isFinite(value) ? value : 0
+})
+
+const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
+const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
+
+function formatPrice(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num)) return '—'
+    return new Intl.NumberFormat('ja-JP').format(num)
+}
+
+function formatSignedAmount(value) {
+    const num = Number(value)
+    if (!Number.isFinite(num) || num === 0) return '0'
+    const abs = formatPrice(Math.abs(num))
+    return num > 0 ? `+${abs}` : `-${abs}`
 }
 
 function updateDraftValue(field, value) {
@@ -505,13 +667,19 @@ async function patchFileSort(fileId, sortNum) {
 .right-column > .action-bar,
 .right-column > .action-message,
 .right-column > .panel-summary,
-.right-column > .panel-delivery {
+.right-column > .panel-delivery,
+.right-column > .panel-price {
     flex: 0 0 auto;
 }
 
 .right-column > .panel-notes {
     flex: 1 1 auto;
     min-height: 160px;
+}
+
+.panel-price {
+    padding: 10px 12px;
+    background: #fff;
 }
 
 .panel {
@@ -738,6 +906,64 @@ async function patchFileSort(fileId, sortNum) {
 .field input::placeholder {
     color: #94a3b8;
     font-weight: 500;
+}
+
+.price-table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.price-table th,
+.price-table td {
+    border-bottom: 1px solid #cbd5e1;
+    padding: 7px 8px;
+    padding-right: 50px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.price-table th:not(:first-child),
+.price-table td:not(:first-child) {
+    padding-left: 0;
+}
+
+.price-table th:first-child,
+.price-table td:first-child,
+.price-table .col-amount {
+    width: 1%;
+    text-align: left !important;
+}
+
+.price-table th:last-child,
+.price-table td:last-child {
+    width: 99%;
+    padding-right: 8px;
+    white-space: normal;
+}
+
+.price-table .row-summary td {
+    background: #f8fafc;
+    font-weight: 700;
+}
+
+.price-table .row-total td {
+    background: #e2e8f0;
+    font-weight: 800;
+}
+
+.loaner-case-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 .notes-empty {

@@ -109,10 +109,10 @@
                                     <td class="col-amount">{{ formatPrice(loanerPrice) }}</td>
                                     <td>{{ loanerLabel }}</td>
                                 </tr>
-                                <tr v-if="partsPriceTotal > 0">
-                                    <td>Parts</td>
-                                    <td class="col-amount">{{ formatPrice(partsPriceTotal) }}</td>
-                                    <td>部品</td>
+                                <tr v-for="part in parts" :key="part.id ?? part.partID">
+                                    <td>アクセサリ</td>
+                                    <td class="col-amount">{{ formatPrice(partVersionPrice(part)) }}</td>
+                                    <td>{{ partDisplayName(part) }}</td>
                                 </tr>
                                 <tr class="row-summary">
                                     <td>小計</td>
@@ -343,7 +343,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 
 const props = defineProps({
@@ -378,6 +378,14 @@ function resolveInvoiceCompleteStatus(currentStatus, orderType) {
 }
 
 const page = usePage()
+
+/** 受注日あり: その日の版 / 未定: 最新版（空文字は未定扱い） */
+const priceAsOfDate = computed(() => {
+    const raw = props.draftRecord?.orderDate || props.record?.orderDate || null
+    if (raw == null || raw === '') return null
+    const match = String(raw).match(/(\d{4}-\d{2}-\d{2})/)
+    return match ? match[1] : String(raw)
+})
 const leftPaneSize = ref(40)
 const rightPaneSize = ref(60)
 const selectedFileId = ref(null)
@@ -486,11 +494,25 @@ watch(workPrice, (value) => {
     props.draftRecord.price = value
 }, { immediate: true })
 
+function resolvedPartMaster(part) {
+    return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
+        ?? part.part_master
+        ?? part.partMaster
+        ?? null
+}
+
+function partVersionPrice(part) {
+    const raw = resolvedPartMaster(part)?.price_discounted
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : 0
+}
+
+function partDisplayName(part) {
+    return resolvedPartMaster(part)?.partName || part.partID || '—'
+}
+
 const partsPriceTotal = computed(() =>
-    (props.parts ?? []).reduce((sum, part) => {
-        const value = Number(part.part_master?.price_discounted)
-        return sum + (Number.isNaN(value) ? 0 : value)
-    }, 0),
+    (props.parts ?? []).reduce((sum, part) => sum + partVersionPrice(part), 0),
 )
 
 const loanerLabel = computed(() => {
@@ -1184,8 +1206,36 @@ watch(
 }
 
 .panel-price .price-table {
+    width: 100%;
+    table-layout: auto;
     font-size: 16px;
     font-weight: 700;
+}
+
+.panel-price .price-table th,
+.panel-price .price-table td {
+    padding-left: 8px;
+    padding-right: 50px;
+    white-space: nowrap;
+}
+
+.panel-price .price-table th:not(:first-child),
+.panel-price .price-table td:not(:first-child) {
+    padding-left: 0;
+}
+
+.panel-price .price-table th:first-child,
+.panel-price .price-table td:first-child,
+.panel-price .price-table .col-amount {
+    width: 1%;
+    text-align: left !important;
+}
+
+.panel-price .price-table th:last-child,
+.panel-price .price-table td:last-child {
+    width: 99%;
+    padding-right: 8px;
+    white-space: normal;
 }
 
 .loaner-case-badge {

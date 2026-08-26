@@ -122,6 +122,8 @@
                     :notes="notes"
                     :files="files"
                     :captured-images="capturedImages"
+                    :parts="parts"
+                    :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
