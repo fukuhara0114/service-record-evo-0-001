@@ -1568,6 +1568,7 @@ const engineerQuoteCoBusy = ref(false)
 const engineerDailyReportMode = ref(false)
 const engineerDailyReportDrafts = ref({})
 const showDailyReportEmailPreview = ref(false)
+const dailyReportForceTodayOnOpen = ref(false)
 const SM_LIST_AUTO_REFRESH_MS = 60 * 1000
 /** 詳細オープン直後の誤 close（dblclick の残存 click / Inertia 競合）を無視する */
 const detailCloseGuardUntil = ref(0)
@@ -1908,7 +1909,7 @@ function formatDailyReportResponse(value) {
 
 function buildDailyReportDraft(record) {
     return {
-        date: toDateInputValue(record?.work_completion_date || record?.receivedDate),
+        date: tokyoTodayYmd(),
         rma: String(record?.RMA ?? ''),
         product: String(record?.productName ?? ''),
         sn: String(record?.SN ?? ''),
@@ -1934,14 +1935,22 @@ function updateDailyReportDraft(orderID, field, value) {
     }
 }
 
-function seedDailyReportDrafts(records) {
+function seedDailyReportDrafts(records, { forceToday = false } = {}) {
+    const today = tokyoTodayYmd()
     const next = { ...engineerDailyReportDrafts.value }
     let changed = false
     for (const record of records ?? []) {
         const id = String(record?.orderID ?? '')
-        if (!id || next[id]) continue
-        next[id] = buildDailyReportDraft(record)
-        changed = true
+        if (!id) continue
+        if (!next[id]) {
+            next[id] = buildDailyReportDraft(record)
+            changed = true
+            continue
+        }
+        if (forceToday && next[id].date !== today) {
+            next[id] = { ...next[id], date: today }
+            changed = true
+        }
     }
     if (changed) {
         engineerDailyReportDrafts.value = next
@@ -1954,9 +1963,11 @@ function toggleEngineerDailyReportMode() {
         engineerQuoteCoMode.value = false
         abroadSelectedIds.value = new Set()
         showDailyReportEmailPreview.value = false
+        dailyReportForceTodayOnOpen.value = true
     } else {
         clearAbroadSelection()
         showDailyReportEmailPreview.value = false
+        dailyReportForceTodayOnOpen.value = false
     }
 }
 
@@ -2927,7 +2938,10 @@ watch(
     () => [engineerDailyReportMode.value, filteredRecords.value],
     () => {
         if (!engineerDailyReportMode.value) return
-        seedDailyReportDrafts(filteredRecords.value)
+        seedDailyReportDrafts(filteredRecords.value, {
+            forceToday: dailyReportForceTodayOnOpen.value,
+        })
+        dailyReportForceTodayOnOpen.value = false
     },
     { immediate: true },
 )
