@@ -365,14 +365,25 @@ const INVOICE_STATUS_MPPICS_FINAL = 385
 const INVOICE_COMPLETE_STATUS_LOGISTICS = 350
 const INVOICE_COMPLETE_STATUS_SHIPPED = 400
 const INVOICE_COMPLETE_STATUS_LOANER_LENDING = 388
+const INVOICE_COMPLETE_STATUS_NON_NUMERIC_RMA = 3
 
-function resolveInvoiceCompleteStatus(currentStatus, orderType) {
+function isNonNumericRma(rma) {
+    const text = String(rma ?? '').trim()
+    if (text === '') return false
+    return !/^\d+$/.test(text)
+}
+
+function resolveInvoiceCompleteStatus(currentStatus, orderType, rma) {
     const status = Number(currentStatus)
     const type = String(orderType ?? 'service').trim().toLowerCase()
     if (status === INVOICE_STATUS_MPPICS_FINAL) {
-        return type === 'loaner'
-            ? INVOICE_COMPLETE_STATUS_LOANER_LENDING
-            : INVOICE_COMPLETE_STATUS_SHIPPED
+        if (type === 'loaner') {
+            return INVOICE_COMPLETE_STATUS_LOANER_LENDING
+        }
+        if ((type === 'service' || type === '') && isNonNumericRma(rma)) {
+            return INVOICE_COMPLETE_STATUS_NON_NUMERIC_RMA
+        }
+        return INVOICE_COMPLETE_STATUS_SHIPPED
     }
     return INVOICE_COMPLETE_STATUS_LOGISTICS
 }
@@ -927,7 +938,8 @@ async function onComplete() {
 
     const currentStatus = props.draftRecord?.status ?? props.record?.status
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
-    const nextStatus = resolveInvoiceCompleteStatus(currentStatus, orderType)
+    const rma = props.draftRecord?.RMA ?? props.record?.RMA
+    const nextStatus = resolveInvoiceCompleteStatus(currentStatus, orderType, rma)
 
     statusActionSaving.value = true
     actionMessage.value = ''

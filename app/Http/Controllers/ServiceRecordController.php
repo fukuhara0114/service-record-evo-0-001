@@ -2345,7 +2345,6 @@ class ServiceRecordController extends Controller
             ->get()
             ->map(function (AttachedLoaner $attached) use ($resolver, $asOfDate) {
                 $master = $resolver->loanerMaster($attached->loanerID, $asOfDate);
-                $sent = $attached->sentDate ?? $attached->plannedSentDate;
                 $productName = trim((string) ($attached->productName ?: ($master?->productName ?? '')));
                 $sn = trim((string) ($master?->SN ?? ''));
                 $manageNum = trim((string) ($master?->manageNum ?? ''));
@@ -2360,7 +2359,7 @@ class ServiceRecordController extends Controller
                     'manageNum' => $manageNum !== '' ? $manageNum : null,
                     'price' => $priceValue,
                     'associatedID' => $attached->associatedID,
-                    'sentDate' => optional($sent)->format('Y-m-d'),
+                    'sentDate' => optional($master?->sentDate)->format('Y-m-d'),
                 ];
             })
             ->values()
