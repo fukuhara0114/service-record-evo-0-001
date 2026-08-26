@@ -56,6 +56,7 @@
 <script setup>
 import { computed } from 'vue'
 import { linkifyText } from '@/utils/linkifyText'
+import { formatNoteDateTime, noteWroteTimestamp } from '@/utils/formatNoteDateTime'
 
 const props = defineProps({
     notes: {
@@ -103,10 +104,7 @@ const props = defineProps({
 const emit = defineEmits(['update:selectedId', 'select', 'edit'])
 
 function noteWroteTime(note) {
-    const when = note?.whenWrote
-    if (!when) return 0
-    const time = new Date(when).getTime()
-    return Number.isNaN(time) ? 0 : time
+    return noteWroteTimestamp(note?.whenWrote)
 }
 
 const sortedNotes = computed(() =>
@@ -210,15 +208,7 @@ function linkifyNote(value) {
 }
 
 function formatDate(value) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return String(value)
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const d = String(date.getDate()).padStart(2, '0')
-    const hh = String(date.getHours()).padStart(2, '0')
-    const mm = String(date.getMinutes()).padStart(2, '0')
-    return `${y}-${m}-${d} ${hh}:${mm}`
+    return formatNoteDateTime(value)
 }
 
 function normalizeCssWidth(value) {

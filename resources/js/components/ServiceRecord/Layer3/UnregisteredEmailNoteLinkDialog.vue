@@ -82,6 +82,7 @@ import { computed, onMounted, ref } from 'vue'
 import BaseDialog from './BaseDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { linkifyText } from '@/utils/linkifyText'
+import { formatNoteDateTime, noteWroteTimestamp } from '@/utils/formatNoteDateTime'
 
 const props = defineProps({
     record: Object,
@@ -98,13 +99,6 @@ const saving = ref(false)
 const deletingId = ref(null)
 const loadError = ref('')
 const error = ref('')
-
-function noteWroteTime(note) {
-    const when = note?.whenWrote
-    if (!when) return 0
-    const time = new Date(when).getTime()
-    return Number.isNaN(time) ? 0 : time
-}
 
 const filteredNotes = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
@@ -136,11 +130,11 @@ function getCsrfToken() {
 }
 
 function formatDateTime(value) {
-    if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return String(value)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    return formatNoteDateTime(value)
+}
+
+function noteWroteTime(note) {
+    return noteWroteTimestamp(note?.whenWrote)
 }
 
 function linkifyNote(value) {

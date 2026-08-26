@@ -33,6 +33,11 @@ class UnregisteredEmailNote extends Model
         'whenWrote' => 'datetime',
     ];
 
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
+
     public static function hashMailLink(string $mailLink): string
     {
         return hash('sha256', $mailLink);
