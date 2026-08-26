@@ -133,6 +133,42 @@
                         </table>
                     </section>
 
+                    <section v-if="attachedLoaners.length" class="panel panel-loaner">
+                        <div class="panel-header">
+                            <h3>貸出機（{{ attachedLoaners.length }}件）</h3>
+                        </div>
+                        <table class="data-table loaner-table">
+                            <thead>
+                                <tr>
+                                    <th>loanerID</th>
+                                    <th>productName</th>
+                                    <th>SN</th>
+                                    <th>期間</th>
+                                    <th class="col-amount">price</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="loaner in attachedLoaners" :key="loaner.orderID || loaner.attachedLoanerId">
+                                    <td>{{ loaner.loanerID || '—' }}</td>
+                                    <td>{{ loaner.productName || '—' }}</td>
+                                    <td>{{ loaner.SN || '—' }}</td>
+                                    <td>{{ loanerPeriod(loaner) }}</td>
+                                    <td class="col-amount">{{ formatPrice(loaner.price ?? loaner.masterPrice) }}</td>
+                                    <td>
+                                        <a
+                                            v-if="loaner.orderID"
+                                            class="loaner-detail-link"
+                                            :href="loanerHref(loaner.orderID)"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >詳細</a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </section>
+
                     <section class="panel panel-info">
                         <div class="info-grid">
                             <div>
@@ -308,6 +344,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
+import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 
 const props = defineProps({
     record: Object,
@@ -461,6 +498,25 @@ const loanerLabel = computed(() => {
     if (!first) return props.draftRecord?.loanerID || props.record?.loanerID || '—'
     return first.loanerID || first.productName || first.SN || first.orderID || '—'
 })
+
+const attachedLoaners = computed(() =>
+    (props.loaners ?? []).filter((loaner) => loaner?.attachedLoanerId),
+)
+
+function formatLoanerDate(value) {
+    if (!value) return '—'
+    return String(value).slice(0, 10)
+}
+
+function loanerPeriod(loaner) {
+    if (!loaner?.plannedSentDate && !loaner?.plannedReturnedDate) return '—'
+    return `${formatLoanerDate(loaner.plannedSentDate)} 〜 ${formatLoanerDate(loaner.plannedReturnedDate)}`
+}
+
+function loanerHref(orderId) {
+    const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
+    return loanerDetailUrl(orderId, returnUrl ? { returnUrl } : {})
+}
 
 const loanerPrice = computed(() => {
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
@@ -1089,6 +1145,18 @@ watch(
 
 .panel-info {
     background: #dbeafe;
+}
+
+.panel-loaner {
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+}
+
+.loaner-detail-link {
+    color: #1d4ed8;
+    font-weight: 700;
+    text-decoration: underline;
+    white-space: nowrap;
 }
 
 .panel h3,

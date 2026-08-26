@@ -628,12 +628,21 @@
                                 @change="toggleAbroadSelectAll($event)"
                             >
                         </th>
-                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">receivedDate</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">status</SortableTh>
+                        <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">receivedDate</SortableTh>
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">productName</SortableTh>
                         <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
                         <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
+                        <SortableTh sort-key="laborName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業担当</SortableTh>
                         <SortableTh sort-key="dealer" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">dealer</SortableTh>
+                        <SortableTh sort-key="dealer_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                        <SortableTh sort-key="contactPerson" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">担当者</SortableTh>
+                        <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">発送先</SortableTh>
+                        <SortableTh sort-key="rmaNumOverSea" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">海外RMA</SortableTh>
+                        <SortableTh sort-key="shippedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">海外発送日</SortableTh>
+                        <SortableTh sort-key="sentOut" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">sentOut</SortableTh>
+                        <SortableTh sort-key="sm_workorder" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">sm_workorder</SortableTh>
+                        <SortableTh sort-key="sm_quote" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">sm_quote</SortableTh>
                         <SortableTh sort-key="a2la" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">A2LA</SortableTh>
                         <SortableTh sort-key="symptoms" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">symptoms</SortableTh>
                     </tr>
@@ -856,12 +865,21 @@
                                     @change="toggleAbroadSelect(r.orderID, $event)"
                                 >
                             </td>
-                            <td>{{ formatListDate(r.receivedDate) }}</td>
                             <td>{{ statusLabel(r) }}</td>
+                            <td>{{ formatListDate(r.receivedDate) }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
+                            <td>{{ r.labor_master?.laborName || '' }}</td>
                             <td>{{ r.dealer }}</td>
+                            <td>{{ r.dealer_depart }}</td>
+                            <td>{{ r.contactPerson }}</td>
+                            <td>{{ r.deliveryDestination_company }}</td>
+                            <td>{{ r.rmaNumOverSea }}</td>
+                            <td>{{ formatListDate(r.shippedDate) }}</td>
+                            <td>{{ formatListDate(r.sentOut) }}</td>
+                            <td>{{ r.sm_workorder }}</td>
+                            <td>{{ r.sm_quote }}</td>
                             <td>{{ abroadA2laLabel(r.a2la) }}</td>
                             <td>{{ r.symptoms }}</td>
                         </template>
@@ -2371,6 +2389,8 @@ function recordColumnSortValue(record, key) {
         case 'orderDate':
         case 'shippingOut_requiredDate':
         case 'shippedDate':
+        case 'shipTo':
+        case 'sentOut':
             return formatListDate(record?.[key]) || ''
         default:
             return record?.[key] ?? ''
@@ -2460,6 +2480,12 @@ const filteredRecords = computed(() => {
                     r.dealer,
                     r.dealer_depart,
                     r.contactPerson,
+                    r.deliveryDestination_company,
+                    r.rmaNumOverSea,
+                    formatListDate(r.shipTo),
+                    r.shipTo,
+                    formatListDate(r.sentOut),
+                    r.sentOut,
                     r.email,
                     r.phone,
                     r.order_type,
@@ -2949,8 +2975,8 @@ watch(
 )
 
 function matchesAbroadFilter(record) {
-    return Number(record?.rmaNumOverSea) === 123
-        || String(record?.rmaNumOverSea ?? '').trim() === '123'
+    const laborID = Number(record?.laborID)
+    return Number.isFinite(laborID) && laborID >= 60 && laborID < 100
 }
 
 function matchesRmaFilter(record) {
@@ -4057,6 +4083,7 @@ async function saveRecord() {
     border: 1px solid #94a3b8;
     border-radius: 4px;
     font-size: 13px;
+    font-weight: 700;
     background: #fff;
     color: #111827;
 }
@@ -4656,6 +4683,16 @@ async function saveRecord() {
 
 #myLargeTable tbody td {
     background: #f5f5f5;
+    font-weight: 700 !important;
+}
+
+:deep(#myLargeTable),
+:deep(#myLargeTable th),
+:deep(#myLargeTable td),
+:deep(#myLargeTable input),
+:deep(#myLargeTable select),
+:deep(#myLargeTable textarea),
+:deep(#myLargeTable button) {
     font-weight: 700 !important;
 }
 

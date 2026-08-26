@@ -77,6 +77,10 @@
                         <span class="header-summary-item">{{ headerProductName }}</span>
                         <span class="header-summary-item header-summary-sn">SN: {{ headerSn }}</span>
                         <span class="header-summary-item header-summary-return">{{ headerReturnCodeLabel }}</span>
+                        <span
+                            v-if="mode === 'logistics' || layout === 'logistics'"
+                            class="header-summary-item header-summary-price"
+                        >価格：{{ headerPrice }}</span>
                     </div>
                     <div class="detail-meta">
                         <p v-if="saveError" class="save-error">{{ saveError }}</p>
@@ -323,6 +327,14 @@ const headerReturnCodeLabel = computed(() => {
     return found?.description || (id != null && id !== '' ? String(id) : '—')
 })
 
+const headerPrice = computed(() => {
+    const value = props.draftRecord?.price ?? props.record?.price
+    if (value === null || value === undefined || value === '') return '—'
+    const num = Number(value)
+    if (!Number.isFinite(num)) return '—'
+    return num.toLocaleString('ja-JP')
+})
+
 const isRemandOn = computed(() => {
     const value = props.draftRecord?.remand ?? props.record?.remand
     return value === 1 || value === '1' || value === true
@@ -447,6 +459,13 @@ function toggleRemand() {
     flex: 0 0 auto;
     width: auto;
     min-width: 100px;
+}
+
+.header-summary-price {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 88px;
+    font-weight: 700;
 }
 
 .closing-title {

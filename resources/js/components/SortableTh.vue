@@ -40,6 +40,7 @@ function onClick() {
 .sortable-th {
     cursor: pointer;
     user-select: none;
+    font-weight: 700;
 }
 
 .sortable-th:hover {
