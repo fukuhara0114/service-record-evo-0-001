@@ -94,6 +94,10 @@
                                             v-if="isLoanerRecord"
                                             class="loaner-case-badge"
                                         >貸出機案件</span>
+                                        <span
+                                            v-else-if="isLegacySrLoanerCase"
+                                            class="legacy-sr-loaner-badge"
+                                        >旧SR  Loaner案件</span>
                                         <template v-else>{{ returnCodeLabel }}</template>
                                     </td>
                                     <td class="col-amount">{{ formatPrice(workPrice) }}</td>
@@ -406,12 +410,10 @@ const INVOICE_STATUS_MPPICS_FINAL = 385
 const INVOICE_COMPLETE_STATUS_LOGISTICS = 350
 const INVOICE_COMPLETE_STATUS_SHIPPED = 400
 const INVOICE_COMPLETE_STATUS_LOANER_LENDING = 388
-const INVOICE_COMPLETE_STATUS_NON_NUMERIC_RMA = 3
+const INVOICE_COMPLETE_STATUS_UNRECEIVED_LOANER_FIRST = 3
 
-function isNonNumericRma(rma) {
-    const text = String(rma ?? '').trim()
-    if (text === '') return false
-    return !/^\d+$/.test(text)
+function isLoanerRmaText(rma) {
+    return String(rma ?? '').trim().toLowerCase() === 'loaner'
 }
 
 function resolveInvoiceCompleteStatus(currentStatus, orderType, rma) {
@@ -421,8 +423,8 @@ function resolveInvoiceCompleteStatus(currentStatus, orderType, rma) {
         if (type === 'loaner') {
             return INVOICE_COMPLETE_STATUS_LOANER_LENDING
         }
-        if ((type === 'service' || type === '') && isNonNumericRma(rma)) {
-            return INVOICE_COMPLETE_STATUS_NON_NUMERIC_RMA
+        if (isLoanerRmaText(rma)) {
+            return INVOICE_COMPLETE_STATUS_UNRECEIVED_LOANER_FIRST
         }
         return INVOICE_COMPLETE_STATUS_SHIPPED
     }
@@ -501,6 +503,12 @@ const canDropFiles = computed(() => Boolean(props.record?.orderID))
 const isLoanerRecord = computed(() => {
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type
     return orderType === 'loaner'
+})
+
+const isLegacySrLoanerCase = computed(() => {
+    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') return false
+    return isLoanerRmaText(props.draftRecord?.RMA ?? props.record?.RMA)
 })
 
 const returnCodeLabel = computed(() => {
@@ -1371,6 +1379,18 @@ watch(
     padding: 2px 10px;
     border-radius: 4px;
     background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.legacy-sr-loaner-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #16a34a;
     color: #fff;
     font-size: inherit;
     font-weight: 700;

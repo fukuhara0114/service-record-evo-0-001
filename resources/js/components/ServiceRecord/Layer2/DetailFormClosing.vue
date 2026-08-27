@@ -79,6 +79,10 @@
                                                             v-if="isLoanerRecord"
                                                             class="loaner-case-badge"
                                                         >貸出機案件</span>
+                                                        <span
+                                                            v-else-if="isLegacySrLoanerCase"
+                                                            class="legacy-sr-loaner-badge"
+                                                        >旧SR  Loaner案件</span>
                                                         <template v-else>作業内容（{{ returnCodeLabel }}）</template>
                                                     </td>
                                                     <td class="col-amount">{{ formatPrice(workPrice) }}</td>
@@ -432,6 +436,12 @@ const selectedServiceMaster = computed(() => {
 const isLoanerRecord = computed(() => {
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type
     return orderType === 'loaner'
+})
+
+const isLegacySrLoanerCase = computed(() => {
+    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') return false
+    return String(props.draftRecord?.RMA ?? props.record?.RMA ?? '').trim().toLowerCase() === 'loaner'
 })
 
 const workPrice = computed(() => {
@@ -1226,6 +1236,18 @@ watch(
     padding: 2px 10px;
     border-radius: 4px;
     background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.legacy-sr-loaner-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #16a34a;
     color: #fff;
     font-size: inherit;
     font-weight: 700;
