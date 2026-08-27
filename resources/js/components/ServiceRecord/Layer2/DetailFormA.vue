@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -1229,51 +1229,72 @@ function getRecordApiBase() {
 
 watch(
     () => [
+        props.record?.orderID,
         props.draftRecord?.order_type ?? props.record?.order_type,
         props.draftRecord?.parentID ?? props.record?.parentID,
+        props.draftRecord?.orderDate ?? props.record?.orderDate,
         parentOrderDateFromRecord(props.draftRecord) ?? parentOrderDateFromRecord(props.record),
-        props.record?.orderID,
     ],
-    async ([orderType, parentId, nestedParentDate]) => {
+    async ([orderId, orderType, parentId, ownOrderDate, nestedParentDate], previous) => {
+        const prevOrderId = previous?.[0]
+        if (String(orderId ?? '') !== String(prevOrderId ?? '')) {
+            fetchedParentOrderDate.value = null
+        }
+
         if (String(orderType ?? '').trim().toLowerCase() !== 'loaner') {
             fetchedParentOrderDate.value = null
             return
         }
-        if (nestedParentDate) {
-            fetchedParentOrderDate.value = nestedParentDate
+
+        if (isLoanerOwnOrderDateUsable(nestedParentDate)) {
+            fetchedParentOrderDate.value = toOrderDateYmd(nestedParentDate)
             return
         }
+
+        if (isLoanerOwnOrderDateUsable(ownOrderDate)) {
+            return
+        }
+
         if (parentId == null || parentId === '' || Number(parentId) === 0) {
             fetchedParentOrderDate.value = null
             return
         }
+
         const requestedParentId = String(parentId)
+        const requestedOrderId = String(orderId ?? '')
         try {
-            const result = await apiFetch(`${page.props.appBaseUrl}/servicerecord/record/${requestedParentId}`)
-            const currentParentId = String(props.draftRecord?.parentID ?? props.record?.parentID ?? '')
-            if (currentParentId !== requestedParentId) return
+            const result = await apiFetch(`${getRecordApiBase()}/record/${requestedParentId}`)
+            if (String(props.record?.orderID ?? '') !== requestedOrderId) return
+            if (String(props.draftRecord?.parentID ?? props.record?.parentID ?? '') !== requestedParentId) return
+
             const already = parentOrderDateFromRecord(props.draftRecord)
                 ?? parentOrderDateFromRecord(props.record)
             if (already) {
                 fetchedParentOrderDate.value = already
                 return
             }
-            if (!result?.response?.ok) {
-                return
-            }
+            if (!result?.response?.ok) return
+
             const parent = result.data
-            const parentDate = parent?.parentOrderDate ?? parent?.orderDate ?? null
-            fetchedParentOrderDate.value = parentDate
-            if (props.draftRecord && parent) {
-                props.draftRecord.parentOrderDate = parentDate
+            const parentDate = [
+                parent?.parentOrderDate,
+                parent?.parentRecord?.orderDate,
+                parent?.orderDate,
+            ].find(value => isLoanerOwnOrderDateUsable(value))
+            const parentYmd = toOrderDateYmd(parentDate)
+            if (!parentYmd) return
+
+            fetchedParentOrderDate.value = parentYmd
+            if (props.draftRecord) {
+                props.draftRecord.parentOrderDate = parentYmd
                 props.draftRecord.parentRecord = {
                     orderID: parent.orderID ?? requestedParentId,
-                    orderDate: parentDate,
+                    orderDate: parentYmd,
                     order_type: parent.order_type ?? null,
                 }
             }
         } catch {
-            // 親の再取得に失敗しても、一覧/詳細で既に持っている受注日は消さない
+            // 親の再取得に失敗しても、既に持っている受注日は消さない
         }
     },
     { immediate: true },
@@ -1481,8 +1502,18 @@ const selectedServiceMaster = computed(() => {
 })
 
 const workPrice = computed(() => {
-    // 1=再校正 / 9=新台/校正 → servicemaster の受注日版 priceC_0
     const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') {
+        const fromLoanerMaster = resolveRecordWorkPriceFromMasters({
+            orderType: 'loaner',
+            returnCode,
+            loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+            loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+            asOfDate: priceAsOfDate.value,
+        })
+        if (fromLoanerMaster > 0) return fromLoanerMaster
+    }
     return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
 })
 

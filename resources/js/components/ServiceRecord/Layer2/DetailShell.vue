@@ -169,6 +169,7 @@
                 />
                 <DetailFormA
                     v-else-if="layout === 'A'"
+                    :key="record?.orderID"
                     ref="detailFormARef"
                     :record="record"
                     :draft-record="draftRecord"

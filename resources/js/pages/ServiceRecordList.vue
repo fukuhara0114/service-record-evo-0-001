@@ -1381,7 +1381,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolveRecordWorkPriceFromMasters } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -3511,8 +3511,23 @@ async function openSecondLayer(record) {
     try {
         const fullRecord = await fetchRecord(record.orderID)
         if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
-        activeRecord.value = fullRecord
-        draftRecord.value = { ...fullRecord }
+        const previous = activeRecord.value
+        const parentOrderDate = parentOrderDateFromRecord(fullRecord)
+            ?? parentOrderDateFromRecord(previous)
+        const parentRecord = parentOrderDateFromRecord(fullRecord)
+            ? (fullRecord.parentRecord ?? fullRecord.parent_record)
+            : (previous?.parentRecord ?? previous?.parent_record)
+        const priceVersions = (Array.isArray(fullRecord.priceVersions) && fullRecord.priceVersions.length)
+            ? fullRecord.priceVersions
+            : (previous?.priceVersions ?? [])
+        activeRecord.value = {
+            ...previous,
+            ...fullRecord,
+            parentOrderDate,
+            parentRecord: parentRecord ?? previous?.parentRecord,
+            priceVersions,
+        }
+        draftRecord.value = { ...activeRecord.value }
     } catch (e) {
         if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
         detailOpenError.value = `${e.message || '詳細データの取得に失敗しました。'}（一覧の情報のみ表示しています）`
@@ -3758,7 +3773,22 @@ function resolveDetailFormAPrice(draft, parts = []) {
         serviceID: draft.serviceID,
     }, asOfDate)
 
-    const workPrice = resolveServiceWorkPrice(master, draft.returnCode)
+    const orderType = String(draft.order_type ?? '').trim().toLowerCase()
+    let workPrice = 0
+    if (orderType === 'loaner') {
+        workPrice = resolveRecordWorkPriceFromMasters({
+            orderType: 'loaner',
+            returnCode: draft.returnCode,
+            loanerID: draft.loanerID,
+            loanerPriceVersions: draft.priceVersions ?? [],
+            asOfDate,
+        })
+        if (!(workPrice > 0)) {
+            workPrice = resolveServiceWorkPrice(master, draft.returnCode)
+        }
+    } else {
+        workPrice = resolveServiceWorkPrice(master, draft.returnCode)
+    }
     const a2laOn = draft.a2la === 1 || draft.a2la === '1' || draft.a2la === true
     const a2laRaw = a2laOn ? Number(master?.price_a2la ?? 0) : 0
     const a2laPrice = Number.isFinite(a2laRaw) ? a2laRaw : 0

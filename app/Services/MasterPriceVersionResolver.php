@@ -105,7 +105,11 @@ class MasterPriceVersionResolver
             return $this->normalizePriceAsOfDate($loanerOrderDate);
         }
 
-        return $this->normalizePriceAsOfDate($serviceOrderDate);
+        if ($this->isLoanerOwnOrderDateUsable($serviceOrderDate)) {
+            return $this->normalizePriceAsOfDate($serviceOrderDate);
+        }
+
+        return null;
     }
 
     public function firstValidAsOf(mixed ...$dates): ?string

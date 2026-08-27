@@ -22,6 +22,11 @@ function normalizeDate(value) {
     return ymd
 }
 
+/** 受注日の暦日 Y-m-d。発送予定日は渡さない。 */
+export function toOrderDateYmd(value) {
+    return normalizeDate(value)
+}
+
 /** 価格版の起点日。未設定・2000年以前は最新版を使うため null。 */
 export function normalizePriceAsOfDate(value) {
     const ymd = normalizeDate(value)
@@ -52,7 +57,10 @@ export function resolveLoanerPriceAsOfDate(loanerOrderDate, serviceOrderDate) {
     if (isLoanerOwnOrderDateUsable(loanerOrderDate)) {
         return normalizePriceAsOfDate(loanerOrderDate)
     }
-    return normalizePriceAsOfDate(serviceOrderDate)
+    if (isLoanerOwnOrderDateUsable(serviceOrderDate)) {
+        return normalizePriceAsOfDate(serviceOrderDate)
+    }
+    return null
 }
 
 /** 画面表示価格の as-of。loaner は上記ルール、それ以外は自身の受注日。 */
@@ -63,13 +71,20 @@ export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderD
     return normalizePriceAsOfDate(orderDate)
 }
 
-/** 親 service の受注日のみ。発送予定日・出荷日は見ない。 */
+/** 親 service の受注日のみ。発送予定日・出荷日・プレースホルダ日付は見ない。 */
 export function parentOrderDateFromRecord(record) {
     if (!record || typeof record !== 'object') return null
-    return record.parentOrderDate
-        ?? record.parentRecord?.orderDate
-        ?? record.parent_record?.orderDate
-        ?? null
+    const candidates = [
+        record.parentOrderDate,
+        record.parentRecord?.orderDate,
+        record.parent_record?.orderDate,
+    ]
+    for (const value of candidates) {
+        if (isLoanerOwnOrderDateUsable(value)) {
+            return normalizeDate(value)
+        }
+    }
+    return null
 }
 
 export function firstValidPriceAsOf(...values) {

@@ -318,6 +318,7 @@ class ServiceRecordController extends Controller
         $this->attachLoanerItemsToRecords($records);
         $this->attachEntityIdsFromServiceMaster($records);
         $this->attachServiceParentOrderDates($records);
+        $this->attachLoanerPriceVersions($records);
 
         $tabBadgeCounts = [
             'loanerReturned' => 0,
@@ -461,9 +462,14 @@ class ServiceRecordController extends Controller
         return app(MasterPriceVersionResolver::class)->normalizeDate($value);
     }
 
+    private function isUsablePriceOrderDate(mixed $value): bool
+    {
+        return app(MasterPriceVersionResolver::class)->isLoanerOwnOrderDateUsable($value);
+    }
+
     /**
      * parentID から service 案件の受注日を辿る。
-     * 直近の親が loaner ならさらに親へ。見つからなければ最初の親の受注日。
+     * 直近の親が loaner、または受注日がプレースホルダならさらに親へ。
      *
      * @return array{orderID: mixed, orderDate: ?string, order_type: mixed}|null
      */
@@ -471,11 +477,19 @@ class ServiceRecordController extends Controller
     {
         $currentId = $parentId;
         $fallback = null;
+        $usableFallback = null;
+        $seen = [];
 
         for ($i = 0; $i < 5; $i++) {
             if ($currentId === null || $currentId === '' || (int) $currentId === 0) {
                 break;
             }
+
+            $key = (string) $currentId;
+            if (isset($seen[$key])) {
+                break;
+            }
+            $seen[$key] = true;
 
             $parent = ServiceRecord::query()
                 ->where('orderID', $currentId)
@@ -491,15 +505,18 @@ class ServiceRecordController extends Controller
                 'order_type' => $parent->order_type,
             ];
             $fallback ??= $info;
+            if ($usableFallback === null && $this->isUsablePriceOrderDate($info['orderDate'])) {
+                $usableFallback = $info;
+            }
 
-            if ($this->isServiceLikeOrderType($parent->order_type)) {
+            if ($this->isServiceLikeOrderType($parent->order_type) && $this->isUsablePriceOrderDate($info['orderDate'])) {
                 return $info;
             }
 
             $currentId = $parent->parentID;
         }
 
-        return $fallback;
+        return $usableFallback ?? $fallback;
     }
 
     /**
@@ -536,7 +553,8 @@ class ServiceRecordController extends Controller
             $needed = [];
             foreach ($rows as $row) {
                 $byId[(string) $row->orderID] = $row;
-                if ($this->isServiceLikeOrderType($row->order_type)) {
+                $rowDate = $this->toOrderDateYmd($row->orderDate);
+                if ($this->isServiceLikeOrderType($row->order_type) && $this->isUsablePriceOrderDate($rowDate)) {
                     continue;
                 }
                 $nextId = $row->parentID;
@@ -555,6 +573,38 @@ class ServiceRecordController extends Controller
     }
 
     /**
+     * 一覧の loaner に loanermaster 価格版を付与する（DetailFormA 初回表示用）。
+     *
+     * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
+     */
+    private function attachLoanerPriceVersions($records): void
+    {
+        $loaners = $records->filter(fn (ServiceRecord $record) => $this->isLoanerOrderType($record->order_type));
+        if ($loaners->isEmpty()) {
+            return;
+        }
+
+        $ids = $loaners
+            ->pluck('loanerID')
+            ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id !== 0)
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $resolver = app(MasterPriceVersionResolver::class);
+        $versionsById = [];
+        foreach ($ids as $id) {
+            $versionsById[$id] = $resolver->loanerPriceVersions($id);
+        }
+
+        foreach ($loaners as $loaner) {
+            $key = (string) ($loaner->loanerID ?? '');
+            $loaner->setAttribute('priceVersions', $versionsById[$key] ?? []);
+        }
+    }
+
+    /**
      * @param  array<string, ServiceRecord>  $byId
      * @return array{orderID: mixed, orderDate: ?string, order_type: mixed}|null
      */
@@ -562,6 +612,7 @@ class ServiceRecordController extends Controller
     {
         $currentId = $parentId;
         $fallback = null;
+        $usableFallback = null;
         $seen = [];
 
         for ($i = 0; $i < 5; $i++) {
@@ -584,15 +635,18 @@ class ServiceRecordController extends Controller
                 'order_type' => $parent->order_type,
             ];
             $fallback ??= $info;
+            if ($usableFallback === null && $this->isUsablePriceOrderDate($info['orderDate'])) {
+                $usableFallback = $info;
+            }
 
-            if ($this->isServiceLikeOrderType($parent->order_type)) {
+            if ($this->isServiceLikeOrderType($parent->order_type) && $this->isUsablePriceOrderDate($info['orderDate'])) {
                 return $info;
             }
 
             $currentId = $parent->parentID;
         }
 
-        return $fallback;
+        return $usableFallback ?? $fallback;
     }
 
     /**
