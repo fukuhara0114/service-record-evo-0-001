@@ -3,8 +3,9 @@
         <p v-if="attachmentsLoading" class="status-message">添付データを読み込み中...</p>
         <p v-else-if="attachmentsError" class="status-message error">{{ attachmentsError }}</p>
 
-        <div v-else class="logistics-grid">
-            <section class="panel panel-files">
+        <Splitpanes v-else class="default-theme logistics-splitpanes" @resized="syncPaneSizes">
+            <Pane class="logistics-pane logistics-pane-files" :size="leftPaneSize" :min-size="22">
+                <section class="panel panel-files">
                 <div class="panel-header">
                     <h3>
                         Files（書類 {{ sortedFiles.length }}件
@@ -60,8 +61,10 @@
                     </div>
                 </div>
             </section>
+            </Pane>
 
-            <div class="right-column">
+            <Pane class="logistics-pane logistics-pane-right" :size="rightPaneSize" :min-size="28">
+                <div class="right-column">
                 <div class="action-bar">
                     <button
                         type="button"
@@ -246,14 +249,17 @@
                         />
                     </div>
                 </section>
-            </div>
-        </div>
+                </div>
+            </Pane>
+        </Splitpanes>
     </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { usePage } from '@inertiajs/vue3'
+import { Pane, Splitpanes } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCapturedImages.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
@@ -279,6 +285,8 @@ const props = defineProps({
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'workflow-done', 'save'])
 
 const page = usePage()
+const leftPaneSize = ref(48)
+const rightPaneSize = ref(52)
 const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
 const capturedImagesOpen = ref(false)
@@ -333,6 +341,12 @@ watch(() => props.notes, () => {
 
 function isPersonalNote(note) {
     return note?.personal === true || note?.personal === 1 || note?.personal === '1'
+}
+
+function syncPaneSizes({ panes } = {}) {
+    if (!Array.isArray(panes) || panes.length < 2) return
+    leftPaneSize.value = panes[0].size
+    rightPaneSize.value = panes[1].size
 }
 
 function fieldValue(field) {
@@ -656,6 +670,8 @@ async function patchFileSort(fileId, sortNum) {
 .logistics-detail {
     height: 100%;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     background: #bbbbbb;
     padding: 10px;
     box-sizing: border-box;
@@ -670,37 +686,55 @@ async function patchFileSort(fileId, sortNum) {
     color: #b91c1c;
 }
 
-.logistics-grid {
-    height: 100%;
+.logistics-splitpanes {
+    flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: 10px;
+    height: 100%;
+    overflow: hidden;
+}
+
+.logistics-splitpanes :deep(.splitpanes__pane) {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.logistics-pane {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
 }
 
 .panel-files {
-    grid-column: 1;
+    width: 100%;
+    height: 100%;
     min-height: 0;
 }
 
 .right-column {
-    grid-column: 2;
+    flex: 1 1 0%;
+    width: 100%;
     min-height: 0;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .right-column > .action-bar,
 .right-column > .action-message,
 .right-column > .panel-summary,
 .right-column > .panel-delivery,
-.right-column > .panel-price {
+.right-column > .panel-price,
+.right-column > .panel-notes {
     flex: 0 0 auto;
 }
 
 .right-column > .panel-notes {
-    flex: 1 1 auto;
     min-height: 160px;
 }
 
@@ -908,12 +942,12 @@ async function patchFileSort(fileId, sortNum) {
 }
 
 .field-zip,
-.field-company,
 .field-contact,
 .field-phone {
     width: min(240px, 100%);
 }
 
+.field-company,
 .field-full {
     width: 100%;
 }
@@ -1064,5 +1098,14 @@ async function patchFileSort(fileId, sortNum) {
     padding: 12px;
     color: #64748b;
     font-size: 13px;
+}
+
+:deep(.splitpanes__splitter) {
+    background: #cbd5e1;
+    min-width: 8px;
+}
+
+:deep(.splitpanes__splitter:hover) {
+    background: #94a3b8;
 }
 </style>
