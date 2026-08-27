@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
 class LoanerMaster extends Model
@@ -75,6 +76,85 @@ class LoanerMaster extends Model
         $text = (string) $item;
 
         return str_contains($text, '使用不可') || str_contains($text, 'サービス終了');
+    }
+
+    /**
+     * 機種選択のグループキー。item（機種）を優先し、空のときだけ productName に倒す。
+     */
+    public static function productSelectGroupKey(?string $item, ?string $productName): string
+    {
+        $itemCode = trim((string) $item);
+        if ($itemCode !== '') {
+            return 'item:'.mb_strtolower($itemCode, 'UTF-8');
+        }
+
+        $name = trim((string) $productName);
+        if ($name !== '') {
+            return 'productName:'.mb_strtolower($name, 'UTF-8');
+        }
+
+        return '';
+    }
+
+    /**
+     * 選択した機種（item 優先、なければ productName）と個体が一致するか。
+     */
+    public static function matchesProductSelection(?self $row, ?string $item, ?string $productName): bool
+    {
+        if (!$row) {
+            return false;
+        }
+
+        $selectedItem = trim((string) $item);
+        $rowItem = trim((string) ($row->item ?? ''));
+        if ($selectedItem !== '') {
+            return strcasecmp($rowItem, $selectedItem) === 0;
+        }
+
+        $selectedName = trim((string) $productName);
+        if ($selectedName === '') {
+            return false;
+        }
+
+        return strcasecmp(trim((string) ($row->productName ?? '')), $selectedName) === 0;
+    }
+
+    /**
+     * 機種選択ダイアログ用: item 単位で在庫台数を集計する。
+     *
+     * @param  Collection<int, self>  $loaners
+     * @return Collection<int, array<string, mixed>>
+     */
+    public static function groupForProductSelect(Collection $loaners, string $statusColumn): Collection
+    {
+        return $loaners
+            ->filter(fn (self $row) => !static::isExcludedFromProductSelect($row->item ?? null))
+            ->groupBy(fn (self $row) => static::productSelectGroupKey($row->item ?? null, $row->productName ?? null))
+            ->filter(fn (Collection $rows, $key) => $key !== '' && $key !== null)
+            ->map(function (Collection $rows, string $selectionKey) use ($statusColumn) {
+                $availableRows = $rows->filter(
+                    fn (self $row) => static::isInStockStatus($row->{$statusColumn} ?? null)
+                );
+                $availableCount = $availableRows->count();
+
+                $item = $rows
+                    ->map(fn (self $row) => trim((string) ($row->item ?? '')))
+                    ->first(fn ($value) => $value !== '');
+
+                $productSource = $availableRows->first() ?? $rows->first();
+                $productName = trim((string) ($productSource?->productName ?? ''));
+
+                return [
+                    'selectionKey' => $selectionKey,
+                    'item' => $item !== null && $item !== '' ? $item : null,
+                    'productName' => $productName !== '' ? $productName : null,
+                    'totalCount' => $rows->count(),
+                    'availableCount' => $availableCount,
+                    'available' => $availableCount > 0,
+                    'order_type' => $availableCount > 0 ? 'loaner' : 'waiting_list',
+                ];
+            })
+            ->values();
     }
 
     /**

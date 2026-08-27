@@ -2151,28 +2151,7 @@ class ServiceRecordController extends Controller
             ['loanerID', 'asc'],
         ])->values();
 
-        $loanerProducts = $loaners
-            ->filter(fn ($row) => !LoanerMaster::isExcludedFromProductSelect($row->item ?? null))
-            ->groupBy('productName')
-            ->map(function ($rows, $productName) use ($loanerStatusColumn) {
-                $availableCount = $rows
-                    ->filter(fn ($row) => LoanerMaster::isInStockStatus($row->{$loanerStatusColumn} ?? null))
-                    ->count();
-
-                $item = $rows
-                    ->map(fn ($row) => trim((string) ($row->item ?? '')))
-                    ->first(fn ($value) => $value !== '');
-
-                return [
-                    'item' => $item !== null && $item !== '' ? $item : null,
-                    'productName' => $productName,
-                    'totalCount' => $rows->count(),
-                    'availableCount' => $availableCount,
-                    'available' => $availableCount > 0,
-                    'order_type' => $availableCount > 0 ? 'loaner' : 'waiting_list',
-                ];
-            })
-            ->values();
+        $loanerProducts = LoanerMaster::groupForProductSelect($loaners, $loanerStatusColumn);
 
         return Inertia::render('ServiceRecordCreateFromFile', [
             'sourceFile' => $sourceFile,

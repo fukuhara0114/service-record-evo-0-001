@@ -53,7 +53,7 @@
                             :key="unit.loanerID"
                             :value="String(unit.loanerID)"
                         >
-                            {{ unit.loanerID }} / {{ unit.SN || 'SNなし' }} / {{ unit.manageNum || '管理番号なし' }}
+                            {{ unit.loanerID }} / {{ unit.item || unit.productName || '—' }} / {{ unit.SN || 'SNなし' }} / {{ unit.manageNum || '管理番号なし' }}
                             <template v-if="unit.isPromotionSource">（返却元）</template>
                         </option>
                     </select>
@@ -62,7 +62,7 @@
                     type="button"
                     class="btn btn-primary"
                     :disabled="promoting || !availableUnits.length"
-                    :title="availableUnits.length ? '' : '同機種の在庫がありません'"
+                    :title="availableUnits.length ? '' : '同 groupName の在庫がありません'"
                     @click="promoteToLoaner"
                 >
                     {{ promoting ? '繰上中...' : 'loaner に繰り上げ' }}
@@ -924,21 +924,63 @@
             <div class="confirm-panel promotion-panel" role="dialog" aria-modal="true" aria-labelledby="promotion-modal-title">
                 <h3 id="promotion-modal-title">繰り上がり候補</h3>
                 <p class="promotion-lead">
-                    <template v-if="promotionFromLending">
-                        完了（status 400）へ進み、機材を在庫に戻しました。予約の繰り上げはありますか？（同機種: {{ record.productName }}）
-                    </template>
-                    <template v-else>
-                        機材が在庫に戻ったため、同機種（{{ record.productName }}）の waiting_list に繰り上がり候補があります。
-                    </template>
+                    返却機を在庫に戻しました。添付画像を確認し、同 groupName の waiting_list へ割り当ててよいか判断してください。
+                    <template v-if="promotionSourceLabel">（{{ promotionSourceLabel }}）</template>
                 </p>
+
+                <section class="promotion-source">
+                    <h4>返却した貸出機</h4>
+                    <dl class="promotion-source-meta">
+                        <div><dt>loanerID</dt><dd>{{ promotionSourceView.loanerID || '—' }}</dd></div>
+                        <div><dt>item</dt><dd>{{ promotionSourceView.item || '—' }}</dd></div>
+                        <div><dt>SN</dt><dd>{{ promotionSourceView.SN || '—' }}</dd></div>
+                        <div><dt>certificatedDate</dt><dd>{{ formatPromotionDate(promotionSourceView.certificatedDate) }}</dd></div>
+                        <div><dt>manageNum</dt><dd>{{ promotionSourceView.manageNum || '—' }}</dd></div>
+                        <div><dt>productName</dt><dd>{{ promotionSourceView.productName || '—' }}</dd></div>
+                        <div class="promotion-source-note"><dt>note1</dt><dd>{{ promotionSourceView.note1 || '—' }}</dd></div>
+                        <div class="promotion-source-note"><dt>note2</dt><dd>{{ promotionSourceView.note2 || '—' }}</dd></div>
+                        <div class="promotion-source-note"><dt>note3</dt><dd>{{ promotionSourceView.note3 || '—' }}</dd></div>
+                    </dl>
+                    <div v-if="promotionSourceImages.length" class="promotion-images">
+                        <a
+                            v-for="file in promotionSourceImages"
+                            :key="file.id"
+                            :href="promotionFileUrl(file)"
+                            target="_blank"
+                            rel="noopener"
+                            class="promotion-image-link"
+                            :title="file.documentName || '添付画像'"
+                        >
+                            <img
+                                :src="promotionFileUrl(file)"
+                                :alt="file.documentName || '添付画像'"
+                            >
+                            <span>{{ file.documentName || '画像' }}</span>
+                        </a>
+                    </div>
+                    <p v-else class="promotion-empty promotion-images-empty">添付画像はありません。</p>
+                    <ul v-if="promotionSourceOtherFiles.length" class="promotion-other-files">
+                        <li v-for="file in promotionSourceOtherFiles" :key="file.id">
+                            <a :href="promotionFileUrl(file)" target="_blank" rel="noopener">
+                                {{ file.documentName || `ファイル #${file.id}` }}
+                            </a>
+                        </li>
+                    </ul>
+                </section>
+
+                <p v-if="promotionAssignError" class="confirm-error">{{ promotionAssignError }}</p>
+
                 <div class="promotion-table-wrap">
                     <table v-if="promotionCandidates.length" class="promotion-table">
                         <thead>
                             <tr>
                                 <th>orderID</th>
-                                <th>ParentID</th>
                                 <th>dealer</th>
+                                <th>dealer_depart</th>
                                 <th>contactPerson</th>
+                                <th>userSN</th>
+                                <th>item</th>
+                                <th>productName</th>
                                 <th>希望期間</th>
                                 <th></th>
                             </tr>
@@ -946,18 +988,30 @@
                         <tbody>
                             <tr v-for="candidate in promotionCandidates" :key="candidate.orderID">
                                 <td>{{ candidate.orderID }}</td>
-                                <td>{{ candidate.parentID ?? '—' }}</td>
                                 <td>{{ candidate.dealer || '—' }}</td>
+                                <td>{{ candidate.dealer_depart || '—' }}</td>
                                 <td>{{ candidate.contactPerson || '—' }}</td>
+                                <td>{{ candidate.userSN || '—' }}</td>
+                                <td>{{ candidate.item || '—' }}</td>
+                                <td>{{ candidate.productName || '—' }}</td>
                                 <td>
                                     {{ candidate.plannedSentDate || '—' }}
                                     ~
                                     {{ candidate.plannedReturnedDate || '—' }}
                                 </td>
-                                <td>
+                                <td class="promotion-row-actions">
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary promotion-open-btn"
+                                        :disabled="promotionAssigningId != null"
+                                        @click="assignPromotionCandidate(candidate)"
+                                    >
+                                        {{ promotionAssigningId === promotionCandidateKey(candidate) ? '割当中...' : 'この個体で繰り上げ' }}
+                                    </button>
                                     <button
                                         type="button"
                                         class="btn btn-secondary promotion-open-btn"
+                                        :disabled="promotionAssigningId != null"
                                         @click="openPromotionCandidate(candidate)"
                                     >
                                         開く
@@ -966,10 +1020,15 @@
                             </tr>
                         </tbody>
                     </table>
-                    <p v-else class="promotion-empty">同機種の waiting_list 候補はありません。</p>
+                    <p v-else class="promotion-empty">同 groupName の waiting_list 候補はありません。</p>
                 </div>
                 <div class="confirm-actions">
-                    <button type="button" class="btn btn-primary" @click="closePromotionModal">
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="promotionAssigningId != null"
+                        @click="closePromotionModal"
+                    >
                         後で対応
                     </button>
                 </div>
@@ -1110,6 +1169,9 @@ const noteDeleting = ref(false)
 const noteDialogError = ref('')
 const promotionModalOpen = ref(false)
 const promotionCandidates = ref([])
+const promotionSource = ref(null)
+const promotionAssigningId = ref(null)
+const promotionAssignError = ref('')
 const reservationSwapDialogOpen = ref(false)
 const reservationSwapCandidates = ref([])
 const reservationSwapLoading = ref(false)
@@ -2554,6 +2616,10 @@ async function save(options = {}) {
         calendarRef.value?.getApi?.().refetchEvents()
         if (data.promotionTriggered) {
             promotionCandidates.value = Array.isArray(data.promotionCandidates) ? data.promotionCandidates : []
+            promotionSource.value = data.promotionSource && typeof data.promotionSource === 'object'
+                ? data.promotionSource
+                : null
+            promotionAssignError.value = ''
             promotionFromLending.value = Boolean(data.promotionFromLending ?? data.promotionFromCheck)
             promotionFromCheck.value = promotionFromLending.value
             promotionModalOpen.value = true
@@ -2568,10 +2634,110 @@ async function save(options = {}) {
 }
 
 function closePromotionModal() {
+    if (promotionAssigningId.value != null) return
     promotionModalOpen.value = false
+    promotionAssignError.value = ''
     // 次へで完了(400)にした後、予約ダイアログを閉じたら詳細も閉じる
     if (Number(form.status) === completeStatusId.value) {
         closePage()
+    }
+}
+
+const promotionSourceView = computed(() => {
+    const source = promotionSource.value
+    if (source) return source
+    return {
+        orderID: props.record?.orderID,
+        loanerID: form.loanerID || props.record?.loanerID,
+        item: props.loanerMaster?.item,
+        productName: props.record?.productName,
+        SN: props.record?.SN,
+        manageNum: props.loanerMaster?.manageNum,
+        groupName: props.loanerMaster?.groupName,
+        certificatedDate: selectedUnit.value?.certificatedDate ?? props.loanerMaster?.certificatedDate,
+        note1: selectedUnit.value?.note1 ?? props.loanerMaster?.note1,
+        note2: selectedUnit.value?.note2 ?? props.loanerMaster?.note2,
+        note3: selectedUnit.value?.note3 ?? props.loanerMaster?.note3,
+        files: fileItems.value,
+    }
+})
+
+const promotionSourceLabel = computed(() => {
+    const source = promotionSourceView.value
+    const group = String(source?.groupName || '').trim()
+    if (group) return `groupName: ${group}`
+    return String(source?.productName || props.record?.productName || '').trim()
+})
+
+const promotionSourceFiles = computed(() => {
+    const files = promotionSource.value?.files
+    if (Array.isArray(files) && files.length) return files
+    return sortedFiles.value
+})
+
+const promotionSourceImages = computed(() =>
+    promotionSourceFiles.value.filter(file => String(file?.fileType || '').startsWith('image/')),
+)
+
+const promotionSourceOtherFiles = computed(() =>
+    promotionSourceFiles.value.filter(file => !String(file?.fileType || '').startsWith('image/')),
+)
+
+function promotionFileUrl(file) {
+    if (!file?.id) return '#'
+    return `${page.props.appBaseUrl}/servicerecord/files/${file.id}`
+}
+
+function formatPromotionDate(value) {
+    if (value == null || value === '') return '—'
+    return String(value).slice(0, 10)
+}
+
+function promotionCandidateKey(candidate) {
+    return String(candidate?.attachedId || candidate?.orderID || '')
+}
+
+async function assignPromotionCandidate(candidate) {
+    const targetId = candidate?.attachedId || candidate?.orderID
+    if (!targetId || promotionAssigningId.value != null) return
+
+    const returnedLoanerId = numericNullable(
+        promotionSourceView.value?.loanerID ?? form.loanerID ?? props.record?.loanerID,
+    )
+    const confirmed = window.confirm(
+        `OrderID ${candidate.orderID} に、返却機 loanerID ${returnedLoanerId ?? '—'} を割り当てて繰り上げますか？`,
+    )
+    if (!confirmed) return
+
+    promotionAssigningId.value = promotionCandidateKey(candidate)
+    promotionAssignError.value = ''
+    error.value = ''
+    try {
+        const payload = {}
+        if (returnedLoanerId != null) payload.loanerID = returnedLoanerId
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/detail/${targetId}/promote`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+                body: JSON.stringify(payload),
+            },
+        )
+        if (!result) {
+            promotionAssignError.value = '認証が必要です。再ログインしてください。'
+            return
+        }
+        const { response, data } = result
+        if (!response.ok) {
+            throw new Error(validationError(data, `繰り上げに失敗しました。（HTTP ${response.status}）`))
+        }
+        success.value = data.message || 'waiting_list を loaner へ繰り上げました。'
+        promotionModalOpen.value = false
+        closePage()
+    } catch (e) {
+        promotionAssignError.value = e.message || '繰り上げに失敗しました。'
+    } finally {
+        promotionAssigningId.value = null
     }
 }
 
@@ -2624,7 +2790,7 @@ async function promoteToLoaner() {
     error.value = ''
     success.value = ''
     if (!availableUnits.value.length) {
-        error.value = '同機種の在庫がありません。在庫復帰後に再度実行してください。'
+        error.value = '同 groupName の在庫がありません。在庫復帰後に再度実行してください。'
         return
     }
 
@@ -3838,14 +4004,78 @@ a.btn {
 .confirm-error { margin: 0; color: #b91c1c; font-size: 12px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
 
-.promotion-panel { width: min(760px, 100%); }
+.promotion-panel { width: min(1280px, 96vw); max-height: calc(100vh - 32px); overflow: auto; }
 .promotion-lead { margin: 0 0 12px; color: #334155; font-size: 13px; line-height: 1.45; }
-.promotion-table-wrap { max-height: min(50vh, 360px); overflow: auto; border: 1px solid #cbd5e1; border-radius: 6px; }
+.promotion-source {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+.promotion-source h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #0f172a;
+}
+.promotion-source-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+.promotion-source-meta div { display: grid; gap: 2px; min-width: 0; }
+.promotion-source-meta dt { margin: 0; color: #64748b; font-size: 11px; }
+.promotion-source-meta dd { margin: 0; color: #0f172a; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.promotion-source-note {
+    width: 100%;
+}
+.promotion-source-note dd {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #fff;
+    white-space: pre-wrap;
+    font-weight: 500;
+}
+.promotion-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.promotion-image-link {
+    display: grid;
+    gap: 4px;
+    width: 160px;
+    color: #334155;
+    text-decoration: none;
+    font-size: 11px;
+}
+.promotion-image-link img {
+    width: 160px;
+    height: 120px;
+    object-fit: contain;
+    background: #0f172a;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+}
+.promotion-images-empty { padding: 8px 0; }
+.promotion-other-files {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+}
+.promotion-table-wrap { max-height: min(40vh, 320px); overflow: auto; border: 1px solid #cbd5e1; border-radius: 6px; }
 .promotion-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .promotion-table th,
 .promotion-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
 .promotion-table th { position: sticky; top: 0; background: #f8fafc; color: #475569; font-weight: 600; }
 .promotion-table tbody tr:last-child td { border-bottom: none; }
+.promotion-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .promotion-open-btn { min-height: 26px; padding: 2px 10px; font-size: 11px; }
 .promotion-empty { margin: 0; padding: 16px; color: #64748b; font-size: 13px; text-align: center; }
 

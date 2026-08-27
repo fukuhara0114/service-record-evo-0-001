@@ -1,6 +1,6 @@
 <template>
     <div class="dialog-overlay" @click.self="$emit('close')">
-        <div class="dialog-panel">
+        <div class="dialog-panel" :class="{ 'dialog-panel-wide': kind === 'loanerProduct' }">
             <div class="dialog-header">
                 <h3>{{ title }}</h3>
                 <button type="button" class="close-btn" @click="$emit('close')">×</button>
@@ -33,6 +33,15 @@
                     </div>
                 </div>
 
+                <p v-if="kind === 'loanerProduct'" class="stock-status-legend">
+                    <span class="stock-legend-item stock-legend-available">
+                        <span class="stock-legend-swatch" aria-hidden="true">■</span>在庫有
+                    </span>
+                    <span class="stock-legend-item stock-legend-loaned">
+                        <span class="stock-legend-swatch" aria-hidden="true">■</span>貸し出し中
+                    </span>
+                </p>
+
                 <p v-if="error" class="error-message">{{ error }}</p>
 
                 <div v-if="kind === 'dealer'" class="preview-box">
@@ -45,7 +54,7 @@
                     </div>
                 </div>
 
-                <div class="table-wrap">
+                <div class="table-wrap" :class="{ 'loaner-stock-table': kind === 'loanerProduct' }">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -57,11 +66,16 @@
                                 v-for="item in filteredItems"
                                 :key="itemKey(item)"
                                 class="table-row"
-                                :class="{ selected: String(selectedValue) === String(itemValue(item)) }"
+                                :class="rowClass(item)"
+                                :title="rowTitle(item)"
                                 @click="selectedValue = itemValue(item)"
                                 @dblclick="confirm"
                             >
-                                <td v-for="column in columns" :key="column.key">
+                                <td
+                                    v-for="column in columns"
+                                    :key="column.key"
+                                    :class="{ 'col-note': isNoteColumn(column) }"
+                                >
                                     {{ column.getter(item) }}
                                 </td>
                             </tr>
@@ -156,19 +170,38 @@ const configs = {
     },
     loanerProduct: {
         title: '貸出機種選択',
-        searchPlaceholder: '半角英数で検索（productName / item）',
+        searchPlaceholder: '半角英数で検索（loanerID / item / productName / SN / manageNum）',
         columns: [
+            { key: 'loanerID', label: 'loanerID', getter: item => item?.loanerID ?? '—' },
             { key: 'item', label: 'item', getter: item => item?.item ?? '—' },
             { key: 'productName', label: 'productName', getter: item => item?.productName ?? '—' },
-            { key: 'availableCount', label: '在庫', getter: item => item?.availableCount ?? 0 },
-            { key: 'totalCount', label: '台数', getter: item => item?.totalCount ?? 0 },
-            { key: 'order_type', label: '判定', getter: item => item?.order_type ?? '—' },
+            { key: 'SN', label: 'SN', getter: item => item?.SN ?? '—' },
+            { key: 'manageNum', label: 'manageNum', getter: item => item?.manageNum || '—' },
+            { key: 'stock', label: '在庫', getter: item => item?.inStock ? '在庫' : '貸出中等' },
+            { key: 'certificatedDate', label: 'certificatedDate', getter: item => formatLoanerDate(item?.certificatedDate) },
+            { key: 'note1', label: 'Note1', getter: item => item?.note1 || '—' },
+            { key: 'note2', label: 'Note2', getter: item => item?.note2 || '—' },
+            { key: 'note3', label: 'Note3', getter: item => item?.note3 || '—' },
         ],
-        valueGetter: item => item?.productName,
-        searchFields: item => [item?.productName, item?.item],
+        valueGetter: item => item?.loanerID,
+        searchFields: item => [
+            item?.loanerID,
+            item?.item,
+            item?.productName,
+            item?.SN,
+            item?.manageNum,
+            item?.groupName,
+            item?.certificatedDate,
+            item?.note1,
+            item?.note2,
+            item?.note3,
+        ],
         buildResult: item => ({
+            loanerID: item?.loanerID ?? null,
             productName: String(item?.productName ?? ''),
             item: item?.item ?? '',
+            SN: item?.SN ?? '',
+            inStock: Boolean(item?.inStock),
         }),
     },
     loanerUnit: {
@@ -235,16 +268,23 @@ const filteredItems = computed(() => {
         })
 
     if (props.kind === 'loanerProduct') {
-        filtered.sort((a, b) => compareLoanerItemSort(a?.item, b?.item)
-            || String(a?.productName ?? '').localeCompare(String(b?.productName ?? ''), 'en', { numeric: true }))
+        filtered.sort((a, b) => String(a?.groupName ?? '').localeCompare(String(b?.groupName ?? ''), 'en', {
+            numeric: true,
+            sensitivity: 'base',
+        })
+            || compareLoanerItemSort(a?.item, b?.item)
+            || String(a?.loanerID ?? '').localeCompare(String(b?.loanerID ?? ''), 'en', { numeric: true }))
     }
 
     return filtered
 })
 
-const selectedItem = computed(() =>
-    props.items.find(item => String(itemValue(item)) === String(selectedValue.value)),
-)
+const selectedItem = computed(() => {
+    const key = String(selectedValue.value ?? '')
+    const fromFiltered = filteredItems.value.find(item => String(itemValue(item)) === key)
+    if (fromFiltered) return fromFiltered
+    return props.items.find(item => String(itemValue(item)) === key)
+})
 
 watch(
     () => [props.kind, props.initialValue, props.initialSearchQuery, props.items],
@@ -286,6 +326,12 @@ function compareLoanerItemSort(a, b) {
     })
 }
 
+function formatLoanerDate(value) {
+    if (value == null || value === '') return '—'
+    if (typeof value === 'string') return value.slice(0, 10)
+    return String(value).slice(0, 10)
+}
+
 function onCompositionStart() {
     isComposing.value = true
 }
@@ -310,6 +356,28 @@ function itemValue(item) {
 
 function itemKey(item) {
     return String(itemValue(item) ?? JSON.stringify(item))
+}
+
+function isNoteColumn(column) {
+    return ['note1', 'note2', 'note3'].includes(column?.key)
+}
+
+function rowClass(item) {
+    const selected = String(selectedValue.value) === String(itemValue(item))
+    if (props.kind !== 'loanerProduct') {
+        return { selected }
+    }
+
+    return {
+        selected,
+        available: Boolean(item?.inStock),
+        unavailable: !item?.inStock,
+    }
+}
+
+function rowTitle(item) {
+    if (props.kind !== 'loanerProduct') return undefined
+    return item?.inStock ? '在庫' : '貸出中等'
 }
 
 function confirm() {
@@ -344,6 +412,10 @@ function confirm() {
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.dialog-panel-wide {
+    width: calc(100vw - 24px);
 }
 
 .dialog-header {
@@ -483,6 +555,149 @@ function confirm() {
 
 .table-row.selected {
     background: #dbeafe;
+}
+
+.table-row.available td {
+    color: #166534;
+    background: #f0fdf4;
+}
+
+.table-row.unavailable td {
+    color: #64748b;
+    background: #f8fafc;
+}
+
+.table-row.available:hover td {
+    background: #dcfce7;
+}
+
+.table-row.unavailable:hover td {
+    background: #e2e8f0;
+}
+
+.table-row.available.selected td {
+    background: #bbf7d0;
+    color: #14532d;
+    font-weight: 700;
+}
+
+.table-row.unavailable.selected td {
+    background: #cbd5e1;
+    color: #334155;
+    font-weight: 700;
+}
+
+.col-note {
+    max-width: 440px;
+    min-width: 320px;
+    width: 440px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.loaner-stock-table .data-table td.col-note {
+    white-space: normal;
+}
+
+.loaner-stock-table {
+    background: #0f172a;
+    border-color: #000;
+}
+
+.loaner-stock-table .data-table {
+    width: max-content;
+    min-width: 100%;
+    color: #e2e8f0;
+    font-size: 12px;
+}
+
+.loaner-stock-table .data-table th,
+.loaner-stock-table .data-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid #334155;
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+
+.loaner-stock-table .data-table th {
+    background: #0f172a;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.loaner-stock-table .table-row:hover {
+    background: transparent;
+}
+
+.loaner-stock-table .table-row.selected {
+    background: transparent;
+}
+
+.loaner-stock-table .table-row.available td {
+    color: #86efac;
+    background: transparent;
+}
+
+.loaner-stock-table .table-row.unavailable td {
+    color: #e2e8f0;
+    background: transparent;
+}
+
+.loaner-stock-table .table-row.available:hover td,
+.loaner-stock-table .table-row.unavailable:hover td {
+    background: #1e293b;
+}
+
+.loaner-stock-table .table-row.available.selected td {
+    background: #14532d;
+    color: #bbf7d0;
+    font-weight: 700;
+}
+
+.loaner-stock-table .table-row.unavailable.selected td {
+    background: #334155;
+    color: #e2e8f0;
+    font-weight: 700;
+}
+
+.loaner-stock-table .empty-message {
+    color: #94a3b8;
+}
+
+.stock-status-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.stock-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stock-legend-swatch {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.stock-legend-available {
+    color: #166534;
+}
+
+.stock-legend-available .stock-legend-swatch {
+    color: #22c55e;
+}
+
+.stock-legend-loaned {
+    color: #475569;
+}
+
+.stock-legend-loaned .stock-legend-swatch {
+    color: #94a3b8;
 }
 
 .error-message {

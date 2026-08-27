@@ -44,6 +44,10 @@ class LoanerRecordController extends Controller
                     'manageNum',
                     'item',
                     'groupName',
+                    'certificatedDate',
+                    'note1',
+                    'note2',
+                    'note3',
                     'validDateMin',
                     'validDateMax',
                     $statusColumn,
@@ -54,28 +58,7 @@ class LoanerRecordController extends Controller
             ['loanerID', 'asc'],
         ])->values();
 
-        $loanerProducts = $loaners
-            ->filter(fn ($row) => !LoanerMaster::isExcludedFromProductSelect($row->item ?? null))
-            ->groupBy('productName')
-            ->map(function ($rows, $productName) use ($statusColumn) {
-                $availableCount = $rows
-                    ->filter(fn ($row) => LoanerMaster::isInStockStatus($row->{$statusColumn} ?? null))
-                    ->count();
-
-                $item = $rows
-                    ->map(fn ($row) => trim((string) ($row->item ?? '')))
-                    ->first(fn ($value) => $value !== '');
-
-                return [
-                    'item' => $item !== null && $item !== '' ? $item : null,
-                    'productName' => $productName,
-                    'totalCount' => $rows->count(),
-                    'availableCount' => $availableCount,
-                    'available' => $availableCount > 0,
-                    'order_type' => $availableCount > 0 ? 'loaner' : 'waiting_list',
-                ];
-            })
-            ->values();
+        $loanerProducts = LoanerMaster::groupForProductSelect($loaners, $statusColumn);
 
         $statuses = StatusLoaner::mapForDisplay(
             StatusLoaner::orderBy('processID_new')->get(StatusLoaner::selectColumnsForDisplay()),
@@ -95,26 +78,39 @@ class LoanerRecordController extends Controller
     public function availability(Request $request)
     {
         $validated = $request->validate([
-            'productName' => 'required|string|max:255',
+            'loanerID' => 'required|integer',
         ]);
 
-        $available = $this->findAvailableLoaner($validated['productName']);
+        $loanerId = (int) $validated['loanerID'];
+        $unit = $this->latestLoanerUnitById($loanerId);
+        if (!$unit) {
+            return response()->json(['message' => '指定した貸出機が見つかりません。'], 422);
+        }
+
+        $available = $this->isLoanerUnitInStock($unit) ? $unit : null;
         $orderType = $available ? 'loaner' : 'waiting_list';
 
         $payload = [
             'available' => $available !== null,
             'order_type' => $orderType,
-            'loaner' => $available ? [
-                'loanerID' => $available->loanerID,
-                'productName' => $available->productName,
-                'SN' => $available->SN,
-                'manageNum' => $available->manageNum,
-                'item' => $available->item,
-            ] : null,
+            'requested' => [
+                'loanerID' => $loanerId,
+            ],
+            'loaner' => [
+                'loanerID' => $unit->loanerID,
+                'productName' => $unit->productName,
+                'SN' => $unit->SN,
+                'manageNum' => $unit->manageNum,
+                'item' => $unit->item,
+            ],
         ];
 
         if ($orderType === 'waiting_list') {
-            [$start, $end, $basedOn] = $this->resolveWaitingListDefaultPeriod($validated['productName']);
+            [$start, $end, $basedOn] = $this->resolveWaitingListDefaultPeriod(
+                (string) ($unit->productName ?? ''),
+                null,
+                $loanerId,
+            );
             $payload['suggestedPeriod'] = [
                 'plannedSentDate' => $start,
                 'plannedReturnedDate' => $end,
@@ -263,6 +259,10 @@ class LoanerRecordController extends Controller
                 'SN',
                 'manageNum',
                 'groupName',
+                'certificatedDate',
+                'note1',
+                'note2',
+                'note3',
                 'price',
                 'validDateMin',
                 'validDateMax',
@@ -311,6 +311,10 @@ class LoanerRecordController extends Controller
                     'SN',
                     'manageNum',
                     'groupName',
+                    'certificatedDate',
+                    'note1',
+                    'note2',
+                    'note3',
                     'price',
                     'validDateMin',
                     'validDateMax',
@@ -328,21 +332,15 @@ class LoanerRecordController extends Controller
      */
     public function promoteFromWaiting(Request $request, int $id)
     {
-        $attached = AttachedLoaner::with('serviceRecord')->findOrFail($id);
-        $record = $attached->serviceRecord;
+        [$attached, $record] = $this->resolveAttachedAndRecordForMutation($id);
 
-        if (!$record || $record->order_type !== 'waiting_list') {
+        if (!$attached || !$record || $record->order_type !== 'waiting_list') {
             return response()->json(['message' => 'waiting_list 案件のみ繰り上げできます。'], 422);
         }
 
         $validated = $request->validate([
             'loanerID' => 'nullable|integer',
         ]);
-
-        $productName = trim((string) ($record->productName ?? ''));
-        if ($productName === '') {
-            return response()->json(['message' => 'productName が未設定のため繰り上げできません。'], 422);
-        }
 
         $preferredLoanerId = isset($validated['loanerID']) ? (int) $validated['loanerID'] : null;
         if ($preferredLoanerId === null && $record->promotion_source_orderID) {
@@ -358,21 +356,13 @@ class LoanerRecordController extends Controller
             && $record->promotion_ready_at != null
             && $record->promotion_ready_at !== '';
 
-        $available = $this->findAvailableLoaner($productName, $preferredLoanerId);
-
-        // 繰上可なのに在庫フラグが残っている場合でも、返却元個体で繰り上げ可能にする
-        if (!$available && $isPromotionReady && $preferredLoanerId !== null) {
-            $available = $this->findLoanerUnitByProductAndId($productName, $preferredLoanerId);
-        }
-        if (!$available && $isPromotionReady) {
-            $available = $this->findLoanerUnitByProductAndId($productName, null);
-        }
+        $available = $this->findUnitForWaitingPromotion($record, $preferredLoanerId, $isPromotionReady);
 
         if (!$available) {
             return response()->json([
                 'message' => isset($validated['loanerID'])
-                    ? '指定した貸出機は在庫として選択できません。'
-                    : '同機種の在庫がありません。在庫復帰後に再度実行してください。',
+                    ? '指定した貸出機は同 groupName の在庫として選択できません。'
+                    : '同 groupName の在庫がありません。在庫復帰後に再度実行してください。',
             ], 422);
         }
 
@@ -704,19 +694,27 @@ class LoanerRecordController extends Controller
      */
     private function serializeAvailableUnitsForProduct(?string $productName, ?ServiceRecord $waitingRecord = null): array
     {
+        $groupName = $waitingRecord ? $this->resolveGroupNameForRecord($waitingRecord) : '';
         $productName = trim((string) $productName);
-        if ($productName === '') {
-            return [];
-        }
 
-        $statusColumn = $this->resolveStatusColumn();
         $latest = app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
-                ->where('loanerID', '!=', '')
-                ->where('productName', $productName),
+                ->where('loanerID', '!=', ''),
             'loanerID'
         );
+
+        if ($groupName !== '') {
+            $latest = $latest
+                ->filter(fn (LoanerMaster $row) => strcasecmp(trim((string) ($row->groupName ?? '')), $groupName) === 0)
+                ->values();
+        } elseif ($productName !== '') {
+            $latest = $latest
+                ->filter(fn (LoanerMaster $row) => strcasecmp(trim((string) ($row->productName ?? '')), $productName) === 0)
+                ->values();
+        } else {
+            return [];
+        }
 
         $available = $latest
             ->filter(fn (LoanerMaster $row) => $this->isLoanerUnitInStock($row))
@@ -753,6 +751,7 @@ class LoanerRecordController extends Controller
                 'SN' => $row->SN,
                 'manageNum' => $row->manageNum,
                 'item' => $row->item,
+                'groupName' => $row->groupName,
                 'isPromotionSource' => $sourceLoanerId !== null
                     && (string) $row->loanerID === (string) $sourceLoanerId,
             ])
@@ -1271,6 +1270,9 @@ class LoanerRecordController extends Controller
             'promotionFromCheck' => $promotionFromLending,
             'promotionFromLending' => $promotionFromLending,
             'promotionCandidates' => $promotionCandidates,
+            'promotionSource' => $promotionTriggered
+                ? $this->serializePromotionSource($record)
+                : null,
         ]);
     }
 
@@ -1278,12 +1280,13 @@ class LoanerRecordController extends Controller
     {
         $this->stringifyEnduserSn($request);
         $validated = $request->validate([
-            'productName' => 'required|string|max:255',
+            'productName' => 'nullable|string|max:255',
+            'item' => 'nullable|string|max:255',
             'receivedDate' => 'nullable|date',
             'status' => 'nullable|integer',
             'returnCode' => 'nullable|integer',
             'SN' => 'nullable|string|max:255',
-            'loanerID' => 'nullable|integer',
+            'loanerID' => 'required|integer',
             'linkMode' => 'required|in:none,parent',
             'parentID' => 'nullable|integer',
             'plannedSentDate' => 'nullable|date',
@@ -1320,27 +1323,31 @@ class LoanerRecordController extends Controller
         ]);
 
         $forceWaitingList = $request->boolean('asWaitingList');
+        $requestedProductName = trim((string) ($validated['productName'] ?? ''));
 
         $requestedLoanerId = array_key_exists('loanerID', $validated) && $validated['loanerID'] !== null && $validated['loanerID'] !== ''
             ? (int) $validated['loanerID']
             : null;
 
-        $available = null;
-        if ($forceWaitingList) {
-            $available = null;
-        } elseif ($requestedLoanerId !== null) {
-            $requestedUnit = $this->latestLoanerUnitById($requestedLoanerId);
-            if (!$requestedUnit) {
-                return response()->json([
-                    'message' => '指定した貸出機が見つかりません。一覧を更新してやり直してください。',
-                ], 422);
-            }
-            if ($this->isLoanerUnitInStock($requestedUnit)) {
-                $available = $requestedUnit;
-            }
-        } else {
-            $available = $this->findAvailableLoaner($validated['productName']);
+        if ($requestedLoanerId === null) {
+            return response()->json([
+                'message' => '貸出機（loanerID）を選択してください。',
+            ], 422);
         }
+
+        $requestedUnit = $this->latestLoanerUnitById($requestedLoanerId);
+        if (!$requestedUnit) {
+            return response()->json([
+                'message' => '指定した貸出機が見つかりません。一覧を更新してやり直してください。',
+            ], 422);
+        }
+
+        $available = null;
+        if (!$forceWaitingList && $this->isLoanerUnitInStock($requestedUnit)) {
+            $available = $requestedUnit;
+        }
+
+        $sourceUnit = $available ?? $requestedUnit;
 
         $orderType = $available ? 'loaner' : 'waiting_list';
         $user = $request->user();
@@ -1404,6 +1411,8 @@ class LoanerRecordController extends Controller
         $record = DB::transaction(function () use (
             $validated,
             $available,
+            $sourceUnit,
+            $requestedLoanerId,
             $orderType,
             $status,
             $loanerMasterStatus,
@@ -1417,9 +1426,9 @@ class LoanerRecordController extends Controller
                 'status' => $status,
                 'returnCode' => null,
                 'RMA' => $orderType === 'loaner' ? 'loaner' : null,
-                'productName' => $available?->productName ?? $validated['productName'],
-                'SN' => $available?->SN ?? ($validated['SN'] ?? null),
-                'loanerID' => $available?->loanerID,
+                'productName' => $sourceUnit?->productName ?? ($validated['productName'] ?? null),
+                'SN' => $sourceUnit?->SN ?? ($validated['SN'] ?? null),
+                'loanerID' => $sourceUnit?->loanerID ?? $requestedLoanerId,
                 'order_type' => $orderType,
                 'parentID' => $parentId,
                 'dealer' => $validated['dealer'] ?? null,
@@ -1453,10 +1462,12 @@ class LoanerRecordController extends Controller
                 $record,
                 $available,
                 $orderType,
-                $validated['productName'],
+                (string) ($sourceUnit?->productName ?? ($validated['productName'] ?? '')),
                 $validated['plannedSentDate'] ?? null,
                 $validated['plannedReturnedDate'] ?? null,
                 $validated['enduser_SN'] ?? null,
+                null,
+                $requestedLoanerId,
             );
             $attachedLoanerId = $attached?->id;
 
@@ -1891,12 +1902,14 @@ class LoanerRecordController extends Controller
         ?string $plannedSentDate = null,
         ?string $plannedReturnedDate = null,
         ?string $repairInstrumentSn = null,
+        ?string $requestedItem = null,
+        mixed $requestedLoanerId = null,
     ): ?AttachedLoaner {
-        $loanerId = $available?->loanerID;
+        $loanerId = $available?->loanerID ?? $requestedLoanerId;
 
-        // waiting_list で個体未定でも loanerID が必須な場合は、同機種の代表個体を仮紐づけ
+        // waiting_list で個体未定の既存案件向け: 選択 loanerID が無いときだけ同名の代表個体
         if ($loanerId == null) {
-            $loanerId = $this->resolveFallbackLoanerId($requestedProductName);
+            $loanerId = $this->resolveFallbackLoanerId($requestedProductName, $requestedItem);
         }
 
         if ($loanerId == null && $available) {
@@ -1910,7 +1923,11 @@ class LoanerRecordController extends Controller
         if ($orderType === 'waiting_list') {
             // waiting_list は同機種の現在貸出終了翌日から（未指定時は自動計算）
             if (!$plannedSentDate || !$plannedReturnedDate) {
-                [$autoStart, $autoEnd] = $this->resolveWaitingListDefaultPeriod($requestedProductName);
+                [$autoStart, $autoEnd] = $this->resolveWaitingListDefaultPeriod(
+                    $requestedProductName,
+                    $requestedItem,
+                    $loanerId,
+                );
                 $start = $plannedSentDate ?: $autoStart;
                 $end = $plannedReturnedDate ?: $autoEnd;
             } else {
@@ -1960,12 +1977,21 @@ class LoanerRecordController extends Controller
      *
      * @return array{0:string,1:string,2:?string} [start, end, basedOnReturnedDate]
      */
-    private function resolveWaitingListDefaultPeriod(string $productName): array
+    private function resolveWaitingListDefaultPeriod(string $productName, ?string $item = null, mixed $loanerId = null): array
     {
         $today = Carbon::today();
-        $masters = LoanerMaster::query()
-            ->where('productName', $productName)
-            ->get(['id', 'loanerID']);
+        if ($loanerId !== null && $loanerId !== '') {
+            $masters = collect([(object) [
+                'id' => $loanerId,
+                'loanerID' => $loanerId,
+            ]]);
+        } else {
+            $masters = $this->loanerMastersMatchingSelection($productName, $item)
+                ->map(fn (LoanerMaster $row) => (object) [
+                    'id' => $row->id,
+                    'loanerID' => $row->loanerID,
+                ]);
+        }
 
         $unitFreeDates = [];
 
@@ -1999,32 +2025,34 @@ class LoanerRecordController extends Controller
                 : $today->copy();
         }
 
-        // productName のみ紐づく予約（loanerID が曖昧な行）も考慮
-        $productRows = AttachedLoaner::query()
-            ->where('productName', $productName)
-            ->when($masters->isNotEmpty(), function ($q) use ($masters) {
-                $ids = $masters->flatMap(fn ($m) => array_filter([$m->loanerID, $m->id]))->unique()->values()->all();
-                if ($ids !== []) {
-                    $q->where(function ($inner) use ($ids) {
-                        $inner->whereNull('loanerID')
-                            ->orWhereNotIn('loanerID', $ids);
-                    });
-                }
-            })
-            ->get(['sentDate', 'returnedDate', 'plannedSentDate', 'plannedReturnedDate']);
+        // productName のみ紐づく予約（loanerID 未指定の既存 waiting 向け）
+        if (($loanerId === null || $loanerId === '') && $productName !== '') {
+            $productRows = AttachedLoaner::query()
+                ->where('productName', $productName)
+                ->when($masters->isNotEmpty(), function ($q) use ($masters) {
+                    $ids = $masters->flatMap(fn ($m) => array_filter([$m->loanerID, $m->id]))->unique()->values()->all();
+                    if ($ids !== []) {
+                        $q->where(function ($inner) use ($ids) {
+                            $inner->whereNull('loanerID')
+                                ->orWhereNotIn('loanerID', $ids);
+                        });
+                    }
+                })
+                ->get(['sentDate', 'returnedDate', 'plannedSentDate', 'plannedReturnedDate']);
 
-        $productLatestEnd = null;
-        foreach ($productRows as $row) {
-            $end = $this->resolveAttachedEndDate($row);
-            if (!$end || $end->lt($today)) {
-                continue;
+            $productLatestEnd = null;
+            foreach ($productRows as $row) {
+                $end = $this->resolveAttachedEndDate($row);
+                if (!$end || $end->lt($today)) {
+                    continue;
+                }
+                if ($productLatestEnd === null || $end->gt($productLatestEnd)) {
+                    $productLatestEnd = $end->copy();
+                }
             }
-            if ($productLatestEnd === null || $end->gt($productLatestEnd)) {
-                $productLatestEnd = $end->copy();
+            if ($productLatestEnd) {
+                $unitFreeDates[] = $productLatestEnd->copy()->addDay();
             }
-        }
-        if ($productLatestEnd) {
-            $unitFreeDates[] = $productLatestEnd->copy()->addDay();
         }
 
         if ($unitFreeDates === []) {
@@ -2145,33 +2173,46 @@ class LoanerRecordController extends Controller
         }
     }
 
-    private function findAvailableLoaner(string $productName, ?int $loanerId = null): ?LoanerMaster
+    private function findAvailableLoaner(string $productName, ?int $loanerId = null, ?string $item = null): ?LoanerMaster
     {
+        $item = trim((string) $item);
+        $item = $item !== '' ? $item : null;
+        $name = trim($productName);
+
         if ($loanerId !== null) {
             $selected = $this->latestLoanerUnitById($loanerId);
 
             return $this->isLoanerUnitInStock($selected) ? $selected : null;
         }
 
-        $name = trim($productName);
-        if ($name === '') {
+        if ($item === null && $name === '') {
             return null;
         }
 
-        $latest = app(MasterPriceVersionResolver::class)->latestByKey(
+        return $this->loanerMastersMatchingSelection($name, $item)
+            ->first(fn (LoanerMaster $row) => $this->isLoanerUnitInStock($row));
+    }
+
+    /**
+     * 選択機種（item 優先）に一致する最新個体。
+     *
+     * @return \Illuminate\Support\Collection<int, LoanerMaster>
+     */
+    private function loanerMastersMatchingSelection(string $productName, ?string $item = null)
+    {
+        $item = trim((string) $item);
+        $item = $item !== '' ? $item : null;
+        $name = trim($productName);
+
+        return app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
                 ->where('loanerID', '!=', ''),
             'loanerID'
-        );
-
-        return $latest->first(function (LoanerMaster $row) use ($name) {
-            if (strcasecmp(trim((string) ($row->productName ?? '')), $name) !== 0) {
-                return false;
-            }
-
-            return $this->isLoanerUnitInStock($row);
-        });
+        )->filter(
+            fn (LoanerMaster $row) => LoanerMaster::matchesProductSelection($row, $item, $name)
+                && !LoanerMaster::isExcludedFromProductSelect($row->item ?? null)
+        )->values();
     }
 
     private function latestLoanerUnitById(int $loanerId): ?LoanerMaster
@@ -2201,6 +2242,7 @@ class LoanerRecordController extends Controller
     /**
      * 貸出詳細の status（servicerecord.status = processID_new）を
      * loanermaster.currentStatus へ同期する。
+     * 案件が完了(400)のときは個体を在庫(0)へ戻す。
      */
     private function syncLoanerMasterCurrentStatus(ServiceRecord $record, mixed $loanerId = null): void
     {
@@ -2217,7 +2259,12 @@ class LoanerRecordController extends Controller
             return;
         }
 
-        $this->setLoanerInventoryStatus($id, (int) $record->status);
+        $recordStatus = (int) $record->status;
+        $masterStatus = LoanerStatusFlow::isActiveListStatus($recordStatus)
+            ? $recordStatus
+            : LoanerStatusFlow::STOCK;
+
+        $this->setLoanerInventoryStatus($id, $masterStatus);
     }
 
     /**
@@ -2325,28 +2372,22 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * 返却（在庫復帰）時に同 productName の waiting_list を繰り上がり候補としてマークする。
+     * 返却（在庫復帰）時に同 groupName の waiting_list を繰り上がり候補としてマークする。
+     * groupName が空の個体は従来どおり productName で探す。
      *
      * @return array<int, array<string, mixed>>
      */
     private function markPromotionCandidatesForReturnedLoaner(ServiceRecord $returned): array
     {
-        $productName = trim((string) ($returned->productName ?? ''));
-        if ($productName === '') {
+        $candidates = $this->findWaitingListCandidatesForReturnedLoaner($returned);
+        if ($candidates->isEmpty()) {
             return [];
         }
 
         $hasPromotionReadyAt = Schema::hasColumn('servicerecord', 'promotion_ready_at');
         $hasPromotionSource = Schema::hasColumn('servicerecord', 'promotion_source_orderID');
         if (!$hasPromotionReadyAt && !$hasPromotionSource) {
-            return $this->serializePromotionCandidates(
-                $this->findWaitingListCandidatesByProductName($productName),
-            );
-        }
-
-        $candidates = $this->findWaitingListCandidatesByProductName($productName);
-        if ($candidates->isEmpty()) {
-            return [];
+            return $this->serializePromotionCandidates($candidates);
         }
 
         $now = now();
@@ -2372,21 +2413,79 @@ class LoanerRecordController extends Controller
     /**
      * @return \Illuminate\Support\Collection<int, ServiceRecord>
      */
+    private function findWaitingListCandidatesForReturnedLoaner(ServiceRecord $returned)
+    {
+        $groupName = $this->resolveGroupNameForRecord($returned);
+        if ($groupName !== '') {
+            return $this->findWaitingListCandidatesByGroupName($groupName);
+        }
+
+        $productName = trim((string) ($returned->productName ?? ''));
+        if ($productName === '') {
+            return collect();
+        }
+
+        return $this->findWaitingListCandidatesByProductName($productName);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, ServiceRecord>
+     */
+    private function findWaitingListCandidatesByGroupName(string $groupName)
+    {
+        $loanerIds = $this->loanerIdsForGroupName($groupName);
+        if ($loanerIds === []) {
+            return collect();
+        }
+
+        $orderIdsFromAttached = AttachedLoaner::query()
+            ->whereIn('loanerID', $loanerIds)
+            ->pluck('associatedID')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $records = ServiceRecord::query()
+            ->where('order_type', 'waiting_list')
+            ->where(function ($q) use ($loanerIds, $orderIdsFromAttached) {
+                $q->whereIn('loanerID', $loanerIds);
+                if ($orderIdsFromAttached !== []) {
+                    $q->orWhereIn('orderID', $orderIdsFromAttached);
+                }
+            })
+            ->orderBy('orderID')
+            ->get();
+
+        return $this->sortWaitingListCandidates($records);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, ServiceRecord>
+     */
     private function findWaitingListCandidatesByProductName(string $productName)
     {
-        $attachedColumns = Schema::getColumnListing('attachedloaners');
-        $hasPlannedSent = in_array('plannedSentDate', $attachedColumns, true);
-
-        $query = ServiceRecord::query()
+        $records = ServiceRecord::query()
             ->where('order_type', 'waiting_list')
             ->where('productName', $productName)
-            ->orderBy('orderID');
+            ->orderBy('orderID')
+            ->get();
 
-        $records = $query->get();
+        return $this->sortWaitingListCandidates($records);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
+     * @return \Illuminate\Support\Collection<int, ServiceRecord>
+     */
+    private function sortWaitingListCandidates($records)
+    {
         if ($records->isEmpty()) {
             return $records;
         }
 
+        $attachedColumns = Schema::getColumnListing('attachedloaners');
+        $hasPlannedSent = in_array('plannedSentDate', $attachedColumns, true);
         $orderIds = $records->pluck('orderID')->all();
         $attachedByOrder = AttachedLoaner::query()
             ->whereIn('associatedID', $orderIds)
@@ -2434,12 +2533,30 @@ class LoanerRecordController extends Controller
             ->groupBy('associatedID')
             ->map(fn ($rows) => $rows->first());
 
+        $loanerIds = $candidates
+            ->map(function (ServiceRecord $record) use ($attachedByOrder) {
+                $attached = $attachedByOrder->get($record->orderID);
+
+                return $attached?->loanerID ?? $record->loanerID;
+            })
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $mastersById = $this->latestUnitsByLoanerIds($loanerIds);
+
         return $candidates->map(function (ServiceRecord $record) use (
             $attachedByOrder,
             $hasPlannedSent,
             $hasPlannedReturned,
+            $mastersById,
         ) {
             $attached = $attachedByOrder->get($record->orderID);
+            $loanerId = $attached?->loanerID ?? $record->loanerID;
+            $master = $loanerId !== null && $loanerId !== ''
+                ? $mastersById->get((string) $loanerId)
+                : null;
             $plannedSent = null;
             $plannedReturned = null;
             if ($attached) {
@@ -2453,10 +2570,17 @@ class LoanerRecordController extends Controller
 
             return [
                 'orderID' => $record->orderID,
+                'attachedId' => $attached?->id,
                 'parentID' => $record->parentID,
                 'dealer' => $record->dealer,
+                'dealer_depart' => $record->dealer_depart,
                 'contactPerson' => $record->contactPerson,
-                'productName' => $record->productName,
+                'userSN' => $attached?->getAttribute('repairInstrument-SN'),
+                'loanerID' => $loanerId,
+                'item' => $master?->item,
+                'productName' => $record->productName ?? $master?->productName,
+                'SN' => $record->SN ?? $master?->SN,
+                'groupName' => $master?->groupName,
                 'plannedSentDate' => $plannedSent
                     ? Carbon::parse($plannedSent)->format('Y-m-d')
                     : null,
@@ -2467,6 +2591,183 @@ class LoanerRecordController extends Controller
                 'promotion_source_orderID' => $record->promotion_source_orderID,
             ];
         })->values()->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializePromotionSource(ServiceRecord $returned): array
+    {
+        $loanerId = $this->resolveLoanerIdForRecord($returned);
+        $master = $loanerId !== null && $loanerId !== ''
+            ? $this->latestLoanerUnitById((int) $loanerId)
+            : null;
+
+        $files = AttachedFile::query()
+            ->where('associatedID', $returned->orderID)
+            ->select(['id', 'associatedID', 'documentType', 'documentName', 'fileType', 'sortNum'])
+            ->orderByRaw('CASE WHEN sortNum IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('sortNum')
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'orderID' => $returned->orderID,
+            'loanerID' => $loanerId,
+            'item' => $master?->item,
+            'productName' => $master?->productName ?? $returned->productName,
+            'SN' => $master?->SN ?? $returned->SN,
+            'manageNum' => $master?->manageNum,
+            'groupName' => $master?->groupName,
+            'certificatedDate' => optional($master?->certificatedDate)->format('Y-m-d'),
+            'note1' => $master?->note1,
+            'note2' => $master?->note2,
+            'note3' => $master?->note3,
+            'files' => $files,
+        ];
+    }
+
+    private function resolveLoanerIdForRecord(ServiceRecord $record): mixed
+    {
+        if ($record->loanerID !== null && $record->loanerID !== '') {
+            return $record->loanerID;
+        }
+
+        return AttachedLoaner::query()
+            ->where('associatedID', $record->orderID)
+            ->orderByDesc('id')
+            ->value('loanerID');
+    }
+
+    private function resolveGroupNameForRecord(ServiceRecord $record): string
+    {
+        return $this->resolveGroupNameForLoanerId($this->resolveLoanerIdForRecord($record));
+    }
+
+    private function resolveGroupNameForLoanerId(mixed $loanerId): string
+    {
+        if ($loanerId === null || $loanerId === '') {
+            return '';
+        }
+
+        $unit = $this->latestLoanerUnitById((int) $loanerId);
+
+        return trim((string) ($unit?->groupName ?? ''));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function loanerIdsForGroupName(string $groupName): array
+    {
+        $groupName = trim($groupName);
+        if ($groupName === '') {
+            return [];
+        }
+
+        return $this->latestLoanerUnitsForGroupName($groupName)
+            ->pluck('loanerID')
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, LoanerMaster>
+     */
+    private function latestLoanerUnitsForGroupName(string $groupName)
+    {
+        $groupName = trim($groupName);
+        if ($groupName === '') {
+            return collect();
+        }
+
+        return app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', ''),
+            'loanerID'
+        )->filter(
+            fn (LoanerMaster $row) => strcasecmp(trim((string) ($row->groupName ?? '')), $groupName) === 0
+                && !LoanerMaster::isExcludedFromProductSelect($row->item ?? null)
+        )->values();
+    }
+
+    /**
+     * @param  array<int, mixed>  $loanerIds
+     * @return \Illuminate\Support\Collection<string, LoanerMaster>
+     */
+    private function latestUnitsByLoanerIds(array $loanerIds)
+    {
+        if ($loanerIds === []) {
+            return collect();
+        }
+
+        return app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()->whereIn('loanerID', $loanerIds),
+            'loanerID'
+        )->keyBy(fn (LoanerMaster $row) => (string) $row->loanerID);
+    }
+
+    private function findUnitForWaitingPromotion(
+        ServiceRecord $waiting,
+        ?int $preferredLoanerId,
+        bool $isPromotionReady,
+    ): ?LoanerMaster {
+        $groupName = $this->resolveGroupNameForRecord($waiting);
+
+        if ($preferredLoanerId !== null) {
+            $preferred = $this->latestLoanerUnitById($preferredLoanerId);
+            if ($preferred && $this->unitMatchesPromotionGroup($preferred, $groupName, $waiting)) {
+                if ($this->isLoanerUnitInStock($preferred) || $isPromotionReady) {
+                    return $preferred;
+                }
+            }
+        }
+
+        if ($groupName !== '') {
+            $inGroup = $this->latestLoanerUnitsForGroupName($groupName);
+            $inStock = $inGroup->first(fn (LoanerMaster $row) => $this->isLoanerUnitInStock($row));
+            if ($inStock) {
+                return $inStock;
+            }
+            if ($isPromotionReady) {
+                return $inGroup->first();
+            }
+
+            return null;
+        }
+
+        $productName = trim((string) ($waiting->productName ?? ''));
+        if ($productName === '') {
+            return null;
+        }
+
+        $available = $this->findAvailableLoaner($productName, $preferredLoanerId);
+        if ($available) {
+            return $available;
+        }
+        if ($isPromotionReady && $preferredLoanerId !== null) {
+            return $this->findLoanerUnitByProductAndId($productName, $preferredLoanerId);
+        }
+        if ($isPromotionReady) {
+            return $this->findLoanerUnitByProductAndId($productName, null);
+        }
+
+        return null;
+    }
+
+    private function unitMatchesPromotionGroup(LoanerMaster $unit, string $groupName, ServiceRecord $waiting): bool
+    {
+        if ($groupName !== '') {
+            return strcasecmp(trim((string) ($unit->groupName ?? '')), $groupName) === 0;
+        }
+
+        return strcasecmp(
+            trim((string) ($unit->productName ?? '')),
+            trim((string) ($waiting->productName ?? '')),
+        ) === 0;
     }
 
     /**
@@ -2642,33 +2943,13 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * productName の大文字小文字差を無視して loanerID を探す。
+     * 同機種の代表 loanerID。部分一致や別機種へのフォールバックはしない。
      */
-    private function resolveFallbackLoanerId(string $productName): mixed
+    private function resolveFallbackLoanerId(string $productName, ?string $item = null): mixed
     {
-        $productName = trim($productName);
-        $base = LoanerMaster::query()->orderBy('loanerID')->orderBy('id');
+        $matched = $this->loanerMastersMatchingSelection($productName, $item)->first();
 
-        if ($productName !== '') {
-            $lower = mb_strtolower($productName, 'UTF-8');
-            $exact = (clone $base)
-                ->whereRaw('LOWER(productName) = ?', [$lower])
-                ->first();
-            if ($exact) {
-                return $exact->loanerID ?? $exact->id;
-            }
-
-            $partial = (clone $base)
-                ->whereRaw('LOWER(productName) LIKE ?', ['%'.$lower.'%'])
-                ->first();
-            if ($partial) {
-                return $partial->loanerID ?? $partial->id;
-            }
-        }
-
-        $any = $base->first();
-
-        return $any?->loanerID ?? $any?->id;
+        return $matched?->loanerID ?? $matched?->id;
     }
 
     private function resolveStatusColumn(): string

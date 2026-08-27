@@ -142,10 +142,13 @@
                                     <button
                                         type="button"
                                         class="field-button"
-                                        :class="{ placeholder: !form.item && !form.productName }"
+                                        :class="{ placeholder: !form.loanerID }"
                                         @click="openSelectDialog('loanerProduct')"
                                     >
-                                        {{ form.item || form.productName || 'item' }}
+                                        <template v-if="form.loanerID">
+                                            {{ form.item || form.productName || '—' }}（loanerID: {{ form.loanerID }}）
+                                        </template>
+                                        <template v-else>item</template>
                                     </button>
                                 </label>
                                 <label class="field field-inline field-sn">
@@ -172,7 +175,7 @@
                                     v-else-if="loanerAvailability?.order_type === 'loaner'"
                                     class="availability-hint availability-inline ok"
                                 >
-                                    在庫有 {{ availableLoanerCount }}台
+                                    在庫有（loanerID: {{ form.loanerID }}）
                                     <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
                                 </p>
                                 <label class="field field-inline field-instrument-name">
@@ -214,7 +217,6 @@
                                 <button
                                     type="button"
                                     class="btn btn-primary btn-stock-list"
-                                    :disabled="!form.productName"
                                     @click="openLoanerStockDialog"
                                 >
                                     在庫リスト
@@ -849,6 +851,7 @@
                 <div class="confirm-body">
                     <p class="confirm-warning">在庫が無いので予約リストに追加しますか？</p>
                     <p class="confirm-detail">機種: {{ form.item || form.productName || '—' }}</p>
+                    <p class="confirm-detail">loanerID: {{ form.loanerID || '—' }}</p>
                     <p v-if="loanerAvailability?.suggestedPeriod" class="confirm-detail">
                         予定期間:
                         {{ loanerAvailability.suggestedPeriod.plannedSentDate }}
@@ -1054,7 +1057,7 @@
                     <button type="button" class="close-btn" @click="closeLoanerStockDialog">×</button>
                 </div>
                 <div class="confirm-body stock-list-body">
-                    <p class="confirm-detail">機種: {{ form.item || form.productName || '—' }}</p>
+                    <p class="confirm-detail">loanerID: {{ form.loanerID || '—' }} / 機種: {{ form.item || form.productName || '—' }}</p>
                     <div v-if="hasLoanerStock" class="stock-list-hint-row">
                         <p class="confirm-detail ok-text">在庫ありの行をクリックして選択できます</p>
                         <div class="stock-status-legend">
@@ -1110,7 +1113,7 @@
                             </tbody>
                         </table>
                         <p v-else class="loaner-unit-empty">
-                            {{ form.productName ? '該当する貸出機がありません' : '機種を選択してください' }}
+                            {{ form.loanerID || form.item || form.productName ? '該当する貸出機がありません' : '機種を選択してください' }}
                         </p>
                     </div>
                 </div>
@@ -1136,6 +1139,7 @@ import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFil
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
+import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
 
 const props = defineProps({
     sourceFile: {
@@ -1273,6 +1277,7 @@ const form = reactive({
 
 const loanerAvailability = ref(null)
 const loanerAvailabilityChecking = ref(false)
+const loanerAvailabilityRequestSeq = ref(0)
 const waitingListAccepted = ref(false)
 const showWaitingConfirm = ref(false)
 const showLoanerStockDialog = ref(false)
@@ -1365,48 +1370,43 @@ const loanerUnits = computed(() => {
     return unique
 })
 const loanerProductOptions = computed(() =>
-    (props.loanerProducts ?? [])
-        .filter((item) => {
-            const text = String(item?.item ?? '')
-            return !text.includes('使用不可') && !text.includes('サービス終了')
-        })
-        .map(item => ({
-            item: item.item ?? '',
-            productName: item.productName,
-            availableCount: item.availableCount,
-            totalCount: item.totalCount,
-            order_type: item.order_type,
+    loanerUnits.value
+        .filter((unit) => !isExcludedLoanerItem(unit?.item))
+        .map(unit => ({
+            loanerID: unit.loanerID,
+            item: unit.item ?? '',
+            productName: unit.productName,
+            SN: unit.SN ?? '',
+            manageNum: unit.manageNum ?? '',
+            groupName: unit.groupName ?? '',
+            certificatedDate: unit.certificatedDate ?? '',
+            note1: unit.note1 ?? '',
+            note2: unit.note2 ?? '',
+            note3: unit.note3 ?? '',
+            inStock: isLoanerUnitAvailable(unit),
+            order_type: isLoanerUnitAvailable(unit) ? 'loaner' : 'waiting_list',
         }))
-        .sort((a, b) => {
-            const ka = String(a.item ?? '')
-                .replace(/【簿外】/g, '')
-                .replace(/[^0-9A-Za-z]+/g, '')
-                .toLowerCase()
-            const kb = String(b.item ?? '')
-                .replace(/【簿外】/g, '')
-                .replace(/[^0-9A-Za-z]+/g, '')
-                .toLowerCase()
-            return ka.localeCompare(kb, 'en', { numeric: true, sensitivity: 'base' })
-                || String(a.productName ?? '').localeCompare(String(b.productName ?? ''), 'en', { numeric: true })
-        }),
+        .sort((a, b) => String(a.groupName ?? '').localeCompare(String(b.groupName ?? ''), 'en', {
+            numeric: true,
+            sensitivity: 'base',
+        })
+            || String(a.item ?? '').localeCompare(String(b.item ?? ''), 'en', { numeric: true, sensitivity: 'base' })
+            || String(a.loanerID ?? '').localeCompare(String(b.loanerID ?? ''), 'en', { numeric: true })),
 )
-const loanerUnitsForProduct = computed(() => {
-    const productName = String(form.productName || '').trim()
-    if (!productName) return []
-    return loanerUnits.value.filter((unit) => {
-        if (String(unit.productName || '') !== productName) return false
-        return !isExcludedLoanerItem(unit?.item)
-    })
-})
+const loanerUnitsForProduct = computed(() =>
+    loanerUnits.value.filter((unit) => !isExcludedLoanerItem(unit?.item)),
+)
 
 const selectedLoanerUnit = computed(() => {
     if (!form.loanerID) return null
-    return loanerUnitsForProduct.value.find(unit => String(unit.loanerID) === String(form.loanerID)) ?? null
+    return loanerUnits.value.find(unit => String(unit.loanerID) === String(form.loanerID)) ?? null
 })
 
-const hasLoanerStock = computed(() => loanerAvailability.value?.order_type === 'loaner')
+const hasLoanerStock = computed(() =>
+    loanerUnitsForProduct.value.some(unit => isLoanerUnitAvailable(unit)),
+)
 const availableLoanerCount = computed(() =>
-    loanerUnitsForProduct.value.filter(unit => isLoanerUnitAvailable(unit)).length,
+    selectedLoanerUnit.value && isLoanerUnitAvailable(selectedLoanerUnit.value) ? 1 : 0,
 )
 
 function isExcludedLoanerItem(itemText) {
@@ -1444,29 +1444,16 @@ function isSelectedLoanerUnit(unit) {
 function selectLoanerUnit(unit) {
     if (isExcludedLoanerItem(unit?.item)) return
 
-    if (isLoanerUnitAvailable(unit)) {
-        form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
-        form.SN = unit.SN ?? ''
-        if (unit.item) form.item = unit.item
-        if (unit.productName) form.productName = unit.productName
-        waitingListAccepted.value = false
-        showWaitingConfirm.value = false
-        showLoanerStockDialog.value = false
-        return
-    }
-
-    // 非在庫を選んだときは waiting_list にする（個体は割り当てない）
-    form.loanerID = ''
-    form.SN = ''
+    form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
+    form.SN = unit.SN ?? ''
     if (unit.item) form.item = unit.item
     if (unit.productName) form.productName = unit.productName
-    waitingListAccepted.value = false
-    showWaitingConfirm.value = true
+    form.instrumentName = String(unit.item || unit.productName || '').trim()
     showLoanerStockDialog.value = false
+    checkLoanerAvailability()
 }
 
 function openLoanerStockDialog() {
-    if (!form.productName) return
     showLoanerStockDialog.value = true
 }
 
@@ -1628,16 +1615,6 @@ function adoptParentCase() {
     parentCaseError.value = ''
 }
 
-function autoSelectFirstAvailableUnit() {
-    const first = loanerUnitsForProduct.value.find(unit => isLoanerUnitAvailable(unit))
-    if (!first) {
-        form.loanerID = ''
-        return
-    }
-    form.loanerID = first.loanerID != null ? String(first.loanerID) : ''
-    form.SN = first.SN ?? ''
-}
-
 const zipLookupTimers = {
     dealer: null,
     endUser: null,
@@ -1740,7 +1717,7 @@ const activeSelectInitialValue = computed(() => {
         return matched?.id ?? null
     }
     if (activeSelectKind.value === 'loanerProduct') {
-        return form.productName || null
+        return form.loanerID || null
     }
     if (activeSelectKind.value === 'dealer') {
         const matched = dealers.value.find(item => item.dealerName === form.dealer)
@@ -1750,8 +1727,11 @@ const activeSelectInitialValue = computed(() => {
 })
 
 const activeSelectSearchQuery = computed(() => {
-    if (activeSelectKind.value === 'serviceMaster' || activeSelectKind.value === 'loanerProduct') {
+    if (activeSelectKind.value === 'serviceMaster') {
         return String(form.productName ?? '').trim()
+    }
+    if (activeSelectKind.value === 'loanerProduct') {
+        return ''
     }
     return ''
 })
@@ -1795,13 +1775,13 @@ function onMasterSelected(result) {
     }
 
     if (activeSelectKind.value === 'loanerProduct') {
+        form.loanerID = result.loanerID != null ? String(result.loanerID) : ''
         form.productName = result.productName ?? ''
         form.item = result.item ?? ''
         form.instrumentName = String(result.item || result.productName || '').trim()
         form.serviceID = ''
         form.entityID = ''
-        form.SN = ''
-        form.loanerID = ''
+        form.SN = result.SN ?? ''
         loanerAvailability.value = null
         waitingListAccepted.value = false
         showWaitingConfirm.value = false
@@ -1840,19 +1820,24 @@ function cancelWaitingList() {
 }
 
 async function checkLoanerAvailability() {
-    if (!form.productName) {
+    if (!form.loanerID) {
         loanerAvailability.value = null
         return
     }
+
+    const requestedLoanerId = String(form.loanerID)
+    const requestSeq = ++loanerAvailabilityRequestSeq.value
 
     loanerAvailabilityChecking.value = true
     error.value = ''
 
     try {
-        const params = new URLSearchParams({ productName: form.productName })
+        const params = new URLSearchParams({ loanerID: requestedLoanerId })
         const url = `${page.props.appBaseUrl}/servicerecord/loaner/availability?${params.toString()}`
         const result = await apiFetch(url)
         if (!result) return
+        if (requestSeq !== loanerAvailabilityRequestSeq.value) return
+        if (String(form.loanerID) !== requestedLoanerId) return
 
         const { response, data } = result
         if (!response.ok) {
@@ -1860,9 +1845,12 @@ async function checkLoanerAvailability() {
         }
 
         loanerAvailability.value = data
+        if (data.loaner && unitMatchesLoanerSelection(data.loaner, form)) {
+            if (data.loaner.item) form.item = data.loaner.item
+            if (data.loaner.productName) form.productName = data.loaner.productName
+            if (data.loaner.SN) form.SN = data.loaner.SN
+        }
         if (data.order_type === 'waiting_list') {
-            form.loanerID = ''
-            form.SN = ''
             waitingListAccepted.value = false
             showWaitingConfirm.value = true
             if (data.suggestedPeriod?.plannedSentDate) {
@@ -1876,13 +1864,15 @@ async function checkLoanerAvailability() {
             showWaitingConfirm.value = false
             form.plannedSentDate = defaultPeriodStart()
             form.plannedReturnedDate = defaultPeriodEnd()
-            autoSelectFirstAvailableUnit()
         }
     } catch (e) {
+        if (requestSeq !== loanerAvailabilityRequestSeq.value) return
         loanerAvailability.value = null
         error.value = e.message || '在庫確認に失敗しました。'
     } finally {
-        loanerAvailabilityChecking.value = false
+        if (requestSeq === loanerAvailabilityRequestSeq.value) {
+            loanerAvailabilityChecking.value = false
+        }
     }
 }
 
@@ -2395,31 +2385,15 @@ onBeforeUnmount(() => {
 })
 
 async function saveLoanerCase() {
-    if (!form.productName) {
-        error.value = 'productName を選択してください。'
+    if (!form.loanerID) {
+        error.value = '貸出機（loanerID）を選択してください。'
         return
     }
 
     const selected = selectedLoanerUnit.value
     const selectedIsStock = !!(selected && isLoanerUnitAvailable(selected))
-    const anyStock = loanerUnitsForProduct.value.some(unit => isLoanerUnitAvailable(unit))
 
-    if (form.loanerID && !selectedIsStock) {
-        form.loanerID = ''
-        form.SN = ''
-        if (!waitingListAccepted.value) {
-            showWaitingConfirm.value = true
-            return
-        }
-    }
-
-    if (anyStock && !selectedIsStock && !waitingListAccepted.value) {
-        error.value = '在庫機を一覧から選択してください。在庫が無い行をクリックすると予約リストになります。'
-        showLoanerStockDialog.value = true
-        return
-    }
-
-    if (!anyStock && !waitingListAccepted.value) {
+    if (!selectedIsStock && !waitingListAccepted.value) {
         showWaitingConfirm.value = true
         return
     }
@@ -2442,6 +2416,7 @@ async function saveLoanerCase() {
             },
             body: JSON.stringify({
                 productName: form.productName,
+                item: form.item || null,
                 receivedDate: null,
                 linkMode: form.parentID ? 'parent' : 'none',
                 parentID: form.parentID === '' ? null : Number(form.parentID),
@@ -2451,7 +2426,7 @@ async function saveLoanerCase() {
                 enduser_SN: form.enduser_SN === '' || form.enduser_SN == null
                     ? null
                     : String(form.enduser_SN).trim(),
-                loanerID: selectedIsStock && form.loanerID !== '' ? Number(form.loanerID) : null,
+                loanerID: form.loanerID !== '' ? Number(form.loanerID) : null,
                 asWaitingList: waitingListAccepted.value && !selectedIsStock,
                 plannedSentDate: form.plannedSentDate || null,
                 plannedReturnedDate: form.plannedReturnedDate || null,
