@@ -207,9 +207,63 @@ function nextTempKey(prefix) {
     return `${prefix}_new_${tempSeq}`
 }
 
+function canonicalBusinessKey(value) {
+    const text = String(value ?? '').trim()
+    if (text === '') return ''
+    if (/^[+-]?\d+\.0+$/.test(text)) return text.replace(/\.0+$/, '')
+    return text
+}
+
+function canonicalHeader(raw) {
+    const text = String(raw ?? '').replace(/^\uFEFF/, '').trim()
+    const compact = text.toLowerCase().replace(/[\s_\-]/g, '')
+    const aliases = {
+        serviceid: 'serviceID',
+        productname: 'productName',
+        pricec0: 'priceC_0',
+        pricer0: 'priceR_0',
+        priceronsite: 'priceR_onSite',
+        pricea2la: 'price_a2la',
+        partid: 'partID',
+        partname: 'partName',
+        pricediscounted: 'price_discounted',
+        pricemarket: 'price_market',
+        pricediscounted1: 'price_discounted_1',
+        loanerid: 'loanerID',
+        id: 'id',
+        sn: 'SN',
+        managenum: 'manageNum',
+        item: 'item',
+        price: 'price',
+        producttype: 'productType',
+        entityid: 'entityID',
+        groupname: 'groupName',
+    }
+    return aliases[compact] || text
+}
+
+function parseCsvNumber(value) {
+    if (value == null) return ''
+    let text = String(value).trim()
+    if (text === '') return ''
+    text = text.replace(/[¥￥,\s]/g, '')
+    text = text.replace(/[０-９]/g, ch => String(ch.charCodeAt(0) - 0xFF10))
+    if (text === '') return ''
+    const num = Number(text)
+    return Number.isFinite(num) ? String(num) : String(value).trim()
+}
+
+function applyCsvPrices(draft, row, fields) {
+    if (!draft) return
+    fields.forEach((field) => {
+        if (row[field] === undefined || row[field] === null || String(row[field]).trim() === '') return
+        draft[field] = parseCsvNumber(row[field])
+    })
+}
+
 function draftKey(row, businessKey) {
     if (row?.isNew || row?._tempKey) return row._tempKey
-    return String(row?.[businessKey])
+    return canonicalBusinessKey(row?.[businessKey]) || String(row?.[businessKey] ?? '')
 }
 
 const CSV_SPECS = {
@@ -229,42 +283,45 @@ const CSV_SPECS = {
             }
         }),
         applyRow(row) {
-            const key = String(row.serviceID ?? '').trim()
+            const keyFromId = canonicalBusinessKey(row.serviceID)
+            let key = keyFromId && draftServices[keyFromId] ? keyFromId : ''
             if (!key) {
                 const productName = String(row.productName ?? '').trim()
-                if (!productName) return false
-                const tempKey = nextTempKey('service')
-                const created = {
-                    id: null,
-                    serviceID: null,
-                    productName,
-                    priceC_0: row.priceC_0 ?? '',
-                    priceR_0: row.priceR_0 ?? '',
-                    priceR_onSite: row.priceR_onSite ?? '',
-                    price_a2la: row.price_a2la ?? '',
-                    validDateMin: null,
-                    validDateMax: null,
-                    isNew: true,
-                    _tempKey: tempKey,
+                if (productName) {
+                    const found = services.value.find(item => !item.isNew && String(item.productName ?? '').trim() === productName)
+                    if (found) key = draftKey(found, 'serviceID')
                 }
-                services.value.push(created)
-                draftServices[tempKey] = {
-                    serviceID: null,
-                    productName,
-                    isNew: true,
-                    priceC_0: String(row.priceC_0 ?? '').trim(),
-                    priceR_0: String(row.priceR_0 ?? '').trim(),
-                    priceR_onSite: String(row.priceR_onSite ?? '').trim(),
-                    price_a2la: String(row.price_a2la ?? '').trim(),
-                }
+            }
+            if (key && draftServices[key]) {
+                applyCsvPrices(draftServices[key], row, ['priceC_0', 'priceR_0', 'priceR_onSite', 'price_a2la'])
                 return true
             }
-            if (!draftServices[key]) return false
-            ;['priceC_0', 'priceR_0', 'priceR_onSite', 'price_a2la'].forEach((field) => {
-                if (row[field] !== undefined && row[field] !== '') {
-                    draftServices[key][field] = String(row[field]).trim()
-                }
-            })
+            const productName = String(row.productName ?? '').trim()
+            if (!productName) return false
+            const tempKey = nextTempKey('service')
+            const created = {
+                id: null,
+                serviceID: keyFromId || null,
+                productName,
+                priceC_0: parseCsvNumber(row.priceC_0),
+                priceR_0: parseCsvNumber(row.priceR_0),
+                priceR_onSite: parseCsvNumber(row.priceR_onSite),
+                price_a2la: parseCsvNumber(row.price_a2la),
+                validDateMin: null,
+                validDateMax: null,
+                isNew: true,
+                _tempKey: tempKey,
+            }
+            services.value.push(created)
+            draftServices[tempKey] = {
+                serviceID: keyFromId || null,
+                productName,
+                isNew: true,
+                priceC_0: created.priceC_0,
+                priceR_0: created.priceR_0,
+                priceR_onSite: created.priceR_onSite,
+                price_a2la: created.price_a2la,
+            }
             return true
         },
     },
@@ -283,40 +340,44 @@ const CSV_SPECS = {
             }
         }),
         applyRow(row) {
-            const key = String(row.partID ?? '').trim()
+            const keyFromId = canonicalBusinessKey(row.partID)
+            let key = keyFromId && draftParts[keyFromId] ? keyFromId : ''
             if (!key) {
                 const partName = String(row.partName ?? '').trim()
-                if (!partName) return false
-                const tempKey = nextTempKey('part')
-                const created = {
-                    id: null,
-                    partID: null,
-                    partName,
-                    price_discounted: row.price_discounted ?? '',
-                    price_market: row.price_market ?? '',
-                    price_discounted_1: row.price_discounted_1 ?? '',
-                    validDateMin: null,
-                    validDateMax: null,
-                    isNew: true,
-                    _tempKey: tempKey,
+                if (partName) {
+                    const found = parts.value.find(item => !item.isNew && String(item.partName ?? '').trim() === partName)
+                    if (found) key = draftKey(found, 'partID')
                 }
-                parts.value.push(created)
-                draftParts[tempKey] = {
-                    partID: null,
-                    partName,
-                    isNew: true,
-                    price_discounted: String(row.price_discounted ?? '').trim(),
-                    price_market: String(row.price_market ?? '').trim(),
-                    price_discounted_1: String(row.price_discounted_1 ?? '').trim(),
-                }
+            }
+            if (key && draftParts[key]) {
+                applyCsvPrices(draftParts[key], row, ['price_discounted', 'price_market', 'price_discounted_1'])
+                if (row.partName) draftParts[key].partName = String(row.partName).trim()
                 return true
             }
-            if (!draftParts[key]) return false
-            ;['price_discounted', 'price_market', 'price_discounted_1'].forEach((field) => {
-                if (row[field] !== undefined && row[field] !== '') {
-                    draftParts[key][field] = String(row[field]).trim()
-                }
-            })
+            const partName = String(row.partName ?? '').trim()
+            if (!partName) return false
+            const tempKey = nextTempKey('part')
+            const created = {
+                id: null,
+                partID: keyFromId || null,
+                partName,
+                price_discounted: parseCsvNumber(row.price_discounted),
+                price_market: parseCsvNumber(row.price_market),
+                price_discounted_1: parseCsvNumber(row.price_discounted_1),
+                validDateMin: null,
+                validDateMax: null,
+                isNew: true,
+                _tempKey: tempKey,
+            }
+            parts.value.push(created)
+            draftParts[tempKey] = {
+                partID: keyFromId || null,
+                partName,
+                isNew: true,
+                price_discounted: created.price_discounted,
+                price_market: created.price_market,
+                price_discounted_1: created.price_discounted_1,
+            }
             return true
         },
     },
@@ -337,40 +398,57 @@ const CSV_SPECS = {
             }
         }),
         applyRow(row) {
-            const key = String(row.loanerID ?? '').trim()
+            const keyFromId = canonicalBusinessKey(row.loanerID)
+            const surrogateId = canonicalBusinessKey(row.id)
+            let key = keyFromId && draftLoaners[keyFromId] ? keyFromId : ''
+            if (!key && surrogateId) {
+                const found = loaners.value.find(item => !item.isNew && canonicalBusinessKey(item.id) === surrogateId)
+                if (found) key = draftKey(found, 'loanerID')
+            }
             if (!key) {
-                const productName = String(row.productName ?? '').trim()
-                if (!productName) return false
-                const tempKey = nextTempKey('loaner')
-                const created = {
-                    id: null,
-                    loanerID: null,
-                    productName,
-                    item: String(row.item ?? '').trim(),
-                    SN: String(row.SN ?? '').trim(),
-                    manageNum: String(row.manageNum ?? '').trim(),
-                    price: row.price ?? '',
-                    validDateMin: null,
-                    validDateMax: null,
-                    isNew: true,
-                    _tempKey: tempKey,
+                const sn = String(row.SN ?? '').trim()
+                if (sn) {
+                    const found = loaners.value.find(item => !item.isNew && String(item.SN ?? '').trim() === sn)
+                    if (found) key = draftKey(found, 'loanerID')
                 }
-                loaners.value.push(created)
-                draftLoaners[tempKey] = {
-                    id: null,
-                    loanerID: null,
-                    productName,
-                    item: created.item,
-                    SN: created.SN,
-                    manageNum: created.manageNum,
-                    isNew: true,
-                    price: String(row.price ?? '').trim(),
+            }
+            if (!key) {
+                const manageNum = String(row.manageNum ?? '').trim()
+                if (manageNum) {
+                    const found = loaners.value.find(item => !item.isNew && String(item.manageNum ?? '').trim() === manageNum)
+                    if (found) key = draftKey(found, 'loanerID')
                 }
+            }
+            if (key && draftLoaners[key]) {
+                applyCsvPrices(draftLoaners[key], row, ['price'])
                 return true
             }
-            if (!draftLoaners[key]) return false
-            if (row.price !== undefined && row.price !== '') {
-                draftLoaners[key].price = String(row.price).trim()
+            const productName = String(row.productName ?? '').trim()
+            if (!productName) return false
+            const tempKey = nextTempKey('loaner')
+            const created = {
+                id: null,
+                loanerID: keyFromId || null,
+                productName,
+                item: String(row.item ?? '').trim(),
+                SN: String(row.SN ?? '').trim(),
+                manageNum: String(row.manageNum ?? '').trim(),
+                price: parseCsvNumber(row.price),
+                validDateMin: null,
+                validDateMax: null,
+                isNew: true,
+                _tempKey: tempKey,
+            }
+            loaners.value.push(created)
+            draftLoaners[tempKey] = {
+                id: null,
+                loanerID: keyFromId || null,
+                productName,
+                item: created.item,
+                SN: created.SN,
+                manageNum: created.manageNum,
+                isNew: true,
+                price: created.price,
             }
             return true
         },
@@ -558,7 +636,19 @@ async function readCsvText(file) {
     }
 }
 
+function detectDelimiter(text) {
+    const firstLine = String(text || '').split(/\r?\n/).find(line => String(line).trim() !== '') || ''
+    const counts = {
+        ',': (firstLine.match(/,/g) || []).length,
+        ';': (firstLine.match(/;/g) || []).length,
+        '\t': (firstLine.match(/\t/g) || []).length,
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1])
+    return ranked[0][1] > 0 ? ranked[0][0] : ','
+}
+
 function parseCsv(text) {
+    const delimiter = detectDelimiter(text)
     const normalized = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     const rows = []
     let current = ''
@@ -586,7 +676,7 @@ function parseCsv(text) {
             inQuotes = true
             continue
         }
-        if (ch === ',') {
+        if (ch === delimiter) {
             pushCell(row, current)
             current = ''
             continue
@@ -604,10 +694,16 @@ function parseCsv(text) {
     if (row.some(cell => String(cell).trim() !== '')) rows.push(row)
     if (!rows.length) return []
 
-    const headers = rows[0].map(cell => String(cell).trim())
-    return rows.slice(1).map((cells) => {
+    const headerIndex = rows.findIndex((cells) => {
+        const names = cells.map(cell => canonicalHeader(cell).toLowerCase())
+        return names.includes('serviceid') || names.includes('partid') || names.includes('loanerid')
+    })
+    const start = headerIndex >= 0 ? headerIndex : 0
+    const headers = rows[start].map(cell => canonicalHeader(cell))
+    return rows.slice(start + 1).map((cells) => {
         const obj = {}
         headers.forEach((header, index) => {
+            if (!header) return
             obj[header] = cells[index] ?? ''
         })
         return obj
@@ -616,7 +712,7 @@ function parseCsv(text) {
 
 function detectCsvKind(rows) {
     if (!rows.length) return null
-    const headers = Object.keys(rows[0]).map(header => header.toLowerCase())
+    const headers = Object.keys(rows[0]).map(header => String(header).toLowerCase())
     if (headers.includes('serviceid')) return 'services'
     if (headers.includes('partid')) return 'parts'
     if (headers.includes('loanerid')) return 'loaners'
@@ -667,7 +763,9 @@ function getCsrfToken() {
 
 function nullableNumber(value) {
     if (value === '' || value === null || value === undefined) return null
-    const num = Number(value)
+    const parsed = parseCsvNumber(value)
+    if (parsed === '') return null
+    const num = Number(parsed)
     return Number.isFinite(num) ? num : null
 }
 
@@ -694,7 +792,7 @@ async function submit() {
             body: JSON.stringify({
                 effectiveDate: effectiveDate.value,
                 services: Object.values(draftServices).map(row => ({
-                    serviceID: row.isNew ? null : row.serviceID,
+                    serviceID: row.serviceID ?? null,
                     productName: row.productName ?? null,
                     priceC_0: nullableNumber(row.priceC_0),
                     priceR_0: nullableNumber(row.priceR_0),
@@ -702,14 +800,14 @@ async function submit() {
                     price_a2la: nullableNumber(row.price_a2la),
                 })),
                 parts: Object.values(draftParts).map(row => ({
-                    partID: row.isNew ? null : row.partID,
+                    partID: row.partID ?? null,
                     partName: row.partName ?? null,
                     price_discounted: nullableNumber(row.price_discounted),
                     price_market: nullableNumber(row.price_market),
                     price_discounted_1: nullableNumber(row.price_discounted_1),
                 })),
                 loaners: Object.values(draftLoaners).map(row => ({
-                    loanerID: row.isNew ? null : row.loanerID,
+                    loanerID: row.loanerID ?? null,
                     productName: row.productName ?? null,
                     item: row.item ?? null,
                     SN: row.SN ?? null,

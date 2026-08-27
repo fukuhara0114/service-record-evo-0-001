@@ -1061,7 +1061,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
-import { pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { pickMasterVersion, PAID_LOANER_RETURN_CODES, firstValidPriceAsOf } from '@/utils/resolveServiceWorkPrice'
 
 const SHIP_PREP_STATUS_ID = 300
 
@@ -1309,10 +1309,17 @@ const form = reactive({
     incident: stringValue(props.record.incident),
 })
 
+const priceAsOfDate = computed(() => firstValidPriceAsOf(
+    form.orderDate,
+    parentInfo.value?.orderDate,
+    props.parentRecord?.orderDate,
+    props.record?.orderDate,
+))
+
 const selectedUnit = computed(() => {
     const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
     if (!units.length) return null
-    return pickMasterVersion(units, form.orderDate || null)
+    return pickMasterVersion(units, priceAsOfDate.value)
         ?? props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID))
         ?? null
 })
@@ -1357,7 +1364,7 @@ const sortedFiles = computed(() => {
 const masterPrice = computed(() => {
     const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
     if (units.length) {
-        const picked = pickMasterVersion(units, form.orderDate || null)
+        const picked = pickMasterVersion(units, priceAsOfDate.value)
         const fromVersion = Number(picked?.price)
         if (Number.isFinite(fromVersion)) return fromVersion
     }

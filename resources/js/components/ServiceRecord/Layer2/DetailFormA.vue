@@ -356,7 +356,7 @@
                                                 <td>{{ displayDash(loaner.productName) }}</td>
                                                 <td>{{ displayDash(loaner.SN) }}</td>
                                                 <td>{{ displayDash(loaner.manageNum) }}</td>
-                                                <td>{{ formatYenPrice(loaner.price) }}</td>
+                                                <td>{{ formatYenPrice(loanerDisplayPrice(loaner)) }}</td>
                                                 <td>{{ displayDash(loaner.associatedID) }}</td>
                                                 <td>{{ displayDash(loaner.sentDate) }}</td>
                                             </tr>
@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, pickMasterVersion, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -931,12 +931,12 @@ const props = defineProps({
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
 
-/** 受注日あり: その日の版 / 未定: 最新版（空文字は未定扱い） */
+/** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
 const priceAsOfDate = computed(() => {
-    const raw = props.draftRecord?.orderDate || props.record?.orderDate || null
-    if (raw == null || raw === '') return null
-    const match = String(raw).match(/(\d{4}-\d{2}-\d{2})/)
-    return match ? match[1] : String(raw)
+    if (props.draftRecord) {
+        return normalizePriceAsOfDate(props.draftRecord.orderDate)
+    }
+    return normalizePriceAsOfDate(props.record?.orderDate)
 })
 
 const leftPaneSize = ref(64)
@@ -1745,6 +1745,11 @@ function toDateInputValue(value) {
 function updateDraftDateValue(field, value) {
     if (!props.draftRecord) return
     props.draftRecord[field] = value || null
+    if (field === 'orderDate') {
+        applyLinePricesForAsOf()
+        const num = Number(displayPrice.value)
+        props.draftRecord.price = Number.isFinite(num) ? num : null
+    }
 }
 
 function openNoteDelete() {
@@ -2063,7 +2068,6 @@ function displayDash(value) {
     return value
 }
 
-const PAID_LOANER_RETURN_CODES_LOCAL = PAID_LOANER_RETURN_CODES
 const currentReturnCode = computed(() => {
     const value = props.draftRecord?.returnCode ?? props.record?.returnCode
     const num = Number(value)
@@ -2072,28 +2076,41 @@ const currentReturnCode = computed(() => {
 
 function partVersionPrice(part) {
     const versioned = findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
+        ?? part.part_master
+        ?? part.partMaster
     const raw = versioned?.price_discounted
-        ?? part.part_master?.price_discounted
-        ?? part.partMaster?.price_discounted
     const value = Number(raw)
     return Number.isFinite(value) ? value : null
 }
 
 function loanerDisplayPrice(loaner) {
-    if (!PAID_LOANER_RETURN_CODES_LOCAL.includes(currentReturnCode.value)) {
-        return 0
-    }
-    const asOf = loaner?.orderDate || priceAsOfDate.value
-    if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
-        const picked = pickMasterVersion(loaner.priceVersions, asOf)
-        const value = Number(picked?.price)
-        if (Number.isFinite(value)) return value
-    }
-    const master = Number(loaner?.masterPrice)
-    if (Number.isFinite(master)) return master
-    const stored = Number(loaner?.price)
-    return Number.isFinite(stored) ? stored : 0
+    return resolveLoanerLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value)
 }
+
+function applyLinePricesForAsOf() {
+    const asOf = priceAsOfDate.value
+    const partsMaster = page.props.partsMaster ?? []
+    for (const part of props.parts ?? []) {
+        applyPartMasterAsOf(part, partsMaster, asOf)
+    }
+    const returnCode = currentReturnCode.value
+    for (const loaner of props.loaners ?? []) {
+        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        loaner.masterPrice = amount
+        loaner.price = amount
+    }
+    for (const loaner of props.attachedLoaners ?? []) {
+        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        loaner.masterPrice = amount
+        loaner.price = amount
+    }
+}
+
+watch(
+    [priceAsOfDate, currentReturnCode, () => props.parts, () => props.loaners, () => props.attachedLoaners],
+    applyLinePricesForAsOf,
+    { immediate: true },
+)
 
 function formatSignedAmount(value) {
     if (value === '' || value == null) return '—'

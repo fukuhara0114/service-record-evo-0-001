@@ -15,9 +15,9 @@ use Illuminate\Support\Collection;
  * servicemaster / partmaster / loanermaster の価格版を解決する。
  *
  * MySQL 5.7 / 8 共通:
- * - 受注日あり: validDateMin〜Max を Y-m-d 文字列で比較
+ * - 受注日あり（2001年以降）: validDateMin〜Max を Y-m-d 文字列で比較
  * - 期間未設定（NULL / 0000-00-00）は常に候補
- * - 受注日未定 or 該当なし: 最新版（validDateMin が最新）
+ * - 受注日未定 / 2000年以前 / 該当なし: 最新版（validDateMin が最新）
  * - ウィンドウ関数・DATE('0000-00-00') は使わない（MySQL 8 error 1525）
  */
 class MasterPriceVersionResolver
@@ -66,9 +66,38 @@ class MasterPriceVersionResolver
         }
     }
 
+    /**
+     * 価格版の起点日。未設定・2000年以前は最新版を使うため null。
+     */
+    public function normalizePriceAsOfDate(mixed $date): ?string
+    {
+        $normalized = $this->normalizeDate($date);
+        if ($normalized === null) {
+            return null;
+        }
+
+        if ((int) substr($normalized, 0, 4) < 2001) {
+            return null;
+        }
+
+        return $normalized;
+    }
+
+    public function firstValidAsOf(mixed ...$dates): ?string
+    {
+        foreach ($dates as $date) {
+            $normalized = $this->normalizePriceAsOfDate($date);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
     public function firstAsOf(Builder $query, mixed $asOfDate): ?Model
     {
-        $asOf = $this->normalizeDate($asOfDate);
+        $asOf = $this->normalizePriceAsOfDate($asOfDate);
 
         if ($asOf !== null) {
             $matched = $this->applyLatestVersionOrder(

@@ -1,7 +1,7 @@
 /**
  * マスタ価格版の共通解決（MySQL 5.7 / 8 共通）。
- * - 受注日あり: validDateMin <= 受注日 <= validDateMax（なければ最新）
- * - 受注日未定: 最新版（validDateMin が最新）
+ * - 受注日あり（2001年以降）: validDateMin <= 受注日 <= validDateMax（なければ最新）
+ * - 受注日未定 / 2000年以前: 最新版（validDateMin が最新）
  * - 期間未設定 / 0000-00-00 は常に候補
  * - 製品名は TRIM 一致（5.7 PAD SPACE と 8 NO PAD の差を吸収）
  * - 日付は Y-m-d（ISO UTC にしない）
@@ -20,6 +20,22 @@ function normalizeDate(value) {
     const ymd = match ? match[1] : (text.length >= 10 ? text.slice(0, 10) : text)
     if (!ymd || ymd.startsWith('0000-00-00') || Number(ymd.slice(0, 4)) < 1) return null
     return ymd
+}
+
+/** 価格版の起点日。未設定・2000年以前は最新版を使うため null。 */
+export function normalizePriceAsOfDate(value) {
+    const ymd = normalizeDate(value)
+    if (!ymd) return null
+    if (Number(ymd.slice(0, 4)) < 2001) return null
+    return ymd
+}
+
+export function firstValidPriceAsOf(...values) {
+    for (const value of values) {
+        const ymd = normalizePriceAsOfDate(value)
+        if (ymd) return ymd
+    }
+    return null
 }
 
 function normalizeProductName(value) {
@@ -50,7 +66,7 @@ export function pickMasterVersion(rows, asOfDate = null) {
     const list = Array.isArray(rows) ? rows.filter(Boolean) : []
     if (!list.length) return null
 
-    const asOf = normalizeDate(asOfDate)
+    const asOf = normalizePriceAsOfDate(asOfDate)
     if (asOf) {
         const matched = list.filter(row => inDateRange(row, asOf)).sort(compareVersionDesc)
         if (matched.length) return matched[0]
@@ -191,4 +207,32 @@ export const PAID_LOANER_RETURN_CODES = [1, 2, 7, 13]
 export function resolveLoanerMasterChargePrice(versionsOrRows, returnCode, loanerID, asOfDate = null) {
     if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
     return findLoanerMasterPrice(versionsOrRows, loanerID, asOfDate)
+}
+
+/** 受注日版の PartMaster を attached part に書き込む。 */
+export function applyPartMasterAsOf(part, partsMaster, asOfDate = null) {
+    if (!part) return null
+    const versioned = findPartMaster(partsMaster, part.partID, asOfDate)
+    if (versioned) {
+        part.part_master = versioned
+        part.partMaster = versioned
+    }
+    return versioned
+}
+
+/**
+ * 貸出行の課金価格。受注日版の priceVersions を優先し、無ければ保存値。
+ * 無償 returnCode は 0。
+ */
+export function resolveLoanerLinePrice(loaner, returnCode, asOfDate = null) {
+    if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
+    if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+        return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOfDate)
+    }
+    const nested = Number(loaner?.loaner_master?.price ?? loaner?.loanerMaster?.price)
+    if (Number.isFinite(nested)) return nested
+    const master = Number(loaner?.masterPrice)
+    if (Number.isFinite(master)) return master
+    const stored = Number(loaner?.price)
+    return Number.isFinite(stored) ? stored : 0
 }

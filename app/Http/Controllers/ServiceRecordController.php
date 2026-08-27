@@ -2179,7 +2179,7 @@ class ServiceRecordController extends Controller
                 ->where('orderID', $orderID)
                 ->first(['orderID', 'orderDate', 'returnCode', 'order_type']);
             $resolver = app(MasterPriceVersionResolver::class);
-            $asOfDate = $parentRecord?->orderDate;
+            $asOfDate = $resolver->normalizePriceAsOfDate($parentRecord?->orderDate);
 
             $linkedLoaners = ServiceRecord::query()
                 ->with(['statusMasterLoaner'])
@@ -2189,14 +2189,14 @@ class ServiceRecordController extends Controller
                 ->get();
 
             $linkedLoanerPayload = $linkedLoaners
-                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord, $asOfDate) {
+                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord) {
                     $attached = AttachedLoaner::query()
                         ->where('associatedID', $loaner->orderID)
                         ->orderByDesc('id')
                         ->first();
 
-                    // 受注日あり: その日の版 / 未定: 最新版
-                    $loanerAsOf = $loaner->orderDate ?: $asOfDate;
+                    // 受注日あり（2001年以降）: その日の版 / 未定・2000年以前: 親、それも無ければ最新版
+                    $loanerAsOf = $resolver->firstValidAsOf($loaner->orderDate, $parentRecord?->orderDate);
                     $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
                     $masterPrice = $resolver->loanerChargePrice(
                         $parentRecord?->returnCode,
@@ -2282,7 +2282,7 @@ class ServiceRecordController extends Controller
                 'loaner' => $linkedLoanerPayload->first(),
                 'loaners' => $linkedLoanerPayload,
                 'attachedLoaners' => $caseAttachedLoaners,
-                'priceAsOfDate' => $resolver->normalizeDate($asOfDate),
+                'priceAsOfDate' => $asOfDate,
             ];
         } catch (\Throwable $e) {
             report($e);
@@ -2337,6 +2337,8 @@ class ServiceRecordController extends Controller
                     'SN' => $sn !== '' ? $sn : null,
                     'manageNum' => $manageNum !== '' ? $manageNum : null,
                     'price' => $priceValue,
+                    'masterPrice' => $priceValue,
+                    'priceVersions' => $resolver->loanerPriceVersions($attached->loanerID),
                     'associatedID' => $attached->associatedID,
                     'sentDate' => optional($master?->sentDate)->format('Y-m-d'),
                 ];
@@ -3192,11 +3194,6 @@ class ServiceRecordController extends Controller
             ], 422);
         }
 
-        $returnCodeChanged = array_key_exists('returnCode', $data)
-            && (string) ($data['returnCode'] ?? '') !== (string) ($record->returnCode ?? '');
-        $orderDateChanged = array_key_exists('orderDate', $data)
-            && (string) ($data['orderDate'] ?? '') !== (string) ($record->orderDate ?? '');
-
         $wasRemandOn = $this->isRemandFlagOn($record->remand);
         $notifyRemandRequested = $request->boolean('notify_remand');
         $previousStatusId = $record->status;
@@ -3248,10 +3245,7 @@ class ServiceRecordController extends Controller
         }
 
         $updatedLoaners = [];
-        if (
-            ($returnCodeChanged || $orderDateChanged)
-            && ! in_array($record->order_type, ['loaner', 'waiting_list'], true)
-        ) {
+        if (! in_array($record->order_type, ['loaner', 'waiting_list'], true)) {
             $updatedLoaners = $this->syncChildLoanerPrices(
                 $record->orderID,
                 $record->fresh()->returnCode,
@@ -3316,8 +3310,8 @@ class ServiceRecordController extends Controller
     }
 
     /**
-     * 親案件の returnCode に応じて、紐づく loaner 案件の price を再計算して保存する。
-     * returnCode が 1,2,7,13 のとき loanermaster.price、それ以外は 0。
+     * 親案件の受注日に応じて、紐づく loaner 案件の price を再計算して保存する。
+     * returnCode が 1,2,7,13 のとき loanermaster の親受注日版、それ以外は 0。
      */
     private function syncChildLoanerPrices(int $parentOrderId, mixed $returnCode): array
     {
@@ -3333,8 +3327,8 @@ class ServiceRecordController extends Controller
 
         $updated = [];
         foreach ($children as $child) {
-            // 受注日あり: その日の版 / 未定: 最新版
-            $asOf = $child->orderDate ?: $parentOrderDate;
+            // 親の受注日を優先（親で切り替えた版）。未定・2000年以前なら子、それも無ければ最新版
+            $asOf = $resolver->firstValidAsOf($parentOrderDate, $child->orderDate);
             $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
             $price = $masterPrice;
 

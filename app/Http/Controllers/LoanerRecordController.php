@@ -887,13 +887,16 @@ class LoanerRecordController extends Controller
             } else {
                 $loanerId = $payload['loanerID'] ?? $attached->loanerID ?? $record->loanerID;
                 $orderDate = $payload['orderDate'] ?? $record->orderDate;
+                $parentId = $payload['parentID'] ?? $record->parentID;
+                $resolver = app(MasterPriceVersionResolver::class);
+                $parentOrderDate = $parentId
+                    ? ServiceRecord::query()->where('orderID', $parentId)->value('orderDate')
+                    : null;
                 $master = null;
                 if ($loanerId !== null && $loanerId !== '') {
-                    $master = app(MasterPriceVersionResolver::class)->firstAsOf(
-                        LoanerMaster::query()
-                            ->where('loanerID', $loanerId)
-                            ->select(['id', 'loanerID', 'price', 'validDateMin', 'validDateMax']),
-                        $orderDate,
+                    $master = $resolver->loanerMaster(
+                        $loanerId,
+                        $resolver->firstValidAsOf($orderDate, $parentOrderDate),
                     );
                 }
                 $payload['price'] = $master?->price ?? $attached->loanerMaster?->price ?? 0;
@@ -2773,7 +2776,7 @@ class LoanerRecordController extends Controller
     /**
      * 貸出案件の課金価格を算出する。
      * parent の returnCode が 1,2,7,13 のとき loanermaster の版価格、それ以外／親なしは 0。
-     * 受注日は loaner 自身 → 親案件の順。未設定なら最新版。
+     * 受注日は loaner 自身 → 親案件の順。未設定・2000年以前なら最新版。
      */
     private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId, mixed $orderDate = null): float
     {
@@ -2789,10 +2792,10 @@ class LoanerRecordController extends Controller
             return 0.0;
         }
 
-        $asOf = $orderDate ?: $parent->orderDate;
+        $resolver = app(MasterPriceVersionResolver::class);
+        $asOf = $resolver->firstValidAsOf($orderDate, $parent->orderDate);
 
-        return app(MasterPriceVersionResolver::class)
-            ->loanerChargePrice($parent->returnCode, $loanerId, $asOf);
+        return $resolver->loanerChargePrice($parent->returnCode, $loanerId, $asOf);
     }
 
     private function serializeLoanerNotes($notes)

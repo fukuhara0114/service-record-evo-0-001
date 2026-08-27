@@ -59,7 +59,8 @@ class MasterPriceRevisionService
     {
         return DB::transaction(function () {
             $today = Carbon::today()->toDateString();
-            $openNullRows = DB::table('loanermaster')
+            $loanerTable = $this->loanerTable();
+            $openNullRows = DB::table($loanerTable)
                 ->where(function ($query) use ($today) {
                     $query->whereNull('validDateMax')
                         ->orWhere('validDateMax', '>=', $today);
@@ -71,11 +72,11 @@ class MasterPriceRevisionService
                 ->orderBy('id')
                 ->get(['id', 'loanerID']);
 
-            $next = $this->nextBusinessId('loanermaster', 'loanerID');
+            $next = $this->nextBusinessId($loanerTable, 'loanerID');
             $assignedNull = 0;
 
             foreach ($openNullRows as $row) {
-                DB::table('loanermaster')->where('id', $row->id)->update(['loanerID' => $next]);
+                DB::table($loanerTable)->where('id', $row->id)->update(['loanerID' => $next]);
                 $next++;
                 $assignedNull++;
             }
@@ -131,51 +132,55 @@ class MasterPriceRevisionService
             $partCreated = 0;
             $loanerCreated = 0;
 
+            $usedServiceKeys = [];
             foreach ($this->latestServiceRows(false) as $current) {
-                $input = $servicesExisting->get((string) $current['serviceID'], []);
+                $usedServiceKeys[$this->canonicalBusinessKey($current['serviceID'])] = true;
+                $input = $this->inputForKey($servicesExisting, $current['serviceID']);
                 $this->closeAndInsertService($current, $input, $closeDate, $openDate, $openEnd);
                 $serviceCount++;
             }
 
+            $usedPartKeys = [];
             foreach ($this->latestPartRows(false) as $current) {
-                $input = $partsExisting->get((string) $current['partID'], []);
+                $usedPartKeys[$this->canonicalBusinessKey($current['partID'])] = true;
+                $input = $this->inputForKey($partsExisting, $current['partID']);
                 $this->closeAndInsertPart($current, $input, $closeDate, $openDate, $openEnd);
                 $partCount++;
             }
 
+            $usedLoanerKeys = [];
             foreach ($this->latestLoanerRows(false) as $current) {
-                $input = $loanersExisting->get((string) $current['loanerID'], []);
+                $usedLoanerKeys[$this->canonicalBusinessKey($current['loanerID'])] = true;
+                $input = $this->inputForKey($loanersExisting, $current['loanerID']);
                 $this->closeAndInsertLoaner($current, $input, $closeDate, $openDate, $openEnd);
                 $loanerCount++;
             }
 
+            $servicesNew = $this->appendUnmatchedAsNew($servicesExisting, $usedServiceKeys, $servicesNew, 'serviceID');
+            $partsNew = $this->appendUnmatchedAsNew($partsExisting, $usedPartKeys, $partsNew, 'partID');
+            $loanersNew = $this->appendUnmatchedAsNew($loanersExisting, $usedLoanerKeys, $loanersNew, 'loanerID');
+
             $nextServiceId = $this->nextBusinessId('servicemaster', 'serviceID');
             foreach ($servicesNew as $input) {
-                $this->insertNewService($input, $nextServiceId, $openDate, $openEnd);
-                $nextServiceId++;
+                $assigned = $this->assignBusinessId($input['serviceID'] ?? null, $nextServiceId);
+                $this->insertNewService($input, $assigned, $openDate, $openEnd);
+                $nextServiceId = $this->bumpNextId($assigned, $nextServiceId);
                 $serviceCreated++;
             }
 
             $nextPartId = $this->nextBusinessId('partmaster', 'partID');
             foreach ($partsNew as $input) {
-                $this->insertNewPart($input, $nextPartId, $openDate, $openEnd);
-                $nextPartId++;
+                $assigned = $this->assignBusinessId($input['partID'] ?? null, $nextPartId);
+                $this->insertNewPart($input, $assigned, $openDate, $openEnd);
+                $nextPartId = $this->bumpNextId($assigned, $nextPartId);
                 $partCreated++;
             }
 
-            $nextLoanerId = $this->nextBusinessId('loanermaster', 'loanerID');
+            $nextLoanerId = $this->nextBusinessId($this->loanerTable(), 'loanerID');
             foreach ($loanersNew as $input) {
-                $explicitLoanerId = $input['loanerID'] ?? null;
-                if ($explicitLoanerId === null || $explicitLoanerId === '' || (is_string($explicitLoanerId) && trim($explicitLoanerId) === '')) {
-                    $assigned = $nextLoanerId;
-                    $nextLoanerId++;
-                } else {
-                    $assigned = (int) $explicitLoanerId;
-                    if ($assigned >= $nextLoanerId) {
-                        $nextLoanerId = $assigned + 1;
-                    }
-                }
+                $assigned = $this->assignBusinessId($input['loanerID'] ?? null, $nextLoanerId);
                 $this->insertNewLoaner($input, $assigned, $openDate, $openEnd);
+                $nextLoanerId = $this->bumpNextId($assigned, $nextLoanerId);
                 $loanerCreated++;
             }
 
@@ -206,20 +211,118 @@ class MasterPriceRevisionService
             if (! is_array($row)) {
                 continue;
             }
-            $key = $row[$keyColumn] ?? null;
-            if ($key === null || $key === '' || (is_string($key) && trim($key) === '')) {
+            $canonical = $this->canonicalBusinessKey($row[$keyColumn] ?? null);
+            if ($canonical === '') {
                 $new->push($row);
                 continue;
             }
-            $existing->put((string) $key, $row);
+            $existing->put($canonical, $row);
         }
 
         return [$existing, $new];
     }
 
+    private function canonicalBusinessKey(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return '';
+        }
+
+        if (preg_match('/^[+-]?\d+\.0+$/', $text) === 1) {
+            return preg_replace('/\.0+$/', '', $text) ?? $text;
+        }
+
+        return $text;
+    }
+
+    /**
+     * @param  Collection<string,array>  $existing
+     */
+    private function inputForKey(Collection $existing, mixed $key): array
+    {
+        $canonical = $this->canonicalBusinessKey($key);
+        if ($canonical !== '' && $existing->has($canonical)) {
+            return $existing->get($canonical);
+        }
+
+        $raw = trim((string) ($key ?? ''));
+        if ($raw !== '' && $existing->has($raw)) {
+            return $existing->get($raw);
+        }
+
+        return [];
+    }
+
+    private function pickValue(array $input, string $key, mixed $fallback): mixed
+    {
+        if (! array_key_exists($key, $input)) {
+            return $fallback;
+        }
+
+        $value = $input[$key];
+        if ($value === null || $value === '') {
+            return $fallback;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param  Collection<string,array>  $existing
+     * @param  array<string,bool>  $usedKeys
+     * @param  Collection<int,array>  $new
+     */
+    private function appendUnmatchedAsNew(Collection $existing, array $usedKeys, Collection $new, string $keyColumn): Collection
+    {
+        foreach ($existing as $key => $input) {
+            $canonical = $this->canonicalBusinessKey($key);
+            if ($canonical !== '' && isset($usedKeys[$canonical])) {
+                continue;
+            }
+            if (! is_array($input)) {
+                continue;
+            }
+            if ($this->canonicalBusinessKey($input[$keyColumn] ?? null) === '') {
+                $input[$keyColumn] = $canonical !== '' ? $canonical : null;
+            }
+            $new->push($input);
+        }
+
+        return $new;
+    }
+
+    private function assignBusinessId(mixed $explicit, int $next): int|string
+    {
+        $canonical = $this->canonicalBusinessKey($explicit);
+        if ($canonical !== '') {
+            return ctype_digit($canonical) ? (int) $canonical : $canonical;
+        }
+
+        return $next;
+    }
+
+    private function bumpNextId(int|string $assigned, int $next): int
+    {
+        if (is_int($assigned) && $assigned >= $next) {
+            return $assigned + 1;
+        }
+
+        return $next;
+    }
+
     private function nextBusinessId(string $table, string $column): int
     {
         return ((int) DB::table($table)->max($column)) + 1;
+    }
+
+    private function loanerTable(): string
+    {
+        return (new LoanerMaster)->getTable();
     }
 
     private function latestServiceRows(bool $forDisplay = true): Collection
@@ -338,17 +441,17 @@ class MasterPriceRevisionService
             'productName' => $current['productName'],
             'productType' => $current['productType'],
             'entityID' => $current['entityID'],
-            'priceC_0' => $input['priceC_0'] ?? $current['priceC_0'],
-            'priceR_0' => $input['priceR_0'] ?? $current['priceR_0'],
-            'priceC_1' => $input['priceC_1'] ?? $current['priceC_1'],
-            'priceR_1' => $input['priceR_1'] ?? $current['priceR_1'],
-            'priceC_2' => $input['priceC_2'] ?? $current['priceC_2'],
-            'priceR_2' => $input['priceR_2'] ?? $current['priceR_2'],
-            'priceC_3' => $input['priceC_3'] ?? $current['priceC_3'],
-            'priceR_3' => $input['priceR_3'] ?? $current['priceR_3'],
-            'priceR_onSite' => $input['priceR_onSite'] ?? $current['priceR_onSite'],
-            'price_postData' => $input['price_postData'] ?? $current['price_postData'],
-            'price_a2la' => $input['price_a2la'] ?? $current['price_a2la'],
+            'priceC_0' => $this->pickValue($input, 'priceC_0', $current['priceC_0']),
+            'priceR_0' => $this->pickValue($input, 'priceR_0', $current['priceR_0']),
+            'priceC_1' => $this->pickValue($input, 'priceC_1', $current['priceC_1']),
+            'priceR_1' => $this->pickValue($input, 'priceR_1', $current['priceR_1']),
+            'priceC_2' => $this->pickValue($input, 'priceC_2', $current['priceC_2']),
+            'priceR_2' => $this->pickValue($input, 'priceR_2', $current['priceR_2']),
+            'priceC_3' => $this->pickValue($input, 'priceC_3', $current['priceC_3']),
+            'priceR_3' => $this->pickValue($input, 'priceR_3', $current['priceR_3']),
+            'priceR_onSite' => $this->pickValue($input, 'priceR_onSite', $current['priceR_onSite']),
+            'price_postData' => $this->pickValue($input, 'price_postData', $current['price_postData']),
+            'price_a2la' => $this->pickValue($input, 'price_a2la', $current['price_a2la']),
             'note' => $current['note'],
             'validDateMin' => $openDate,
             'validDateMax' => $openEnd,
@@ -366,9 +469,9 @@ class MasterPriceRevisionService
             'partID' => $current['partID'],
             'partName' => $current['partName'] ?? '',
             'description' => $current['description'] ?? '',
-            'price_market' => $input['price_market'] ?? $current['price_market'] ?? 0,
-            'price_discounted' => $input['price_discounted'] ?? $current['price_discounted'] ?? 0,
-            'price_discounted_1' => $input['price_discounted_1'] ?? $current['price_discounted_1'] ?? 0,
+            'price_market' => $this->pickValue($input, 'price_market', $current['price_market'] ?? 0),
+            'price_discounted' => $this->pickValue($input, 'price_discounted', $current['price_discounted'] ?? 0),
+            'price_discounted_1' => $this->pickValue($input, 'price_discounted_1', $current['price_discounted_1'] ?? 0),
             'associatedInstruments' => $current['associatedInstruments'] ?? '',
             'type' => $current['type'] ?? '',
             'note' => $current['note'],
@@ -403,7 +506,7 @@ class MasterPriceRevisionService
             'sentDate' => $this->sanitizeSqlDate($base->sentDate ?? null),
             'returnedDate' => $this->sanitizeSqlDate($base->returnedDate ?? null),
             'book' => $base->book ?? null,
-            'price' => $input['price'] ?? $current['price'],
+            'price' => $this->pickValue($input, 'price', $current['price']),
             'associatedID' => $base->associatedID ?? null,
             'lastEditPerson' => auth()->user()?->kanji_name,
             'lastEditDate' => now(),
@@ -463,7 +566,7 @@ class MasterPriceRevisionService
         }
     }
 
-    private function insertNewService(array $input, int $serviceId, string $openDate, string $openEnd): void
+    private function insertNewService(array $input, int|string $serviceId, string $openDate, string $openEnd): void
     {
         $productName = trim((string) ($input['productName'] ?? ''));
         if ($productName === '') {
@@ -475,17 +578,17 @@ class MasterPriceRevisionService
             'productName' => $productName,
             'productType' => $input['productType'] ?? null,
             'entityID' => $input['entityID'] ?? null,
-            'priceC_0' => $input['priceC_0'] ?? 0,
-            'priceR_0' => $input['priceR_0'] ?? 0,
-            'priceC_1' => $input['priceC_1'] ?? null,
-            'priceR_1' => $input['priceR_1'] ?? null,
-            'priceC_2' => $input['priceC_2'] ?? null,
-            'priceR_2' => $input['priceR_2'] ?? null,
-            'priceC_3' => $input['priceC_3'] ?? null,
-            'priceR_3' => $input['priceR_3'] ?? null,
-            'priceR_onSite' => $input['priceR_onSite'] ?? 0,
-            'price_postData' => $input['price_postData'] ?? null,
-            'price_a2la' => $input['price_a2la'] ?? 0,
+            'priceC_0' => $this->pickValue($input, 'priceC_0', 0),
+            'priceR_0' => $this->pickValue($input, 'priceR_0', 0),
+            'priceC_1' => $this->pickValue($input, 'priceC_1', null),
+            'priceR_1' => $this->pickValue($input, 'priceR_1', null),
+            'priceC_2' => $this->pickValue($input, 'priceC_2', null),
+            'priceR_2' => $this->pickValue($input, 'priceR_2', null),
+            'priceC_3' => $this->pickValue($input, 'priceC_3', null),
+            'priceR_3' => $this->pickValue($input, 'priceR_3', null),
+            'priceR_onSite' => $this->pickValue($input, 'priceR_onSite', 0),
+            'price_postData' => $this->pickValue($input, 'price_postData', null),
+            'price_a2la' => $this->pickValue($input, 'price_a2la', 0),
             'note' => $input['note'] ?? null,
             'validDateMin' => $openDate,
             'validDateMax' => $openEnd,
@@ -494,7 +597,7 @@ class MasterPriceRevisionService
         DB::table('servicemaster')->insert($this->filterExistingColumns('servicemaster', $payload));
     }
 
-    private function insertNewPart(array $input, int $partId, string $openDate, string $openEnd): void
+    private function insertNewPart(array $input, int|string $partId, string $openDate, string $openEnd): void
     {
         $partName = trim((string) ($input['partName'] ?? ''));
         if ($partName === '') {
@@ -506,9 +609,9 @@ class MasterPriceRevisionService
             'partName' => $partName,
             // NOT NULL 列は空文字/0で埋める
             'description' => (string) ($input['description'] ?? ''),
-            'price_market' => $input['price_market'] ?? 0,
-            'price_discounted' => $input['price_discounted'] ?? 0,
-            'price_discounted_1' => $input['price_discounted_1'] ?? 0,
+            'price_market' => $this->pickValue($input, 'price_market', 0),
+            'price_discounted' => $this->pickValue($input, 'price_discounted', 0),
+            'price_discounted_1' => $this->pickValue($input, 'price_discounted_1', 0),
             'associatedInstruments' => (string) ($input['associatedInstruments'] ?? ''),
             'type' => (string) ($input['type'] ?? ''),
             'note' => $input['note'] ?? null,
@@ -519,7 +622,7 @@ class MasterPriceRevisionService
         DB::table('partmaster')->insert($this->filterExistingColumns('partmaster', $payload));
     }
 
-    private function insertNewLoaner(array $input, int $loanerId, string $openDate, string $openEnd): void
+    private function insertNewLoaner(array $input, int|string $loanerId, string $openDate, string $openEnd): void
     {
         $productName = trim((string) ($input['productName'] ?? ''));
         if ($productName === '') {
@@ -533,7 +636,7 @@ class MasterPriceRevisionService
             'SN' => $input['SN'] ?? null,
             'manageNum' => $input['manageNum'] ?? null,
             'groupName' => (string) ($input['groupName'] ?? ''),
-            'price' => $input['price'] ?? 0,
+            'price' => $this->pickValue($input, 'price', 0),
             'currentStatus' => $input['currentStatus'] ?? '0',
             'property' => $input['property'] ?? 'サービス',
             'lastEditPerson' => auth()->user()?->kanji_name,

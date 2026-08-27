@@ -296,7 +296,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveServiceWorkPrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -405,12 +405,20 @@ const isA2laOn = computed(() => {
     return value === 1 || value === '1' || value === true
 })
 
+/** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
+const priceAsOfDate = computed(() => {
+    if (props.draftRecord) {
+        return normalizePriceAsOfDate(props.draftRecord.orderDate)
+    }
+    return normalizePriceAsOfDate(props.record?.orderDate)
+})
+
 const selectedServiceMaster = computed(() => {
     return findServiceMaster(page.props.servicesMaster, {
         productName: props.draftRecord?.productName ?? props.record?.productName,
         entityID: props.draftRecord?.entityID ?? props.record?.entityID,
         serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
-    }, props.draftRecord?.orderDate ?? props.record?.orderDate ?? null)
+    }, priceAsOfDate.value)
 })
 
 const workPrice = computed(() => {
@@ -431,9 +439,24 @@ watch(workPrice, (value) => {
 
 const partsPriceTotal = computed(() =>
     (props.parts ?? []).reduce((sum, part) => {
-        const value = Number(part.part_master?.price_discounted)
-        return sum + (Number.isNaN(value) ? 0 : value)
+        const versioned = findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
+            ?? part.part_master
+            ?? part.partMaster
+        const value = Number(versioned?.price_discounted)
+        return sum + (Number.isFinite(value) ? value : 0)
     }, 0),
+)
+
+watch(
+    [priceAsOfDate, () => props.parts],
+    () => {
+        const asOf = priceAsOfDate.value
+        const partsMaster = page.props.partsMaster ?? []
+        for (const part of props.parts ?? []) {
+            applyPartMasterAsOf(part, partsMaster, asOf)
+        }
+    },
+    { immediate: true },
 )
 
 const adjustmentAmount = computed(() => {

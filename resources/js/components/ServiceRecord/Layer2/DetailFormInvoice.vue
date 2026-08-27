@@ -154,7 +154,7 @@
                                     <td>{{ loaner.productName || '—' }}</td>
                                     <td>{{ loaner.SN || '—' }}</td>
                                     <td>{{ loanerPeriod(loaner) }}</td>
-                                    <td class="col-amount">{{ formatPrice(loaner.price ?? loaner.masterPrice) }}</td>
+                                    <td class="col-amount">{{ formatPrice(loanerDisplayPrice(loaner)) }}</td>
                                     <td>
                                         <a
                                             v-if="loaner.orderID"
@@ -383,7 +383,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
@@ -431,12 +431,12 @@ function resolveInvoiceCompleteStatus(currentStatus, orderType, rma) {
 
 const page = usePage()
 
-/** 受注日あり: その日の版 / 未定: 最新版（空文字は未定扱い） */
+/** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
 const priceAsOfDate = computed(() => {
-    const raw = props.draftRecord?.orderDate || props.record?.orderDate || null
-    if (raw == null || raw === '') return null
-    const match = String(raw).match(/(\d{4}-\d{2}-\d{2})/)
-    return match ? match[1] : String(raw)
+    if (props.draftRecord) {
+        return normalizePriceAsOfDate(props.draftRecord.orderDate)
+    }
+    return normalizePriceAsOfDate(props.record?.orderDate)
 })
 const leftPaneSize = ref(40)
 const rightPaneSize = ref(60)
@@ -529,7 +529,7 @@ const selectedServiceMaster = computed(() => {
         productName: props.draftRecord?.productName ?? props.record?.productName,
         entityID: props.draftRecord?.entityID ?? props.record?.entityID,
         serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
-    }, props.draftRecord?.orderDate ?? props.record?.orderDate ?? null)
+    }, priceAsOfDate.value)
 })
 
 const workPrice = computed(() => {
@@ -565,6 +565,36 @@ function partDisplayName(part) {
     return resolvedPartMaster(part)?.partName || part.partID || '—'
 }
 
+const currentReturnCode = computed(() => {
+    const value = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const num = Number(value)
+    return Number.isFinite(num) ? num : null
+})
+
+function loanerDisplayPrice(loaner) {
+    return resolveLoanerLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value)
+}
+
+function applyLinePricesForAsOf() {
+    const asOf = priceAsOfDate.value
+    const partsMaster = page.props.partsMaster ?? []
+    for (const part of props.parts ?? []) {
+        applyPartMasterAsOf(part, partsMaster, asOf)
+    }
+    const returnCode = currentReturnCode.value
+    for (const loaner of props.loaners ?? []) {
+        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        loaner.masterPrice = amount
+        loaner.price = amount
+    }
+}
+
+watch(
+    [priceAsOfDate, currentReturnCode, () => props.parts, () => props.loaners],
+    applyLinePricesForAsOf,
+    { immediate: true },
+)
+
 const partsPriceTotal = computed(() =>
     (props.parts ?? []).reduce((sum, part) => sum + partVersionPrice(part), 0),
 )
@@ -598,7 +628,7 @@ const loanerPrice = computed(() => {
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
     if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
     return (props.loaners ?? []).reduce((sum, loaner) => {
-        const value = Number(loaner?.price ?? loaner?.loaner_master?.price ?? 0)
+        const value = Number(loanerDisplayPrice(loaner))
         return sum + (Number.isFinite(value) ? value : 0)
     }, 0)
 })
