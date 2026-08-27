@@ -569,16 +569,32 @@
         </template>
         <div v-else class="scrollable-table-zone">
             <!-- abroad: Excel 作成画面 -->
-            <div v-if="orderTypeFilter === 'abroad'" class="abroad-toolbar">
+            <div v-if="orderTypeFilter === 'abroad'" class="abroad-toolbar abroad-toolbar-sm">
+                <div class="abroad-toolbar-main">
+                    <button
+                        type="button"
+                        class="abroad-excel-btn"
+                        :disabled="abroadSelectedCount === 0"
+                        @click="openAbroadExcelPreview"
+                    >
+                        Create Excel File{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                    </button>
+                    <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
+                </div>
                 <button
                     type="button"
-                    class="abroad-excel-btn"
-                    :disabled="abroadSelectedCount === 0"
-                    @click="openAbroadExcelPreview"
+                    class="order-type-btn abroad-overseas-rma-btn"
+                    :class="{ active: abroadOverseasRmaFilter }"
+                    title="海外RMA（rmaNumOverSea）= 123 の案件を抽出"
+                    @click="toggleAbroadOverseasRmaFilter"
                 >
-                    Create Excel File{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                    海外RMA申請
+                    <span
+                        v-if="abroadOverseasRmaBadgeCount > 0"
+                        class="order-type-badge"
+                        :title="`海外RMA=123: ${abroadOverseasRmaBadgeCount}件`"
+                    >{{ abroadOverseasRmaBadgeCount }}</span>
                 </button>
-                <span v-if="abroadExcelMessage" class="abroad-excel-message">{{ abroadExcelMessage }}</span>
             </div>
             <!-- Invoice: Excel 貼付用クリップボードコピー -->
             <div v-else-if="orderTypeFilter === 'invoice'" class="abroad-toolbar">
@@ -1669,6 +1685,7 @@ syncOrderTypeQuery(orderTypeFilter.value)
 syncArrivalQuery(arrivalFilter.value)
 const selectedOrderId = ref(null)
 const abroadSelectedIds = ref(new Set())
+const abroadOverseasRmaFilter = ref(false)
 const abroadExcelMessage = ref('')
 const abroadExcelPreviewOpen = ref(false)
 const abroadGalleryPickerOpen = ref(false)
@@ -2585,7 +2602,11 @@ const filteredRecords = computed(() => {
             records = records.filter((r) => matchesEngineerListStatus(r))
         }
     } else if (!isBoardMode.value) {
-        records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+        if (orderTypeFilter.value === 'abroad' && abroadOverseasRmaFilter.value) {
+            records = records.filter(matchesOverseasRmaFilter)
+        } else {
+            records = records.filter((r) => matchesOrderTypeFilter(r, orderTypeFilter.value))
+        }
     }
 
     if (!isRestrictedListMode.value && orderTypeFilter.value !== 'invoice') {
@@ -2697,6 +2718,9 @@ const filteredRecords = computed(() => {
 })
 
 const abroadSelectedCount = computed(() => abroadSelectedIds.value.size)
+const abroadOverseasRmaBadgeCount = computed(() =>
+    (props.initialRecords ?? []).filter(matchesOverseasRmaFilter).length,
+)
 const abroadAllVisibleSelected = computed(() => {
     const rows = filteredRecords.value
     if (!rows.length) return false
@@ -3103,6 +3127,9 @@ watch(orderTypeFilter, (value) => {
     clearColumnSort()
     persistOrderTypeFilter(value)
     syncOrderTypeQuery(value)
+    if (value !== 'abroad') {
+        abroadOverseasRmaFilter.value = false
+    }
     if (value !== 'abroad' && value !== 'rma' && value !== 'update_sm') {
         clearAbroadSelection()
         stopSmListAutoRefresh()
@@ -3146,6 +3173,16 @@ watch(
 function matchesAbroadFilter(record) {
     const laborID = Number(record?.laborID)
     return Number.isFinite(laborID) && laborID >= 60 && laborID < 100
+}
+
+function matchesOverseasRmaFilter(record) {
+    return Number(record?.rmaNumOverSea) === 123
+        || String(record?.rmaNumOverSea ?? '').trim() === '123'
+}
+
+function toggleAbroadOverseasRmaFilter() {
+    abroadOverseasRmaFilter.value = !abroadOverseasRmaFilter.value
+    clearAbroadSelection()
 }
 
 function matchesRmaFilter(record) {
@@ -4433,6 +4470,11 @@ async function saveRecord() {
 
 .abroad-toolbar-sm {
     justify-content: space-between;
+}
+
+.abroad-overseas-rma-btn {
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .abroad-toolbar-main {
