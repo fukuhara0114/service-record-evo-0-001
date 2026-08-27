@@ -310,7 +310,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -498,8 +498,10 @@ const currentReturnCode = computed(() => {
 const loanerPrice = computed(() => {
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
     if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+    const parentOrderDate = props.draftRecord?.orderDate ?? props.record?.orderDate
     return (props.loaners ?? []).reduce((sum, loaner) => {
-        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value))
+        const asOf = resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate)
+        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, asOf))
         return sum + (Number.isFinite(value) ? value : 0)
     }, 0)
 })

@@ -2454,18 +2454,22 @@ class ServiceRecordController extends Controller
                 ->get();
 
             $linkedLoanerPayload = $linkedLoaners
-                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord, $asOfDate) {
+                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord) {
                     $attached = AttachedLoaner::query()
                         ->where('associatedID', $loaner->orderID)
                         ->orderByDesc('id')
                         ->first();
 
-                    // 親 servicerecord.orderDate 版の loanermaster のみ参照する
+                    // loaner 自身の受注日ルール（2001〜2098は自身、それ以外は親 service の受注日）
+                    $loanerAsOf = $resolver->resolveLoanerPriceAsOf(
+                        $loaner->orderDate,
+                        $parentRecord?->orderDate,
+                    );
                     $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
                     $masterPrice = $resolver->loanerChargePrice(
                         $parentRecord?->returnCode,
                         $loaner->loanerID,
-                        $asOfDate,
+                        $loanerAsOf,
                     );
 
                     return [
@@ -3574,8 +3578,9 @@ class ServiceRecordController extends Controller
     }
 
     /**
-     * 親案件の受注日に応じて、紐づく loaner 案件の price を再計算して保存する。
-     * returnCode が 1,2,7,13 のとき loanermaster の親受注日版、それ以外は 0。
+     * 紐づく loaner 案件の price を再計算して保存する。
+     * returnCode が 1,2,7,13 のとき loanermaster を参照。
+     * as-of は loaner 自身の受注日ルール（親の受注日はフォールバックのみ）。
      */
     private function syncChildLoanerPrices(int $parentOrderId, mixed $returnCode): array
     {
@@ -3591,8 +3596,7 @@ class ServiceRecordController extends Controller
 
         $updated = [];
         foreach ($children as $child) {
-            // 親 servicerecord.orderDate 版のみ（未定・2000年以前は最新版）
-            $asOf = $resolver->normalizePriceAsOfDate($parentOrderDate);
+            $asOf = $resolver->resolveLoanerPriceAsOf($child->orderDate, $parentOrderDate);
             $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
             $current = (float) ($child->price ?? 0);
             // loaner 詳細で無償（price=0）にした案件は、親の再計算で有償価格へ戻さない

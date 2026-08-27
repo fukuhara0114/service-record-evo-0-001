@@ -387,7 +387,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
@@ -582,8 +582,15 @@ const currentReturnCode = computed(() => {
     return Number.isFinite(num) ? num : null
 })
 
+function loanerLineAsOfDate(loaner) {
+    return resolveLinkedLoanerPriceAsOfDate(
+        loaner,
+        props.draftRecord?.orderDate ?? props.record?.orderDate,
+    )
+}
+
 function loanerDisplayPrice(loaner) {
-    return resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value)
+    return resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, loanerLineAsOfDate(loaner))
 }
 
 function applyLinePricesForAsOf() {
@@ -594,7 +601,7 @@ function applyLinePricesForAsOf() {
     }
     const returnCode = currentReturnCode.value
     for (const loaner of props.loaners ?? []) {
-        const amount = resolveLoanerMasterLinePrice(loaner, returnCode, asOf)
+        const amount = resolveLoanerMasterLinePrice(loaner, returnCode, loanerLineAsOfDate(loaner))
         loaner.masterPrice = amount
     }
 }

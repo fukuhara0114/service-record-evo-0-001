@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -2175,23 +2175,56 @@ function partVersionPrice(part) {
     return Number.isFinite(value) ? value : null
 }
 
+function caseParentOrderDate() {
+    return props.draftRecord?.orderDate ?? props.record?.orderDate
+}
+
+/** 紐づく loaner 行は自身の受注日ルール。AttachedLoaner は案件の as-of。 */
+function loanerLineAsOfDate(loaner) {
+    const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner' || orderType === 'waiting_list' || loaner?.orderID != null) {
+        return resolveLinkedLoanerPriceAsOfDate(loaner, caseParentOrderDate())
+    }
+    return priceAsOfDate.value
+}
+
+/**
+ * LoanerDetail の有償表示と同じく、紐づく loaner はマスタを loaner 受注日で再計算する。
+ * 保存済み price=0（無償）は 0 のまま。
+ */
 function loanerDisplayPrice(loaner) {
-    return resolveLoanerLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value)
+    const asOf = loanerLineAsOfDate(loaner)
+    const returnCode = currentReturnCode.value
+    const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
+
+    if (orderType === 'loaner' || orderType === 'waiting_list') {
+        if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
+        const stored = Number(loaner?.price)
+        if (Number.isFinite(stored) && Math.abs(stored) < 0.00001) return 0
+        if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+            return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
+        }
+        const master = Number(loaner?.masterPrice)
+        if (Number.isFinite(master)) return master
+        return Number.isFinite(stored) ? stored : 0
+    }
+
+    return resolveLoanerLinePrice(loaner, returnCode, asOf)
 }
 
 function applyLinePricesForAsOf() {
-    const asOf = priceAsOfDate.value
+    const caseAsOf = priceAsOfDate.value
     const partsMaster = page.props.partsMaster ?? []
     for (const part of props.parts ?? []) {
-        applyPartMasterAsOf(part, partsMaster, asOf)
+        applyPartMasterAsOf(part, partsMaster, caseAsOf)
     }
     const returnCode = currentReturnCode.value
     for (const loaner of props.loaners ?? []) {
-        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        const amount = loanerDisplayPrice(loaner)
         loaner.masterPrice = amount
     }
     for (const loaner of props.attachedLoaners ?? []) {
-        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        const amount = resolveLoanerLinePrice(loaner, returnCode, loanerLineAsOfDate(loaner))
         loaner.masterPrice = amount
     }
 }

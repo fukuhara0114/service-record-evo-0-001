@@ -265,7 +265,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { tokyoTodayYmd } from '@/utils/businessDays'
-import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
@@ -428,13 +428,15 @@ const currentReturnCode = computed(() => {
 
 function applyLinePricesForAsOf() {
     const asOf = priceAsOfDate.value
+    const parentOrderDate = props.draftRecord?.orderDate ?? props.record?.orderDate
     const partsMaster = page.props.partsMaster ?? []
     for (const part of props.parts ?? []) {
         applyPartMasterAsOf(part, partsMaster, asOf)
     }
     const returnCode = currentReturnCode.value
     for (const loaner of props.loaners ?? []) {
-        const amount = resolveLoanerMasterLinePrice(loaner, returnCode, asOf)
+        const loanerAsOf = resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate)
+        const amount = resolveLoanerMasterLinePrice(loaner, returnCode, loanerAsOf)
         loaner.masterPrice = amount
     }
 }
@@ -458,8 +460,10 @@ const loanerLabel = computed(() => {
 const loanerPrice = computed(() => {
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
     if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+    const parentOrderDate = props.draftRecord?.orderDate ?? props.record?.orderDate
     return (props.loaners ?? []).reduce((sum, loaner) => {
-        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value))
+        const asOf = resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate)
+        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, asOf))
         return sum + (Number.isFinite(value) ? value : 0)
     }, 0)
 })

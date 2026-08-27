@@ -71,6 +71,18 @@ export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderD
     return normalizePriceAsOfDate(orderDate)
 }
 
+/**
+ * 親 Service 画面に紐づく loaner 行の as-of。
+ * 親の受注日ではなく、loaner 自身の受注日ルールを優先する。
+ */
+export function resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate) {
+    return resolveDisplayPriceAsOfDate({
+        orderType: 'loaner',
+        orderDate: loaner?.orderDate,
+        parentOrderDate,
+    })
+}
+
 /** 親 service の受注日のみ。発送予定日・出荷日・プレースホルダ日付は見ない。 */
 export function parentOrderDateFromRecord(record) {
     if (!record || typeof record !== 'object') return null
