@@ -1381,7 +1381,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -3747,7 +3747,11 @@ function stopLogisticsAutoRefresh() {
 function resolveDetailFormAPrice(draft, parts = []) {
     if (!draft) return null
 
-    const asOfDate = normalizePriceAsOfDate(draft.orderDate)
+    const asOfDate = resolveDisplayPriceAsOfDate({
+        orderType: draft.order_type,
+        orderDate: draft.orderDate,
+        parentOrderDate: draft.parentRecord?.orderDate,
+    })
     const master = findServiceMaster(page.props.servicesMaster, {
         productName: draft.productName,
         entityID: draft.entityID,

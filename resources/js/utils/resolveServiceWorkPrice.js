@@ -30,6 +30,39 @@ export function normalizePriceAsOfDate(value) {
     return ymd
 }
 
+function orderDateYear(value) {
+    const ymd = normalizeDate(value)
+    if (!ymd) return null
+    const year = Number(ymd.slice(0, 4))
+    return Number.isFinite(year) ? year : null
+}
+
+/**
+ * loaner 自身の受注日を価格版に使えるか。
+ * 未定・2000年以前・2099年以降は使わず、親 service の受注日にフォールバックする。
+ */
+export function isLoanerOwnOrderDateUsable(value) {
+    const year = orderDateYear(value)
+    if (year == null) return false
+    return year > 2000 && year < 2099
+}
+
+/** loaner 表示価格の as-of。範囲外なら親 service の受注日。 */
+export function resolveLoanerPriceAsOfDate(loanerOrderDate, serviceOrderDate) {
+    if (isLoanerOwnOrderDateUsable(loanerOrderDate)) {
+        return normalizePriceAsOfDate(loanerOrderDate)
+    }
+    return normalizePriceAsOfDate(serviceOrderDate)
+}
+
+/** 画面表示価格の as-of。loaner は上記ルール、それ以外は自身の受注日。 */
+export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderDate } = {}) {
+    if (String(orderType ?? '').trim().toLowerCase() === 'loaner') {
+        return resolveLoanerPriceAsOfDate(orderDate, parentOrderDate)
+    }
+    return normalizePriceAsOfDate(orderDate)
+}
+
 export function firstValidPriceAsOf(...values) {
     for (const value of values) {
         const ymd = normalizePriceAsOfDate(value)

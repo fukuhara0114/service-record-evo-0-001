@@ -795,6 +795,21 @@ class ServiceRecordController extends Controller
                 'priceVersions',
                 app(MasterPriceVersionResolver::class)->loanerPriceVersions($record->loanerID),
             );
+            $parentId = $record->parentID;
+            $parentRecord = null;
+            if ($parentId !== null && $parentId !== '') {
+                $parent = ServiceRecord::query()
+                    ->where('orderID', $parentId)
+                    ->first(['orderID', 'orderDate', 'order_type']);
+                if ($parent) {
+                    $parentRecord = [
+                        'orderID' => $parent->orderID,
+                        'orderDate' => $parent->orderDate,
+                        'order_type' => $parent->order_type,
+                    ];
+                }
+            }
+            $record->setAttribute('parentRecord', $parentRecord);
         } elseif ($record->order_type === 'waiting_list') {
             $record->unsetRelation('statusMaster');
             $record->unsetRelation('statusMasterLoaner');

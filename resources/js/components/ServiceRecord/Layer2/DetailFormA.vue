@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -931,13 +931,19 @@ const props = defineProps({
 
 const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'save'])
 
-/** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
-const priceAsOfDate = computed(() => {
-    if (props.draftRecord) {
-        return normalizePriceAsOfDate(props.draftRecord.orderDate)
-    }
-    return normalizePriceAsOfDate(props.record?.orderDate)
-})
+const fetchedParentOrderDate = ref(null)
+
+/**
+ * loaner: 受注日が 2000年以前または 2099年以降なら親 service の受注日。
+ * それ以外の loaner / service: 自身の受注日（未定・2000年以前は最新版）。
+ */
+const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
+    orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+    orderDate: props.draftRecord?.orderDate ?? props.record?.orderDate,
+    parentOrderDate: props.draftRecord?.parentRecord?.orderDate
+        ?? props.record?.parentRecord?.orderDate
+        ?? fetchedParentOrderDate.value,
+}))
 
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
@@ -1220,6 +1226,52 @@ function getRecordApiBase() {
     const basePath = window.location.pathname.replace(/\/(administrator|engineer|logistics|shipping-prep)\/?$/, '')
     return `${window.location.origin}${basePath}`
 }
+
+watch(
+    () => [
+        props.draftRecord?.order_type ?? props.record?.order_type,
+        props.draftRecord?.parentID ?? props.record?.parentID,
+        props.draftRecord?.parentRecord?.orderDate ?? props.record?.parentRecord?.orderDate,
+        props.record?.orderID,
+    ],
+    async ([orderType, parentId, nestedParentDate]) => {
+        if (String(orderType ?? '').trim().toLowerCase() !== 'loaner') {
+            fetchedParentOrderDate.value = null
+            return
+        }
+        if (nestedParentDate) {
+            fetchedParentOrderDate.value = nestedParentDate
+            return
+        }
+        if (parentId == null || parentId === '') {
+            fetchedParentOrderDate.value = null
+            return
+        }
+        const requestedParentId = parentId
+        try {
+            const result = await apiFetch(`${getRecordApiBase()}/record/${requestedParentId}`)
+            if ((props.draftRecord?.parentID ?? props.record?.parentID) !== requestedParentId) return
+            if (!result?.response?.ok) {
+                fetchedParentOrderDate.value = null
+                return
+            }
+            const parent = result.data
+            fetchedParentOrderDate.value = parent?.orderDate ?? null
+            if (props.draftRecord && parent) {
+                props.draftRecord.parentRecord = {
+                    orderID: parent.orderID ?? requestedParentId,
+                    orderDate: parent.orderDate ?? null,
+                    order_type: parent.order_type ?? null,
+                }
+            }
+        } catch {
+            if ((props.draftRecord?.parentID ?? props.record?.parentID) === requestedParentId) {
+                fetchedParentOrderDate.value = null
+            }
+        }
+    },
+    { immediate: true },
+)
 
 async function previewEmailDraft(templateType) {
     if (!templateType) {
