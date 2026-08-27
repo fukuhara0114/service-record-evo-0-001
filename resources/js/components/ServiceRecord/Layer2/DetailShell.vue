@@ -140,6 +140,7 @@
                     :files="files"
                     :captured-images="capturedImages"
                     :parts="parts"
+                    :loaners="loaners"
                     :attachments-loading="attachmentsLoading"
                     :attachments-error="attachmentsError"
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
@@ -183,6 +184,7 @@
                     @open-dialog="(type, payload) => $emit('open-dialog', type, payload)"
                     @files-updated="(nextFiles) => $emit('files-updated', nextFiles)"
                     @reload-attachments="$emit('reload-attachments')"
+                    @save="$emit('save')"
                 />
                 <DetailFormB
                     v-else-if="layout === 'B'"

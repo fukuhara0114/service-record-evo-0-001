@@ -239,21 +239,35 @@
                         </div>
 
                         <div class="price-adjust-row">
-                            <div class="price-adjust-main">
-                                <span class="price-adjust-label">価格</span>
-                                <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
-                            </div>
-                            <button
-                                type="button"
-                                class="btn btn-primary price-adjust-btn"
-                                :disabled="priceAdjustSaving"
-                                @click="openPriceAdjustDialog"
-                            >
-                                価格調整
-                            </button>
-                            <div class="price-adjust-delta">
-                                <span class="price-adjust-label">調整額</span>
-                                <strong>{{ formatSignedAmount(discountAmount) }}</strong>
+                            <div class="price-adjust-center-slot">
+                                <div class="price-adjust-group">
+                                    <button
+                                        v-if="record.order_type === 'loaner'"
+                                        type="button"
+                                        class="charge-type-toggle"
+                                        :class="{ active: chargeType === 'paid' }"
+                                        :aria-pressed="chargeType === 'paid'"
+                                        @click="toggleChargeType"
+                                    >
+                                        {{ chargeType === 'paid' ? '有償' : '無償' }}
+                                    </button>
+                                    <div class="price-adjust-main">
+                                        <span class="price-adjust-label">価格</span>
+                                        <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary price-adjust-btn"
+                                        :disabled="priceAdjustSaving"
+                                        @click="openPriceAdjustDialog"
+                                    >
+                                        価格調整
+                                    </button>
+                                    <div class="price-adjust-delta">
+                                        <span class="price-adjust-label">調整額</span>
+                                        <strong>{{ formatSignedAmount(discountAmount) }}</strong>
+                                    </div>
+                                </div>
                             </div>
                             <label class="price-adjust-enduser-sn">
                                 <span class="price-adjust-label">enduser_SN</span>
@@ -1147,6 +1161,14 @@ const priceAdjustForm = reactive({
     amount: '',
     reason: '',
 })
+function chargeTypeFromPrice(value) {
+    const num = Number(value)
+    return Number.isFinite(num) && num !== 0 ? 'paid' : 'free'
+}
+const chargeType = ref(chargeTypeFromPrice(props.record?.price))
+function toggleChargeType() {
+    chargeType.value = chargeType.value === 'paid' ? 'free' : 'paid'
+}
 const showApplicationFormDialog = ref(false)
 const showApplicationFormSetupDialog = ref(false)
 const applicationFormSetupError = ref('')
@@ -1373,6 +1395,9 @@ const masterPrice = computed(() => {
     return Number.isFinite(num) ? num : 0
 })
 const basePrice = computed(() => {
+    if (props.record.order_type === 'loaner') {
+        return chargeType.value === 'paid' ? masterPrice.value : 0
+    }
     if (!form.parentID) return 0
     const code = Number(parentReturnCode.value)
     if (!PAID_LOANER_RETURN_CODES.includes(code)) return 0
@@ -1382,7 +1407,12 @@ const discountAmount = computed(() => {
     const num = Number(form.discount_service)
     return Number.isFinite(num) ? num : 0
 })
-const displayPrice = computed(() => basePrice.value + discountAmount.value)
+const displayPrice = computed(() => {
+    if (props.record.order_type === 'loaner' && chargeType.value === 'free') return 0
+    return basePrice.value + discountAmount.value
+})
+/** service 案件と同じ: price は元価格（有償=マスタ / 無償=0）、調整額は discount_service */
+const savePrice = computed(() => basePrice.value)
 
 function tokyoTodayYmd() {
     return new Intl.DateTimeFormat('en-CA', {
@@ -1833,8 +1863,12 @@ async function confirmPriceAdjust() {
         if (data?.note) {
             noteItems.value = [data.note, ...noteItems.value.filter(n => Number(n.id) !== Number(data.note.id))]
         }
+        const saved = await save()
+        if (!saved) {
+            throw new Error(error.value || '案件の保存に失敗しました。')
+        }
         showPriceAdjustDialog.value = false
-        success.value = '価格調整を反映しました。保存ボタンで確定してください。'
+        success.value = '価格調整を保存しました。'
     } catch (e) {
         priceAdjustError.value = e.message || '価格調整に失敗しました。'
     } finally {
@@ -2573,7 +2607,7 @@ async function save(options = {}) {
 
     payload.discount_service = numericNullable(form.discount_service) ?? 0
     payload.incident = numericNullable(form.incident)
-    payload.price = basePrice.value
+    payload.price = savePrice.value
     Object.keys(payload).forEach((key) => {
         if (typeof payload[key] === 'string') payload[key] = nullable(payload[key])
     })
@@ -2929,6 +2963,9 @@ function syncCurrentDates(attached, record = null) {
         }
         form.discount_service = record.discount_service ?? 0
         if (record.parentID != null) form.parentID = stringValue(record.parentID)
+        if (Object.prototype.hasOwnProperty.call(record, 'price')) {
+            chargeType.value = chargeTypeFromPrice(record.price)
+        }
     }
 }
 
@@ -3772,15 +3809,55 @@ a.btn {
 
 .price-adjust-row {
     margin-top: 8px;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 10px 16px;
     padding: 6px 10px;
     border: 1px solid #94a3b8;
     background: #e2e8f0;
+    overflow: visible;
 }
-.price-adjust-main,
+.price-adjust-center-slot {
+    grid-column: 2;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.price-adjust-group {
+    display: flex;
+    align-items: center;
+}
+.charge-type-toggle {
+    box-sizing: border-box;
+    margin-right: 50px;
+    min-height: 24px;
+    padding: 2px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 3px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.charge-type-toggle.active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+}
+.price-adjust-main {
+    box-sizing: border-box;
+    flex: 0 0 400px;
+    width: 400px;
+    min-width: 400px;
+    max-width: 400px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 .price-adjust-actions,
 .price-adjust-delta {
     display: flex;
@@ -3788,8 +3865,17 @@ a.btn {
     gap: 8px;
 }
 .price-adjust-label { color: #475569; font-size: 13px; font-weight: bold; white-space: nowrap; }
-.price-adjust-value { font-size: 13px; color: #0f172a; }
-.price-adjust-btn { min-height: 24px; padding: 2px 10px; font-size: 11px; }
+.price-adjust-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 13px;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.price-adjust-btn { margin-left: 16px; min-height: 24px; padding: 2px 10px; font-size: 11px; }
+.price-adjust-delta { margin-left: 16px; }
 .incidents-btn {
     min-height: 24px;
     padding: 2px 10px;
@@ -3817,7 +3903,8 @@ a.btn {
 }
 .price-adjust-delta strong { font-size: 12px; color: #0f172a; }
 .price-adjust-enduser-sn {
-    margin-left: auto;
+    grid-column: 3;
+    justify-self: end;
     display: flex;
     align-items: center;
     gap: 8px;

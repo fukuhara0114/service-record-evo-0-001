@@ -929,7 +929,7 @@ const props = defineProps({
     currentUserKanji: { type: String, default: '' },
 })
 
-const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments'])
+const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 'save'])
 
 /** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
 const priceAsOfDate = computed(() => {
@@ -1719,7 +1719,10 @@ async function confirmPriceAdjust() {
         // discount_service を更新し、表示価格（displayPrice）は watch 経由で price へ反映
         props.draftRecord.discount_service = amount
         sessionAdjustmentAmount.value = amount
+        const num = Number(displayPrice.value)
+        props.draftRecord.price = Number.isFinite(num) ? num : null
         showPriceAdjustDialog.value = false
+        emit('save')
         emit('reload-attachments')
     } catch (e) {
         priceAdjustError.value = e.message || '価格調整に失敗しました。'
@@ -2097,12 +2100,10 @@ function applyLinePricesForAsOf() {
     for (const loaner of props.loaners ?? []) {
         const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
         loaner.masterPrice = amount
-        loaner.price = amount
     }
     for (const loaner of props.attachedLoaners ?? []) {
         const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
         loaner.masterPrice = amount
-        loaner.price = amount
     }
 }
 

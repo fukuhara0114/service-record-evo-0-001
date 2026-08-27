@@ -221,10 +221,15 @@ export function applyPartMasterAsOf(part, partsMaster, asOfDate = null) {
 }
 
 /**
- * 貸出行の課金価格。受注日版の priceVersions を優先し、無ければ保存値。
- * 無償 returnCode は 0。
+ * 貸出行の課金価格。
+ * loaner 詳細の有償・無償で保存した price を優先し、未設定なら受注日版マスタ（有償 returnCode のみ）。
  */
 export function resolveLoanerLinePrice(loaner, returnCode, asOfDate = null) {
+    const storedRaw = loaner?.price
+    if (storedRaw != null && storedRaw !== '') {
+        const stored = Number(storedRaw)
+        if (Number.isFinite(stored)) return stored
+    }
     if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
     if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
         return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOfDate)
@@ -232,7 +237,5 @@ export function resolveLoanerLinePrice(loaner, returnCode, asOfDate = null) {
     const nested = Number(loaner?.loaner_master?.price ?? loaner?.loanerMaster?.price)
     if (Number.isFinite(nested)) return nested
     const master = Number(loaner?.masterPrice)
-    if (Number.isFinite(master)) return master
-    const stored = Number(loaner?.price)
-    return Number.isFinite(stored) ? stored : 0
+    return Number.isFinite(master) ? master : 0
 }

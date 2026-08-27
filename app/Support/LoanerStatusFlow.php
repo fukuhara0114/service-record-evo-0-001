@@ -40,6 +40,9 @@ class LoanerStatusFlow
     /** @deprecated 旧フロー。次へでは使わない */
     public const SHIP_REQUEST = 350;
 
+    /** 貸出中 */
+    public const LENDING_OUT = 388;
+
     /** 返却（labor 設定可能） */
     public const RETURNED = 393;
 

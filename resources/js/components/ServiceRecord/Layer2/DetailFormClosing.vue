@@ -74,12 +74,22 @@
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td>作業内容（{{ returnCodeLabel }}）</td>
+                                                    <td>
+                                                        <span
+                                                            v-if="isLoanerRecord"
+                                                            class="loaner-case-badge"
+                                                        >貸出機案件</span>
+                                                        <template v-else>作業内容（{{ returnCodeLabel }}）</template>
+                                                    </td>
                                                     <td class="col-amount">{{ formatPrice(workPrice) }}</td>
                                                 </tr>
                                                 <tr>
                                                     <td>a2la{{ isA2laOn ? '' : '（OFF）' }}</td>
                                                     <td class="col-amount">{{ formatPrice(a2laPrice) }}</td>
+                                                </tr>
+                                                <tr v-if="loanerPrice > 0">
+                                                    <td>貸出機</td>
+                                                    <td class="col-amount">{{ formatPrice(loanerPrice) }}</td>
                                                 </tr>
                                                 <tr>
                                                     <td>Parts</td>
@@ -296,7 +306,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -305,6 +315,7 @@ const props = defineProps({
     files: { type: Array, default: () => [] },
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
+    loaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
@@ -421,9 +432,17 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
+const isLoanerRecord = computed(() => {
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type
+    return orderType === 'loaner'
+})
+
 const workPrice = computed(() => {
     const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
-    return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+    const resolved = resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+    if (Number.isFinite(resolved) && resolved !== 0) return resolved
+    const stored = Number(props.draftRecord?.price ?? props.record?.price)
+    return Number.isFinite(stored) ? stored : 0
 })
 
 const a2laPrice = computed(() => {
@@ -434,6 +453,7 @@ const a2laPrice = computed(() => {
 
 watch(workPrice, (value) => {
     if (!props.draftRecord) return
+    if (isLoanerRecord.value) return
     props.draftRecord.price = value
 }, { immediate: true })
 
@@ -459,12 +479,27 @@ watch(
     { immediate: true },
 )
 
+const currentReturnCode = computed(() => {
+    const value = props.draftRecord?.returnCode ?? props.record?.returnCode
+    const num = Number(value)
+    return Number.isFinite(num) ? num : null
+})
+
+const loanerPrice = computed(() => {
+    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
+    if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+    return (props.loaners ?? []).reduce((sum, loaner) => {
+        const value = Number(resolveLoanerLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value))
+        return sum + (Number.isFinite(value) ? value : 0)
+    }, 0)
+})
+
 const adjustmentAmount = computed(() => {
     const value = Number(props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
     return Number.isFinite(value) ? value : 0
 })
 
-const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value)
+const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
 const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
 
 function formatPrice(value) {
@@ -1184,6 +1219,18 @@ watch(
     text-align: right !important;
     white-space: nowrap;
     width: 96px;
+}
+
+.loaner-case-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 .row-summary td {

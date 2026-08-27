@@ -534,7 +534,10 @@ const selectedServiceMaster = computed(() => {
 
 const workPrice = computed(() => {
     const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
-    return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+    const resolved = resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
+    if (Number.isFinite(resolved) && resolved !== 0) return resolved
+    const stored = Number(props.draftRecord?.price ?? props.record?.price)
+    return Number.isFinite(stored) ? stored : 0
 })
 
 const a2laPrice = computed(() => {
@@ -545,6 +548,7 @@ const a2laPrice = computed(() => {
 
 watch(workPrice, (value) => {
     if (!props.draftRecord) return
+    if (isLoanerRecord.value) return
     props.draftRecord.price = value
 }, { immediate: true })
 
@@ -585,7 +589,6 @@ function applyLinePricesForAsOf() {
     for (const loaner of props.loaners ?? []) {
         const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
         loaner.masterPrice = amount
-        loaner.price = amount
     }
 }
 

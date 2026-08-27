@@ -1130,17 +1130,21 @@ class LoanerRecordController extends Controller
                 unset($recordPayload['status']);
             }
 
-            // 価格: parent の returnCode が有償のとき loanermaster 版価格、それ以外/親なしは 0
-            $parentId = array_key_exists('parentID', $validated)
-                ? $validated['parentID']
-                : $record->parentID;
-            $loanerId = array_key_exists('loanerID', $validated)
-                ? $validated['loanerID']
-                : ($attached->loanerID ?? $record->loanerID);
-            $orderDate = array_key_exists('orderDate', $validated)
-                ? $validated['orderDate']
-                : $record->orderDate;
-            $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId, $orderDate);
+            // 価格: 有償=マスタ価格 / 無償=0。調整後の表示額は price に入れず discount_service で持つ
+            if ($record->order_type === 'loaner' && array_key_exists('price', $validated)) {
+                $recordPayload['price'] = $validated['price'] === null ? 0 : (float) $validated['price'];
+            } else {
+                $parentId = array_key_exists('parentID', $validated)
+                    ? $validated['parentID']
+                    : $record->parentID;
+                $loanerId = array_key_exists('loanerID', $validated)
+                    ? $validated['loanerID']
+                    : ($attached->loanerID ?? $record->loanerID);
+                $orderDate = array_key_exists('orderDate', $validated)
+                    ? $validated['orderDate']
+                    : $record->orderDate;
+                $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId, $orderDate);
+            }
 
             // laborID は fill 後に明示セット（欠落・上書き漏れ防止）
             if (array_key_exists('laborID', $validated)) {

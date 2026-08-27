@@ -264,6 +264,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { tokyoTodayYmd } from '@/utils/businessDays'
 import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
@@ -436,7 +437,6 @@ function applyLinePricesForAsOf() {
     for (const loaner of props.loaners ?? []) {
         const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
         loaner.masterPrice = amount
-        loaner.price = amount
     }
 }
 
@@ -559,6 +559,7 @@ async function onComplete() {
         await updateRecord({
             ...deliveryPayload(),
             status: LOGISTICS_COMPLETE_STATUS,
+            sentOut: tokyoTodayYmd(),
         })
         emit('workflow-done', { action: 'complete', status: LOGISTICS_COMPLETE_STATUS })
     } catch (e) {

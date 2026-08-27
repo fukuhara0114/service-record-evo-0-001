@@ -198,7 +198,7 @@ class ServiceRecordController extends Controller
         return $this->renderServiceRecordList($request, 'engineer');
     }
 
-    // Logistics用表示（status = 350）
+    // Logistics用表示（status = 350、および貸出中 388 の loaner）
     public function logistics(Request $request)
     {
         return $this->renderServiceRecordList($request, 'logistics');
@@ -232,7 +232,14 @@ class ServiceRecordController extends Controller
         $query = ServiceRecord::with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
 
         if ($mode === 'logistics') {
-            $query->where('status', 350);
+            $query->where(function ($logisticsQuery) {
+                $logisticsQuery
+                    ->where('status', 350)
+                    ->orWhere(function ($loanerQuery) {
+                        $loanerQuery->where('order_type', 'loaner')
+                            ->where('status', LoanerStatusFlow::LENDING_OUT);
+                    });
+            });
         } elseif ($mode === 'shippingPrep') {
             $query->whereIn('status', [300, 310 ,350, 385]);
         } elseif ($mode === 'engineer') {
@@ -309,12 +316,20 @@ class ServiceRecordController extends Controller
 
         // loaner / waiting_list 一覧の item 列表示用
         $this->attachLoanerItemsToRecords($records);
+        $this->attachEntityIdsFromServiceMaster($records);
 
         $tabBadgeCounts = [
             'loanerReturned' => 0,
             'waitingPromotionReady' => 0,
             'serviceRemand' => 0,
+            'loanerLending' => 0,
         ];
+        if ($mode === 'logistics') {
+            $tabBadgeCounts['loanerLending'] = $records
+                ->filter(static fn (ServiceRecord $record) => $record->order_type === 'loaner'
+                    && (int) $record->getRawOriginal('status') === LoanerStatusFlow::LENDING_OUT)
+                ->count();
+        }
         if ($mode === 'admin') {
             $returnedStatusId = \App\Models\StatusLoaner::query()
                 ->where('status_new', '返却')
@@ -575,6 +590,42 @@ class ServiceRecordController extends Controller
 
             $record->setAttribute('enduser_SN', $enduserSnByOrderId[$orderKey] ?? null);
         });
+    }
+
+    /**
+     * 一覧用: servicerecord.entityID が空のとき servicemaster から補完する。
+     *
+     * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
+     */
+    private function attachEntityIdsFromServiceMaster($records): void
+    {
+        $needFill = collect($records)->filter(function (ServiceRecord $record) {
+            return trim((string) ($record->entityID ?? '')) === '';
+        });
+        if ($needFill->isEmpty()) {
+            return;
+        }
+
+        $resolver = app(MasterPriceVersionResolver::class);
+        $cache = [];
+        foreach ($needFill as $record) {
+            $orderDate = $record->orderDate;
+            $orderDateKey = $orderDate instanceof \DateTimeInterface
+                ? $orderDate->format('Y-m-d')
+                : (string) $orderDate;
+            $cacheKey = implode("\t", [
+                (string) ($record->serviceID ?? ''),
+                trim((string) ($record->productName ?? '')),
+                $orderDateKey,
+            ]);
+            if (! array_key_exists($cacheKey, $cache)) {
+                $master = $resolver->serviceMaster($record->serviceID, $record->orderDate, $record->productName);
+                $cache[$cacheKey] = trim((string) ($master?->entityID ?? ''));
+            }
+            if ($cache[$cacheKey] !== '') {
+                $record->setAttribute('entityID', $cache[$cacheKey]);
+            }
+        }
     }
 
     private function engineerCanAccessOrder($orderID): bool
@@ -926,6 +977,7 @@ class ServiceRecordController extends Controller
         if (in_array($orderTypeFilter, ['loaner', 'waiting_list'], true)) {
             $this->attachLoanerItemsToRecords($records);
         }
+        $this->attachEntityIdsFromServiceMaster($records);
 
         return response()->json([
             'records' => $records,
@@ -3330,9 +3382,13 @@ class ServiceRecordController extends Controller
             // 親の受注日を優先（親で切り替えた版）。未定・2000年以前なら子、それも無ければ最新版
             $asOf = $resolver->firstValidAsOf($parentOrderDate, $child->orderDate);
             $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
-            $price = $masterPrice;
+            $current = (float) ($child->price ?? 0);
+            // loaner 詳細で無償（price=0）にした案件は、親の再計算で有償価格へ戻さない
+            $price = ($child->order_type === 'loaner' && abs($current) < 0.00001)
+                ? 0.0
+                : $masterPrice;
 
-            if ((float) ($child->price ?? 0) !== $price) {
+            if (abs($current - (float) $price) >= 0.00001) {
                 $child->price = $price;
                 $child->save();
             }

@@ -200,6 +200,21 @@
                     >
                     <button type="button" @click="clearSearch">Clear</button>
                     <button
+                        v-if="mode === 'logistics'"
+                        type="button"
+                        class="order-type-btn logistics-loaner-btn"
+                        :class="{ active: logisticsLoanerFilter }"
+                        title="order_type=loaner かつ 貸出中(388)"
+                        @click="toggleLogisticsLoanerFilter"
+                    >
+                        Loaner
+                        <span
+                            v-if="logisticsLoanerLendingBadgeCount > 0"
+                            class="order-type-badge"
+                            :title="`貸出中: ${logisticsLoanerLendingBadgeCount}件`"
+                        >{{ logisticsLoanerLendingBadgeCount }}</span>
+                    </button>
+                    <button
                         v-if="mode === 'engineer'"
                         type="button"
                         class="sm-mode-btn"
@@ -293,7 +308,25 @@
             <div v-if="logisticsViewMode === 'list'" class="scrollable-table-zone">
                 <table id="myLargeTable">
                     <thead>
-                        <tr>
+                        <tr v-if="isLogisticsLoanerList">
+                            <SortableTh
+                                sort-key="orderID"
+                                :active-key="listColumnSortKey"
+                                :direction="listColumnSortDir"
+                                style="width: 80px; text-align: center;"
+                                @sort="toggleColumnSort"
+                            >OrderID</SortableTh>
+                            <SortableTh sort-key="sentOut" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">出荷日</SortableTh>
+                            <SortableTh sort-key="productName" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                            <SortableTh sort-key="item" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
+                            <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_depart</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_zipcode</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address1</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address2</SortableTh>
+                        </tr>
+                        <tr v-else>
                             <SortableTh
                                 sort-key="orderID"
                                 :active-key="listColumnSortKey"
@@ -334,6 +367,19 @@
                             @click="selectedOrderId = r.orderID"
                             @dblclick="openSecondLayer(r)"
                         >
+                            <template v-if="isLogisticsLoanerList">
+                                <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                                <td class="logistics-loaner-col-100">{{ formatListDate(r.sentOut) }}</td>
+                                <td class="logistics-loaner-col-200">{{ r.productName }}</td>
+                                <td class="logistics-loaner-col-200">{{ r.item || '' }}</td>
+                                <td>{{ r.SN }}</td>
+                                <td>{{ r.deliveryDestination_company }}</td>
+                                <td>{{ r.deliveryDestination_depart }}</td>
+                                <td class="logistics-loaner-col-100">{{ r.deliveryDestination_zipcode }}</td>
+                                <td class="logistics-loaner-col-100">{{ r.deliveryDestination_address1 }}</td>
+                                <td>{{ r.deliveryDestination_address2 }}</td>
+                            </template>
+                            <template v-else>
                             <td
                                 style="text-align: center; font-weight: bold;"
                                 :class="shippingStatusCellUnderlineClass(r)"
@@ -362,6 +408,7 @@
                             <td>{{ r.contactPerson }}</td>
                             <td>{{ r.email }}</td>
                             <td>{{ r.phone }}</td>
+                            </template>
                         </tr>
                     </tbody>
                 </table>
@@ -397,7 +444,25 @@
                     <div v-if="panel === 'list'" class="scrollable-table-zone logistics-pane-body">
                         <table id="myLargeTable">
                             <thead>
-                                <tr>
+                                <tr v-if="isLogisticsLoanerList">
+                                    <SortableTh
+                                        sort-key="orderID"
+                                        :active-key="listColumnSortKey"
+                                        :direction="listColumnSortDir"
+                                        style="width: 80px; text-align: center;"
+                                        @sort="toggleColumnSort"
+                                    >OrderID</SortableTh>
+                                    <SortableTh sort-key="sentOut" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">出荷日</SortableTh>
+                                    <SortableTh sort-key="productName" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
+                                    <SortableTh sort-key="item" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
+                                    <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_depart</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_zipcode</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address1</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address2</SortableTh>
+                                </tr>
+                                <tr v-else>
                                     <SortableTh
                                         sort-key="orderID"
                                         :active-key="listColumnSortKey"
@@ -438,6 +503,19 @@
                                     @click="selectedOrderId = r.orderID"
                                     @dblclick="openSecondLayer(r)"
                                 >
+                                    <template v-if="isLogisticsLoanerList">
+                                        <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
+                                        <td class="logistics-loaner-col-100">{{ formatListDate(r.sentOut) }}</td>
+                                        <td class="logistics-loaner-col-200">{{ r.productName }}</td>
+                                        <td class="logistics-loaner-col-200">{{ r.item || '' }}</td>
+                                        <td>{{ r.SN }}</td>
+                                        <td>{{ r.deliveryDestination_company }}</td>
+                                        <td>{{ r.deliveryDestination_depart }}</td>
+                                        <td class="logistics-loaner-col-100">{{ r.deliveryDestination_zipcode }}</td>
+                                        <td class="logistics-loaner-col-100">{{ r.deliveryDestination_address1 }}</td>
+                                        <td>{{ r.deliveryDestination_address2 }}</td>
+                                    </template>
+                                    <template v-else>
                                     <td
                                         style="text-align: center; font-weight: bold;"
                                         :class="shippingStatusCellUnderlineClass(r)"
@@ -466,6 +544,7 @@
                                     <td>{{ r.contactPerson }}</td>
                                     <td>{{ r.email }}</td>
                                     <td>{{ r.phone }}</td>
+                                    </template>
                                 </tr>
                             </tbody>
                         </table>
@@ -900,7 +979,7 @@
                                 <input
                                     type="text"
                                     class="entity-id-input"
-                                    :value="r.entityID ?? ''"
+                                    :value="listEntityId(r)"
                                     :disabled="entityIdSavingOrderId === r.orderID"
                                     @focus="onEntityIdFocus(r, $event)"
                                     @keydown.enter.prevent="$event.target.blur()"
@@ -1266,6 +1345,12 @@
             :subject="dailyReportEmailSubject"
             @close="showDailyReportEmailPreview = false"
         />
+        <LogisticsLoanerLendingDialog
+            v-if="logisticsLoanerDialogRecord"
+            :record="logisticsLoanerDialogRecord"
+            @close="closeLogisticsLoanerDialog"
+            @returned="onLogisticsLoanerReturned"
+        />
         </div>
     </div>
 </template>
@@ -1298,6 +1383,7 @@ import StockedPartQuantityDialog from '@/components/ServiceRecord/Layer3/Stocked
 import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/UnregisteredEmailNoteLinkDialog.vue'
 import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/DailyReportEmailPreviewDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
+import LogisticsLoanerLendingDialog from '@/components/ServiceRecord/Layer3/LogisticsLoanerLendingDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
 
 const props = defineProps({
@@ -1309,7 +1395,7 @@ const props = defineProps({
     mode: String,
     tabBadgeCounts: {
         type: Object,
-        default: () => ({ loanerReturned: 0, waitingPromotionReady: 0, serviceRemand: 0 }),
+        default: () => ({ loanerReturned: 0, waitingPromotionReady: 0, serviceRemand: 0, loanerLending: 0 }),
     },
 })
 
@@ -1319,9 +1405,17 @@ const isBoardMode = computed(() => props.mode === 'logistics' || props.mode === 
 const isRestrictedListMode = computed(() =>
     props.mode === 'engineer' || props.mode === 'logistics' || props.mode === 'shippingPrep',
 )
+const LOANER_LENDING_STATUS = 388
+const logisticsLoanerFilter = ref(false)
+const isLogisticsLoanerList = computed(() =>
+    props.mode === 'logistics' && logisticsLoanerFilter.value,
+)
+
 const boardStatusFilter = computed(() => {
     if (props.mode === 'shippingPrep') return '300,310,350,385'
-    if (props.mode === 'logistics') return '350'
+    if (props.mode === 'logistics') {
+        return logisticsLoanerFilter.value ? String(LOANER_LENDING_STATUS) : '350'
+    }
     return '300,350'
 })
 
@@ -1334,6 +1428,12 @@ const waitingPromotionReadyBadgeCount = computed(() =>
 const serviceRemandBadgeCount = computed(() =>
     Number(props.tabBadgeCounts?.serviceRemand ?? 0) || 0,
 )
+const logisticsLoanerLendingBadgeCount = computed(() => {
+    if (props.tabBadgeCounts && Object.prototype.hasOwnProperty.call(props.tabBadgeCounts, 'loanerLending')) {
+        return Number(props.tabBadgeCounts.loanerLending) || 0
+    }
+    return (props.initialRecords ?? []).filter(isLogisticsLoanerLending).length
+})
 
 const currentUserKanji = computed(() => {
     const fromPage = String(page.props.authUser?.kanji_name ?? '').trim()
@@ -1709,6 +1809,18 @@ function matchesDailyReportStatus(record) {
         && (status === 90 || status === 180 || status === 185)
 }
 
+function listEntityId(record) {
+    const stored = String(record?.entityID ?? '').trim()
+    if (stored !== '') return stored
+
+    const service = findServiceMaster(page.props.servicesMaster, {
+        productName: record?.productName,
+        serviceID: record?.serviceID,
+        entityID: record?.entityID,
+    }, normalizePriceAsOfDate(record?.orderDate))
+    return String(service?.entityID ?? '').trim()
+}
+
 function onEntityIdFocus(record, event) {
     entityIdEditOriginal.set(record.orderID, String(event.target.value ?? ''))
 }
@@ -1772,7 +1884,7 @@ function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
 
         const orderID = String(r.orderID ?? '').trim()
         const incident = String(r.incident ?? '').trim()
-        const entityID = String(r.entityID ?? '').trim()
+        const entityID = listEntityId(r)
         const sn = String(r.SN ?? '').trim()
         const symptoms = String(r.symptoms ?? '').trim()
         const poNum = String(r.poNum ?? r.RMA ?? '').trim()
@@ -1830,7 +1942,7 @@ function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
         if (!isAbroadSelected(r.orderID)) continue
 
         const orderID = String(r.orderID ?? '').trim()
-        const entityID = String(r.entityID ?? '').trim()
+        const entityID = listEntityId(r)
         const sn = String(r.SN ?? '').trim()
         const RMA = String(r.RMA ?? '').trim()
         const WO = String(r.sm_workorder ?? '').trim()
@@ -2043,7 +2155,7 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
     for (const r of selectedRows) {
         const orderID = String(r.orderID ?? '').trim()
         const sm_workorder = String(r.sm_workorder ?? '').trim()
-        const entityID = String(r.entityID ?? '').trim()
+        const entityID = listEntityId(r)
         const sn = String(r.SN ?? '').trim()
 
         let stockedParts = []
@@ -2264,6 +2376,40 @@ function nextBusinessDayYmd(fromYmd = tokyoTodayYmd()) {
     return ymd
 }
 
+function isLogisticsLoanerLending(record) {
+    return (record?.order_type === 'loaner') && Number(record?.status) === LOANER_LENDING_STATUS
+}
+
+function toggleLogisticsLoanerFilter() {
+    logisticsLoanerFilter.value = !logisticsLoanerFilter.value
+}
+
+const logisticsLoanerDialogRecord = ref(null)
+
+function closeLogisticsLoanerDialog() {
+    logisticsLoanerDialogRecord.value = null
+}
+
+async function openLogisticsLoanerDialog(record) {
+    const snapshot = { ...record }
+    logisticsLoanerDialogRecord.value = snapshot
+    try {
+        const full = await fetchRecord(record.orderID)
+        if (logisticsLoanerDialogRecord.value?.orderID !== record.orderID) return
+        logisticsLoanerDialogRecord.value = {
+            ...full,
+            item: full.item || snapshot.item,
+        }
+    } catch {
+        // 一覧の情報で表示を続ける
+    }
+}
+
+async function onLogisticsLoanerReturned() {
+    logisticsLoanerDialogRecord.value = null
+    await reloadListRecords({ preserveState: true })
+}
+
 function matchesLogisticsShippingDateFilter(record, filter) {
     if (filter === 'all') return true
     const ymd = formatListDate(record?.shippingOut_requiredDate)
@@ -2393,6 +2539,8 @@ function recordColumnSortValue(record, key) {
         case 'shipTo':
         case 'sentOut':
             return formatListDate(record?.[key]) || ''
+        case 'entityID':
+            return listEntityId(record)
         default:
             return record?.[key] ?? ''
     }
@@ -2444,7 +2592,16 @@ const filteredRecords = computed(() => {
         records = records.filter((r) => matchesArrivalFilter(r, effectiveArrivalFilter.value))
     }
 
-    if (props.mode === 'logistics' || props.mode === 'shippingPrep') {
+    if (props.mode === 'logistics') {
+        if (logisticsLoanerFilter.value) {
+            records = records.filter(isLogisticsLoanerLending)
+        } else {
+            records = records.filter((r) => !isLogisticsLoanerLending(r))
+            records = records.filter((r) =>
+                matchesLogisticsShippingDateFilter(r, shippingDateFilter.value),
+            )
+        }
+    } else if (props.mode === 'shippingPrep') {
         records = records.filter((r) =>
             matchesLogisticsShippingDateFilter(r, shippingDateFilter.value),
         )
@@ -2482,6 +2639,10 @@ const filteredRecords = computed(() => {
                     r.dealer_depart,
                     r.contactPerson,
                     r.deliveryDestination_company,
+                    r.deliveryDestination_depart,
+                    r.deliveryDestination_zipcode,
+                    r.deliveryDestination_address1,
+                    r.deliveryDestination_address2,
                     r.rmaNumOverSea,
                     formatListDate(r.shipTo),
                     r.shipTo,
@@ -2495,7 +2656,7 @@ const filteredRecords = computed(() => {
                     r.symptoms,
                     r.sm_workorder,
                     r.sm_quote,
-                    r.entityID,
+                    listEntityId(r),
                     r.incident,
                     String(symptomsNumForRecord(r)),
                     r.RMA,
@@ -2931,6 +3092,13 @@ async function downloadAbroadExcelFile() {
     }
 }
 
+watch(logisticsLoanerFilter, () => {
+    clearColumnSort()
+    nextTick(() => {
+        logisticsCalendarRef.value?.refetchEvents?.()
+    })
+})
+
 watch(orderTypeFilter, (value) => {
     clearColumnSort()
     persistOrderTypeFilter(value)
@@ -3230,6 +3398,11 @@ async function fetchRecord(orderID) {
 async function openSecondLayer(record) {
     if (!record?.orderID) {
         console.error('orderID が取得できません', record)
+        return
+    }
+
+    if (props.mode === 'logistics' && isLogisticsLoanerLending(record)) {
+        await openLogisticsLoanerDialog(record)
         return
     }
 
@@ -3884,6 +4057,7 @@ async function saveRecord() {
     flex: 1 1 auto;
     min-width: 0;
     justify-content: center;
+    overflow: visible;
 }
 
 .filtered-count {
@@ -3998,6 +4172,8 @@ async function saveRecord() {
     justify-content: flex-start;
     align-items: center;
     gap: 8px;
+    overflow: visible;
+    padding-top: 4px;
 }
 
 .search-area label {
@@ -4017,7 +4193,7 @@ async function saveRecord() {
     color: #111827;
 }
 
-.search-area > button:not(.calendar-link):not(.sm-mode-btn) {
+.search-area > button:not(.calendar-link):not(.sm-mode-btn):not(.order-type-btn) {
     padding: 6px 16px;
     background-color: #6b7280;
     color: white;
@@ -4172,13 +4348,18 @@ async function saveRecord() {
     flex: 0 0 auto;
 }
 
+.logistics-loaner-btn {
+    margin-left: 2px;
+}
+
 .logistics-view-controls {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     align-items: center;
     gap: 6px;
-    padding: 0;
+    padding: 4px 0 0;
+    overflow: visible;
 }
 
 .view-mode-btn {
@@ -4684,6 +4865,22 @@ async function saveRecord() {
     text-overflow: ellipsis;
     font-size: 12px;
     font-weight: 700 !important;
+}
+
+:deep(#myLargeTable th.logistics-loaner-col-100),
+:deep(#myLargeTable td.logistics-loaner-col-100) {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    box-sizing: border-box;
+}
+
+:deep(#myLargeTable th.logistics-loaner-col-200),
+:deep(#myLargeTable td.logistics-loaner-col-200) {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+    box-sizing: border-box;
 }
 
 #myLargeTable tbody td {
