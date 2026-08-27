@@ -3044,15 +3044,41 @@ function listOrderTypeForRecord() {
     return props.record.order_type === 'waiting_list' ? 'waiting_list' : 'loaner'
 }
 
-function buildListReturnUrl(orderType) {
-    const base = `${page.props.appBaseUrl}/servicerecord/administrator`
+function closeListUrl(orderType) {
+    const returnUrl = safeReturnUrl()
+    let base = `${page.props.appBaseUrl}/servicerecord/administrator`
+    let arrival = null
     try {
+        const fromEngineer = new URLSearchParams(window.location.search).get('from') === 'engineer'
+        if (returnUrl) {
+            const prev = new URL(returnUrl)
+            if (/\/servicerecord\/engineer(?:\/|$)/.test(prev.pathname)) {
+                base = `${page.props.appBaseUrl}/servicerecord/engineer`
+            }
+            arrival = prev.searchParams.get('arrival')
+        } else if (fromEngineer) {
+            base = `${page.props.appBaseUrl}/servicerecord/engineer`
+        }
+
         const url = new URL(base, window.location.origin)
         url.searchParams.set('orderType', orderType)
+        if (arrival && arrival !== 'hide_future') {
+            url.searchParams.set('arrival', arrival)
+        }
+        url.searchParams.delete('openOrderID')
+        for (const key of [...url.searchParams.keys()]) {
+            if (key !== 'openOrderID' && /(^|;)openOrderID$/i.test(key)) {
+                url.searchParams.delete(key)
+            }
+        }
         return url.href
     } catch {
         return `${base}?orderType=${encodeURIComponent(orderType)}`
     }
+}
+
+function buildListReturnUrl(orderType) {
+    return closeListUrl(orderType)
 }
 
 function returnToWaitingListList() {
@@ -3061,23 +3087,7 @@ function returnToWaitingListList() {
         return
     }
 
-    const returnUrl = safeReturnUrl()
-    if (returnUrl) {
-        try {
-            const url = new URL(returnUrl)
-            if (/\/servicerecord\/(administrator|engineer)\/?$/.test(url.pathname) || url.pathname.includes('/servicerecord/administrator')) {
-                url.searchParams.set('orderType', 'waiting_list')
-                window.location.href = url.href
-                return
-            }
-            window.location.href = url.href
-            return
-        } catch {
-            // fall through
-        }
-    }
-
-    window.location.href = buildListReturnUrl('waiting_list')
+    window.location.href = closeListUrl('waiting_list')
 }
 
 function openParentServiceDetail() {
@@ -3145,31 +3155,13 @@ function closePage() {
         return
     }
 
-    const orderType = listOrderTypeForRecord()
-    const returnUrl = safeReturnUrl()
-    if (returnUrl) {
-        try {
-            const url = new URL(returnUrl)
-            // administrator / engineer 一覧へ戻す場合は loaner / waiting_list フィルターを明示
-            if (/\/servicerecord\/(administrator|engineer)\/?$/.test(url.pathname) || url.pathname.includes('/servicerecord/administrator')) {
-                url.searchParams.set('orderType', orderType)
-                window.location.href = url.href
-                return
-            }
-            // servicerecord_q など呼び出し元へそのまま戻る
-            try {
-                sessionStorage.removeItem('sr_list_return_url')
-            } catch {
-                // ignore
-            }
-            window.location.href = url.href
-            return
-        } catch {
-            // fall through
-        }
+    try {
+        sessionStorage.removeItem('sr_list_return_url')
+    } catch {
+        // ignore
     }
 
-    window.location.href = buildListReturnUrl(orderType)
+    window.location.href = closeListUrl(listOrderTypeForRecord())
 }
 
 function updateCalendarSize() {
