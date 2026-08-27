@@ -3172,7 +3172,8 @@ watch(
 
 function matchesAbroadFilter(record) {
     const laborID = Number(record?.laborID)
-    return Number.isFinite(laborID) && laborID >= 60 && laborID < 100
+    const matchesLaborRange = Number.isFinite(laborID) && laborID >= 60 && laborID < 100
+    return matchesLaborRange || matchesOverseasRmaFilter(record)
 }
 
 function matchesOverseasRmaFilter(record) {
