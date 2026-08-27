@@ -1381,7 +1381,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -3750,7 +3750,7 @@ function resolveDetailFormAPrice(draft, parts = []) {
     const asOfDate = resolveDisplayPriceAsOfDate({
         orderType: draft.order_type,
         orderDate: draft.orderDate,
-        parentOrderDate: draft.parentRecord?.orderDate,
+        parentOrderDate: parentOrderDateFromRecord(draft),
     })
     const master = findServiceMaster(page.props.servicesMaster, {
         productName: draft.productName,
@@ -3941,7 +3941,11 @@ async function saveRecord() {
             productName: draftRecord.value.productName,
             entityID: draftRecord.value.entityID,
             serviceID: draftRecord.value.serviceID,
-        }, normalizePriceAsOfDate(draftRecord.value.orderDate))
+        }, resolveDisplayPriceAsOfDate({
+            orderType: draftRecord.value.order_type,
+            orderDate: draftRecord.value.orderDate,
+            parentOrderDate: parentOrderDateFromRecord(draftRecord.value),
+        }))
 
         // 受注日・作業内容変更時: 子 loaner の保存済み価格を反映
         if (Array.isArray(data.loaners) && data.loaners.length) {

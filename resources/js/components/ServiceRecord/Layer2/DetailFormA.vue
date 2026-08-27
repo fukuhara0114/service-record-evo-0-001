@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -940,8 +940,8 @@ const fetchedParentOrderDate = ref(null)
 const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
     orderType: props.draftRecord?.order_type ?? props.record?.order_type,
     orderDate: props.draftRecord?.orderDate ?? props.record?.orderDate,
-    parentOrderDate: props.draftRecord?.parentRecord?.orderDate
-        ?? props.record?.parentRecord?.orderDate
+    parentOrderDate: parentOrderDateFromRecord(props.draftRecord)
+        ?? parentOrderDateFromRecord(props.record)
         ?? fetchedParentOrderDate.value,
 }))
 
@@ -1231,7 +1231,7 @@ watch(
     () => [
         props.draftRecord?.order_type ?? props.record?.order_type,
         props.draftRecord?.parentID ?? props.record?.parentID,
-        props.draftRecord?.parentRecord?.orderDate ?? props.record?.parentRecord?.orderDate,
+        parentOrderDateFromRecord(props.draftRecord) ?? parentOrderDateFromRecord(props.record),
         props.record?.orderID,
     ],
     async ([orderType, parentId, nestedParentDate]) => {
@@ -1243,31 +1243,37 @@ watch(
             fetchedParentOrderDate.value = nestedParentDate
             return
         }
-        if (parentId == null || parentId === '') {
+        if (parentId == null || parentId === '' || Number(parentId) === 0) {
             fetchedParentOrderDate.value = null
             return
         }
-        const requestedParentId = parentId
+        const requestedParentId = String(parentId)
         try {
-            const result = await apiFetch(`${getRecordApiBase()}/record/${requestedParentId}`)
-            if ((props.draftRecord?.parentID ?? props.record?.parentID) !== requestedParentId) return
+            const result = await apiFetch(`${page.props.appBaseUrl}/servicerecord/record/${requestedParentId}`)
+            const currentParentId = String(props.draftRecord?.parentID ?? props.record?.parentID ?? '')
+            if (currentParentId !== requestedParentId) return
+            const already = parentOrderDateFromRecord(props.draftRecord)
+                ?? parentOrderDateFromRecord(props.record)
+            if (already) {
+                fetchedParentOrderDate.value = already
+                return
+            }
             if (!result?.response?.ok) {
-                fetchedParentOrderDate.value = null
                 return
             }
             const parent = result.data
-            fetchedParentOrderDate.value = parent?.orderDate ?? null
+            const parentDate = parentOrderDateFromRecord(parent) ?? parent?.orderDate ?? null
+            fetchedParentOrderDate.value = parentDate
             if (props.draftRecord && parent) {
+                props.draftRecord.parentOrderDate = parentDate
                 props.draftRecord.parentRecord = {
                     orderID: parent.orderID ?? requestedParentId,
-                    orderDate: parent.orderDate ?? null,
+                    orderDate: parentDate,
                     order_type: parent.order_type ?? null,
                 }
             }
         } catch {
-            if ((props.draftRecord?.parentID ?? props.record?.parentID) === requestedParentId) {
-                fetchedParentOrderDate.value = null
-            }
+            // 親の再取得に失敗しても、一覧/詳細で既に持っている受注日は消さない
         }
     },
     { immediate: true },

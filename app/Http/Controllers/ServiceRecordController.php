@@ -317,6 +317,7 @@ class ServiceRecordController extends Controller
         // loaner / waiting_list 一覧の item 列表示用
         $this->attachLoanerItemsToRecords($records);
         $this->attachEntityIdsFromServiceMaster($records);
+        $this->attachServiceParentOrderDates($records);
 
         $tabBadgeCounts = [
             'loanerReturned' => 0,
@@ -441,6 +442,157 @@ class ServiceRecordController extends Controller
             'attachmentData' => $attachmentData,
             'tabBadgeCounts' => $tabBadgeCounts,
         ]);
+    }
+
+    private function isLoanerOrderType(mixed $orderType): bool
+    {
+        return strtolower(trim((string) ($orderType ?? ''))) === 'loaner';
+    }
+
+    private function isServiceLikeOrderType(mixed $orderType): bool
+    {
+        $type = strtolower(trim((string) ($orderType ?? '')));
+
+        return $type === '' || $type === 'service';
+    }
+
+    private function toOrderDateYmd(mixed $value): ?string
+    {
+        return app(MasterPriceVersionResolver::class)->normalizeDate($value);
+    }
+
+    /**
+     * parentID から service 案件の受注日を辿る。
+     * 直近の親が loaner ならさらに親へ。見つからなければ最初の親の受注日。
+     *
+     * @return array{orderID: mixed, orderDate: ?string, order_type: mixed}|null
+     */
+    private function loadServiceParentInfo(mixed $parentId): ?array
+    {
+        $currentId = $parentId;
+        $fallback = null;
+
+        for ($i = 0; $i < 5; $i++) {
+            if ($currentId === null || $currentId === '' || (int) $currentId === 0) {
+                break;
+            }
+
+            $parent = ServiceRecord::query()
+                ->where('orderID', $currentId)
+                ->first(['orderID', 'orderDate', 'order_type', 'parentID']);
+
+            if (! $parent) {
+                break;
+            }
+
+            $info = [
+                'orderID' => $parent->orderID,
+                'orderDate' => $this->toOrderDateYmd($parent->orderDate),
+                'order_type' => $parent->order_type,
+            ];
+            $fallback ??= $info;
+
+            if ($this->isServiceLikeOrderType($parent->order_type)) {
+                return $info;
+            }
+
+            $currentId = $parent->parentID;
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * 一覧の loaner に親 service の受注日を付与する（DetailFormA の価格版用）。
+     *
+     * @param  \Illuminate\Support\Collection<int, ServiceRecord>  $records
+     */
+    private function attachServiceParentOrderDates($records): void
+    {
+        $loaners = $records->filter(fn (ServiceRecord $record) => $this->isLoanerOrderType($record->order_type));
+        if ($loaners->isEmpty()) {
+            return;
+        }
+
+        $needed = $loaners
+            ->pluck('parentID')
+            ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id !== 0)
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $byId = [];
+        for ($guard = 0; $needed !== [] && $guard < 5; $guard++) {
+            $missing = array_values(array_filter($needed, fn ($id) => ! isset($byId[$id])));
+            if ($missing === []) {
+                break;
+            }
+
+            $rows = ServiceRecord::query()
+                ->whereIn('orderID', $missing)
+                ->get(['orderID', 'orderDate', 'order_type', 'parentID']);
+
+            $needed = [];
+            foreach ($rows as $row) {
+                $byId[(string) $row->orderID] = $row;
+                if ($this->isServiceLikeOrderType($row->order_type)) {
+                    continue;
+                }
+                $nextId = $row->parentID;
+                if ($nextId !== null && $nextId !== '' && (int) $nextId !== 0) {
+                    $needed[] = (string) $nextId;
+                }
+            }
+            $needed = array_values(array_unique($needed));
+        }
+
+        foreach ($loaners as $loaner) {
+            $info = $this->resolveServiceParentInfoFromMap($loaner->parentID, $byId);
+            $loaner->setAttribute('parentOrderDate', data_get($info, 'orderDate'));
+            $loaner->setAttribute('parentRecord', $info);
+        }
+    }
+
+    /**
+     * @param  array<string, ServiceRecord>  $byId
+     * @return array{orderID: mixed, orderDate: ?string, order_type: mixed}|null
+     */
+    private function resolveServiceParentInfoFromMap(mixed $parentId, array $byId): ?array
+    {
+        $currentId = $parentId;
+        $fallback = null;
+        $seen = [];
+
+        for ($i = 0; $i < 5; $i++) {
+            if ($currentId === null || $currentId === '' || (int) $currentId === 0) {
+                break;
+            }
+            $key = (string) $currentId;
+            if (isset($seen[$key])) {
+                break;
+            }
+            $seen[$key] = true;
+            $parent = $byId[$key] ?? null;
+            if (! $parent) {
+                break;
+            }
+
+            $info = [
+                'orderID' => $parent->orderID,
+                'orderDate' => $this->toOrderDateYmd($parent->orderDate),
+                'order_type' => $parent->order_type,
+            ];
+            $fallback ??= $info;
+
+            if ($this->isServiceLikeOrderType($parent->order_type)) {
+                return $info;
+            }
+
+            $currentId = $parent->parentID;
+        }
+
+        return $fallback;
     }
 
     /**
@@ -789,27 +941,15 @@ class ServiceRecordController extends Controller
             return response()->json(['message' => '指定された案件は存在しません。'], 404);
         }
 
-        if ($record->order_type === 'loaner') {
+        if (strtolower(trim((string) ($record->order_type ?? ''))) === 'loaner') {
             $record->unsetRelation('statusMaster');
             $record->setAttribute(
                 'priceVersions',
                 app(MasterPriceVersionResolver::class)->loanerPriceVersions($record->loanerID),
             );
-            $parentId = $record->parentID;
-            $parentRecord = null;
-            if ($parentId !== null && $parentId !== '') {
-                $parent = ServiceRecord::query()
-                    ->where('orderID', $parentId)
-                    ->first(['orderID', 'orderDate', 'order_type']);
-                if ($parent) {
-                    $parentRecord = [
-                        'orderID' => $parent->orderID,
-                        'orderDate' => $parent->orderDate,
-                        'order_type' => $parent->order_type,
-                    ];
-                }
-            }
-            $record->setAttribute('parentRecord', $parentRecord);
+            $parentInfo = $this->loadServiceParentInfo($record->parentID);
+            $record->setAttribute('parentOrderDate', data_get($parentInfo, 'orderDate'));
+            $record->setAttribute('parentRecord', $parentInfo);
         } elseif ($record->order_type === 'waiting_list') {
             $record->unsetRelation('statusMaster');
             $record->unsetRelation('statusMasterLoaner');

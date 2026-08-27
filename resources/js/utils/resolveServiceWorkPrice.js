@@ -63,6 +63,15 @@ export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderD
     return normalizePriceAsOfDate(orderDate)
 }
 
+/** 親 service の受注日。parentOrderDate または parentRecord.orderDate。 */
+export function parentOrderDateFromRecord(record) {
+    if (!record || typeof record !== 'object') return null
+    return record.parentOrderDate
+        ?? record.parentRecord?.orderDate
+        ?? record.parent_record?.orderDate
+        ?? null
+}
+
 export function firstValidPriceAsOf(...values) {
     for (const value of values) {
         const ymd = normalizePriceAsOfDate(value)
