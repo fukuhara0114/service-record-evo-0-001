@@ -791,6 +791,10 @@ class ServiceRecordController extends Controller
 
         if ($record->order_type === 'loaner') {
             $record->unsetRelation('statusMaster');
+            $record->setAttribute(
+                'priceVersions',
+                app(MasterPriceVersionResolver::class)->loanerPriceVersions($record->loanerID),
+            );
         } elseif ($record->order_type === 'waiting_list') {
             $record->unsetRelation('statusMaster');
             $record->unsetRelation('statusMasterLoaner');
@@ -2229,7 +2233,7 @@ class ServiceRecordController extends Controller
         try {
             $parentRecord = ServiceRecord::query()
                 ->where('orderID', $orderID)
-                ->first(['orderID', 'orderDate', 'returnCode', 'order_type']);
+                ->first(['orderID', 'orderDate', 'returnCode', 'order_type', 'loanerID']);
             $resolver = app(MasterPriceVersionResolver::class);
             $asOfDate = $resolver->normalizePriceAsOfDate($parentRecord?->orderDate);
 
@@ -2241,19 +2245,18 @@ class ServiceRecordController extends Controller
                 ->get();
 
             $linkedLoanerPayload = $linkedLoaners
-                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord) {
+                ->map(function (ServiceRecord $loaner) use ($resolver, $parentRecord, $asOfDate) {
                     $attached = AttachedLoaner::query()
                         ->where('associatedID', $loaner->orderID)
                         ->orderByDesc('id')
                         ->first();
 
-                    // 受注日あり（2001年以降）: その日の版 / 未定・2000年以前: 親、それも無ければ最新版
-                    $loanerAsOf = $resolver->firstValidAsOf($loaner->orderDate, $parentRecord?->orderDate);
+                    // 親 servicerecord.orderDate 版の loanermaster のみ参照する
                     $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
                     $masterPrice = $resolver->loanerChargePrice(
                         $parentRecord?->returnCode,
                         $loaner->loanerID,
-                        $loanerAsOf,
+                        $asOfDate,
                     );
 
                     return [
@@ -3379,8 +3382,8 @@ class ServiceRecordController extends Controller
 
         $updated = [];
         foreach ($children as $child) {
-            // 親の受注日を優先（親で切り替えた版）。未定・2000年以前なら子、それも無ければ最新版
-            $asOf = $resolver->firstValidAsOf($parentOrderDate, $child->orderDate);
+            // 親 servicerecord.orderDate 版のみ（未定・2000年以前は最新版）
+            $asOf = $resolver->normalizePriceAsOfDate($parentOrderDate);
             $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
             $current = (float) ($child->price ?? 0);
             // loaner 詳細で無償（price=0）にした案件は、親の再計算で有償価格へ戻さない

@@ -265,7 +265,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { tokyoTodayYmd } from '@/utils/businessDays'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerLinePrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice } from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
@@ -358,13 +358,10 @@ function fieldValue(field) {
     return ''
 }
 
-/** 受注日（2001年以降）: その日の版 / 未定・2000年以前: 最新版 */
-const priceAsOfDate = computed(() => {
-    if (props.draftRecord) {
-        return normalizePriceAsOfDate(props.draftRecord.orderDate)
-    }
-    return normalizePriceAsOfDate(props.record?.orderDate)
-})
+/** 価格版は servicerecord.orderDate のみ */
+const priceAsOfDate = computed(() =>
+    normalizePriceAsOfDate(props.draftRecord?.orderDate ?? props.record?.orderDate),
+)
 
 const isLoanerRecord = computed(() => {
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type
@@ -391,11 +388,16 @@ const selectedServiceMaster = computed(() => findServiceMaster(page.props.servic
 }, priceAsOfDate.value))
 
 const workPrice = computed(() => {
-    const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
-    const resolved = resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
-    if (Number.isFinite(resolved) && resolved !== 0) return resolved
-    const stored = Number(props.draftRecord?.price ?? props.record?.price)
-    return Number.isFinite(stored) ? stored : 0
+    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
+    if (isLoanerRecord.value && (noCharge === 1 || noCharge === '1' || noCharge === true)) return 0
+    return resolveRecordWorkPriceFromMasters({
+        orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+        returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+        serviceMaster: selectedServiceMaster.value,
+        loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+        loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+        asOfDate: priceAsOfDate.value,
+    })
 })
 
 const a2laPrice = computed(() => {
@@ -406,9 +408,6 @@ const a2laPrice = computed(() => {
 
 function resolvedPartMaster(part) {
     return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
-        ?? part.part_master
-        ?? part.partMaster
-        ?? null
 }
 
 function partVersionPrice(part) {
@@ -435,7 +434,7 @@ function applyLinePricesForAsOf() {
     }
     const returnCode = currentReturnCode.value
     for (const loaner of props.loaners ?? []) {
-        const amount = resolveLoanerLinePrice(loaner, returnCode, asOf)
+        const amount = resolveLoanerMasterLinePrice(loaner, returnCode, asOf)
         loaner.masterPrice = amount
     }
 }
@@ -460,7 +459,7 @@ const loanerPrice = computed(() => {
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
     if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
     return (props.loaners ?? []).reduce((sum, loaner) => {
-        const value = Number(resolveLoanerLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value))
+        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, priceAsOfDate.value))
         return sum + (Number.isFinite(value) ? value : 0)
     }, 0)
 })

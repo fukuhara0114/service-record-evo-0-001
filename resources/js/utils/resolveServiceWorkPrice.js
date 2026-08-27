@@ -204,6 +204,35 @@ export function findLoanerMasterPrice(versionsOrRows, loanerID, asOfDate = null)
 
 export const PAID_LOANER_RETURN_CODES = [1, 2, 7, 13]
 
+/**
+ * 案件本体の作業価格。
+ * service → servicemaster、loaner → loanermaster。版は必ず asOfDate（受注日）。
+ */
+export function resolveRecordWorkPriceFromMasters({
+    orderType,
+    returnCode,
+    serviceMaster,
+    loanerID,
+    loanerPriceVersions = [],
+    asOfDate = null,
+} = {}) {
+    if (String(orderType ?? '').trim() === 'loaner') {
+        return findLoanerMasterPrice(loanerPriceVersions, loanerID, asOfDate)
+    }
+    return resolveServiceWorkPrice(serviceMaster, returnCode)
+}
+
+/**
+ * 紐づく貸出行の価格。servicerecord.orderDate 版の loanermaster のみ参照する。
+ */
+export function resolveLoanerMasterLinePrice(loaner, returnCode, asOfDate = null) {
+    if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
+    if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+        return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOfDate)
+    }
+    return 0
+}
+
 export function resolveLoanerMasterChargePrice(versionsOrRows, returnCode, loanerID, asOfDate = null) {
     if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
     return findLoanerMasterPrice(versionsOrRows, loanerID, asOfDate)
