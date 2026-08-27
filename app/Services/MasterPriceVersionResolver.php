@@ -83,6 +83,31 @@ class MasterPriceVersionResolver
         return $normalized;
     }
 
+    public function isLoanerOwnOrderDateUsable(mixed $date): bool
+    {
+        $ymd = $this->normalizeDate($date);
+        if ($ymd === null) {
+            return false;
+        }
+
+        $year = (int) substr($ymd, 0, 4);
+
+        return $year > 2000 && $year < 2099;
+    }
+
+    /**
+     * loaner の価格版 as-of。受注日が 2000年以前 / 2099年以降 / 未定なら親 service の受注日。
+     * 発送予定日・出荷日は使わない。
+     */
+    public function resolveLoanerPriceAsOf(mixed $loanerOrderDate, mixed $serviceOrderDate): ?string
+    {
+        if ($this->isLoanerOwnOrderDateUsable($loanerOrderDate)) {
+            return $this->normalizePriceAsOfDate($loanerOrderDate);
+        }
+
+        return $this->normalizePriceAsOfDate($serviceOrderDate);
+    }
+
     public function firstValidAsOf(mixed ...$dates): ?string
     {
         foreach ($dates as $date) {

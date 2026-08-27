@@ -1075,7 +1075,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
-import { pickMasterVersion, PAID_LOANER_RETURN_CODES, firstValidPriceAsOf } from '@/utils/resolveServiceWorkPrice'
+import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
 
 const SHIP_PREP_STATUS_ID = 300
 
@@ -1331,12 +1331,13 @@ const form = reactive({
     incident: stringValue(props.record.incident),
 })
 
-const priceAsOfDate = computed(() => firstValidPriceAsOf(
-    form.orderDate,
-    parentInfo.value?.orderDate,
-    props.parentRecord?.orderDate,
-    props.record?.orderDate,
-))
+const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
+    orderType: props.record?.order_type,
+    orderDate: form.orderDate ?? props.record?.orderDate,
+    parentOrderDate: parentInfo.value?.orderDate
+        ?? props.parentRecord?.orderDate
+        ?? parentOrderDateFromRecord(props.record),
+}))
 
 const selectedUnit = computed(() => {
     const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
@@ -1461,6 +1462,7 @@ function normalizeParentInfo(data) {
     if (!data) return null
     return {
         orderID: data.orderID ?? data.order_id ?? null,
+        orderDate: toYmd(data.orderDate ?? data.order_date ?? data.parentOrderDate) ?? null,
         status: data.status ?? null,
         status_label: data.status_label
             ?? data.statusMaster?.status

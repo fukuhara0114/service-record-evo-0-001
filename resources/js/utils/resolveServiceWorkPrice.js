@@ -63,7 +63,7 @@ export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderD
     return normalizePriceAsOfDate(orderDate)
 }
 
-/** 親 service の受注日。parentOrderDate または parentRecord.orderDate。 */
+/** 親 service の受注日のみ。発送予定日・出荷日は見ない。 */
 export function parentOrderDateFromRecord(record) {
     if (!record || typeof record !== 'object') return null
     return record.parentOrderDate

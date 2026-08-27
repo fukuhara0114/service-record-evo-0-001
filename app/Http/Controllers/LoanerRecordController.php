@@ -173,6 +173,7 @@ class LoanerRecordController extends Controller
 
                 $parentRecord = [
                     'orderID' => $parent->orderID,
+                    'orderDate' => app(MasterPriceVersionResolver::class)->normalizeDate($parent->orderDate),
                     'status' => $parent->status,
                     'status_label' => $parentStatusLabel,
                     'sentOut' => $sentOut,
@@ -896,7 +897,7 @@ class LoanerRecordController extends Controller
                 if ($loanerId !== null && $loanerId !== '') {
                     $master = $resolver->loanerMaster(
                         $loanerId,
-                        $resolver->firstValidAsOf($orderDate, $parentOrderDate),
+                        $resolver->resolveLoanerPriceAsOf($orderDate, $parentOrderDate),
                     );
                 }
                 $payload['price'] = $master?->price ?? $attached->loanerMaster?->price ?? 0;
@@ -2780,7 +2781,8 @@ class LoanerRecordController extends Controller
     /**
      * 貸出案件の課金価格を算出する。
      * parent の returnCode が 1,2,7,13 のとき loanermaster の版価格、それ以外／親なしは 0。
-     * 受注日は loaner 自身 → 親案件の順。未設定・2000年以前なら最新版。
+     * 受注日は loaner 自身（2001〜2098年）→ それ以外は親 service の受注日。
+     * 発送予定日・出荷日は使わない。未設定・2000年以前なら最新版。
      */
     private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId, mixed $orderDate = null): float
     {
@@ -2797,7 +2799,7 @@ class LoanerRecordController extends Controller
         }
 
         $resolver = app(MasterPriceVersionResolver::class);
-        $asOf = $resolver->firstValidAsOf($orderDate, $parent->orderDate);
+        $asOf = $resolver->resolveLoanerPriceAsOf($orderDate, $parent->orderDate);
 
         return $resolver->loanerChargePrice($parent->returnCode, $loanerId, $asOf);
     }

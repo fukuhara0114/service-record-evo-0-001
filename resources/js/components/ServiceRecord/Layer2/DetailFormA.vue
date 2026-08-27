@@ -1262,7 +1262,7 @@ watch(
                 return
             }
             const parent = result.data
-            const parentDate = parentOrderDateFromRecord(parent) ?? parent?.orderDate ?? null
+            const parentDate = parent?.parentOrderDate ?? parent?.orderDate ?? null
             fetchedParentOrderDate.value = parentDate
             if (props.draftRecord && parent) {
                 props.draftRecord.parentOrderDate = parentDate
