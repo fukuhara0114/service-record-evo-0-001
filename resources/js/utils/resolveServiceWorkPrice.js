@@ -16,10 +16,21 @@ function normalizeDate(value) {
     }
     const text = String(value).trim()
     if (text === '' || text === '[object Object]') return null
-    const match = text.match(/(\d{4}-\d{2}-\d{2})/)
-    const ymd = match ? match[1] : (text.length >= 10 ? text.slice(0, 10) : text)
+    const dashed = text.match(/(\d{4})-(\d{2})-(\d{2})/)
+    if (dashed) {
+        const ymd = `${dashed[1]}-${dashed[2]}-${dashed[3]}`
+        if (ymd.startsWith('0000-00-00') || Number(dashed[1]) < 1) return null
+        return ymd
+    }
+    const slashed = text.match(/(\d{4})\/(\d{2})\/(\d{2})/)
+    if (slashed) {
+        const ymd = `${slashed[1]}-${slashed[2]}-${slashed[3]}`
+        if (Number(slashed[1]) < 1) return null
+        return ymd
+    }
+    const ymd = text.length >= 10 ? text.slice(0, 10) : text
     if (!ymd || ymd.startsWith('0000-00-00') || Number(ymd.slice(0, 4)) < 1) return null
-    return ymd
+    return /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : null
 }
 
 /** 受注日の暦日 Y-m-d。発送予定日は渡さない。 */

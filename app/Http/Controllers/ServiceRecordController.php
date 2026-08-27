@@ -2461,8 +2461,9 @@ class ServiceRecordController extends Controller
                         ->first();
 
                     // loaner 自身の受注日ルール（2001〜2098は自身、それ以外は親 service の受注日）
+                    $loanerOrderDate = $this->toOrderDateYmd($loaner->orderDate);
                     $loanerAsOf = $resolver->resolveLoanerPriceAsOf(
-                        $loaner->orderDate,
+                        $loanerOrderDate,
                         $parentRecord?->orderDate,
                     );
                     $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
@@ -2482,7 +2483,8 @@ class ServiceRecordController extends Controller
                         'productName' => $loaner->productName,
                         'SN' => $loaner->SN,
                         'price' => $loaner->price,
-                        'orderDate' => optional($loaner->orderDate)->format('Y-m-d') ?? $loaner->orderDate,
+                        'orderDate' => $loanerOrderDate,
+                        'priceAsOfDate' => $loanerAsOf,
                         'masterPrice' => $masterPrice,
                         'priceVersions' => $priceVersions,
                         'loanerID' => $loaner->loanerID,

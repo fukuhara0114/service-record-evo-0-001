@@ -911,7 +911,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -2183,17 +2183,26 @@ function caseParentOrderDate() {
 function loanerLineAsOfDate(loaner) {
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
     if (orderType === 'loaner' || orderType === 'waiting_list' || loaner?.orderID != null) {
-        return resolveLinkedLoanerPriceAsOfDate(loaner, caseParentOrderDate())
+        const fromApi = normalizePriceAsOfDate(loaner?.priceAsOfDate)
+        if (fromApi) return fromApi
+        const own = loaner?.orderDate ?? loaner?.order_date ?? null
+        if (isLoanerOwnOrderDateUsable(own)) {
+            return normalizePriceAsOfDate(own)
+        }
+        return resolveLinkedLoanerPriceAsOfDate(
+            { ...loaner, orderDate: own },
+            caseParentOrderDate(),
+        )
     }
     return priceAsOfDate.value
 }
 
 /**
- * LoanerDetail の有償表示と同じく、紐づく loaner はマスタを loaner 受注日で再計算する。
- * 保存済み price=0（無償）は 0 のまま。
+ * LoanerDetail の有償表示に合わせる。
+ * as-of が取れないときに priceVersions へ null を渡すと最新版になるため、
+ * その場合はサーバ計算済み masterPrice を使う。
  */
 function loanerDisplayPrice(loaner) {
-    const asOf = loanerLineAsOfDate(loaner)
     const returnCode = currentReturnCode.value
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
 
@@ -2201,15 +2210,25 @@ function loanerDisplayPrice(loaner) {
         if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
         const stored = Number(loaner?.price)
         if (Number.isFinite(stored) && Math.abs(stored) < 0.00001) return 0
+
+        const asOf = loanerLineAsOfDate(loaner)
+        const serverMaster = Number(loaner?.masterPrice)
+
+        // as-of があるときだけクライアントで版を選ぶ（null だと最新版に落ちる）
+        if (asOf && Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+            const calc = findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
+            if (calc > 0) return calc
+        }
+
+        if (Number.isFinite(serverMaster) && serverMaster > 0) return serverMaster
+
         if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
             return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
         }
-        const master = Number(loaner?.masterPrice)
-        if (Number.isFinite(master)) return master
         return Number.isFinite(stored) ? stored : 0
     }
 
-    return resolveLoanerLinePrice(loaner, returnCode, asOf)
+    return resolveLoanerLinePrice(loaner, returnCode, loanerLineAsOfDate(loaner))
 }
 
 function applyLinePricesForAsOf() {
