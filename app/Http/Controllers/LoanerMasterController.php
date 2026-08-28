@@ -125,6 +125,54 @@ class LoanerMasterController extends Controller
     }
 
     /**
+     * LoanerMaster 一覧の詳細ダイアログからの更新。
+     */
+    public function update(Request $request, int $id)
+    {
+        $row = LoanerMaster::query()->findOrFail($id);
+        $table = $row->getTable();
+        $columns = Schema::getColumnListing($table);
+        $editable = array_values(array_diff($columns, ['id']));
+
+        $rules = [];
+        foreach ($editable as $column) {
+            $rules[$column] = 'nullable';
+        }
+
+        $validated = $request->validate($rules);
+        $payload = [];
+        foreach ($editable as $column) {
+            if (! array_key_exists($column, $validated)) {
+                continue;
+            }
+            $value = $validated[$column];
+            if ($value === '') {
+                $value = null;
+            }
+            $payload[$column] = $value;
+        }
+
+        $payload['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
+        $payload['lastEditDate'] = now();
+
+        $row->fill($payload);
+        $row->save();
+
+        $statusColumn = $this->resolveStatusColumn();
+        $statusLabels = $this->buildStatusLabelMap();
+        $serialized = $this->serializeRow($row->fresh(), $columns, $statusColumn, $statusLabels);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'LoanerMaster を更新しました。',
+                'master' => $serialized,
+            ]);
+        }
+
+        return back()->with('success', 'LoanerMaster を更新しました。');
+    }
+
+    /**
      * @return array<string, string>
      */
     private function buildStatusLabelMap(): array

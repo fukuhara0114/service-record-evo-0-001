@@ -171,14 +171,98 @@
                 </div>
             </div>
         </div>
+
+        <div
+            v-if="editDialogOpen"
+            class="dialog-overlay"
+            @click.self="closeEditDialog"
+        >
+            <div
+                class="dialog-panel edit-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="edit-dialog-title"
+            >
+                <header class="detail-choice-header">
+                    <h3 id="edit-dialog-title">LoanerMaster 詳細</h3>
+                    <div class="edit-dialog-header-actions">
+                        <button
+                            type="button"
+                            class="edit-save-btn"
+                            :disabled="editSaving"
+                            @click="saveEditDialog"
+                        >
+                            {{ editSaving ? '保存中...' : '保存' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="detail-choice-close"
+                            aria-label="閉じる"
+                            :disabled="editSaving"
+                            @click="closeEditDialog"
+                        >
+                            X
+                        </button>
+                    </div>
+                </header>
+                <p v-if="editError" class="detail-choice-error">{{ editError }}</p>
+                <div class="edit-dialog-body">
+                    <label
+                        v-for="column in editColumns"
+                        :key="column"
+                        class="edit-field"
+                        :class="{ 'edit-field--full': isFullWidthColumn(column) }"
+                    >
+                        <span class="edit-label">{{ columnLabel(column) }}</span>
+                        <select
+                            v-if="column === statusColumn"
+                            v-model="editForm[column]"
+                            class="edit-input"
+                            :disabled="editSaving"
+                        >
+                            <option value="">—</option>
+                            <option
+                                v-for="opt in uniqueStatusOptions"
+                                :key="opt.id"
+                                :value="String(opt.id)"
+                            >
+                                {{ opt.label }} ({{ opt.id }})
+                            </option>
+                        </select>
+                        <input
+                            v-else-if="isDateColumn(column)"
+                            v-model="editForm[column]"
+                            type="date"
+                            class="edit-input"
+                            :disabled="editSaving || isReadonlyColumn(column)"
+                        >
+                        <input
+                            v-else-if="isNumberColumn(column)"
+                            v-model="editForm[column]"
+                            type="number"
+                            class="edit-input"
+                            :disabled="editSaving || isReadonlyColumn(column)"
+                        >
+                        <input
+                            v-else
+                            v-model="editForm[column]"
+                            type="text"
+                            class="edit-input"
+                            :disabled="editSaving || isReadonlyColumn(column)"
+                        >
+                    </label>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import { loanerDetailUrl, serviceRecordUrl } from '@/utils/serviceRecordPath'
+import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
     columns: {
@@ -228,9 +312,27 @@ const quickFilter = ref('')
 const detailChoiceOpen = ref(false)
 const detailChoiceRow = ref(null)
 const detailChoiceError = ref('')
+const editDialogOpen = ref(false)
+const editSaving = ref(false)
+const editError = ref('')
+const editForm = reactive({})
+const DATE_COLUMNS = new Set(['certificatedDate', 'sentDate', 'returnedDate'])
+const NUMBER_COLUMNS = new Set(['loanerID', 'price', 'associatedID', 'inventory', 'book'])
+const READONLY_COLUMNS = new Set(['id'])
+const FULL_WIDTH_COLUMNS = new Set(['note1', 'note2', 'note3'])
+const HIDDEN_EDIT_COLUMNS = new Set([
+    'lastEditPerson',
+    'lastEditDate',
+    'validDateMin',
+    'validDateMax',
+    'groupName',
+])
 watch(() => props.q, (value) => {
     searchInput.value = value || ''
 })
+const editColumns = computed(() =>
+    (props.columns ?? []).filter((column) => !HIDDEN_EDIT_COLUMNS.has(column)),
+)
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const rows = computed(() => props.masters?.data ?? [])
 const totalCount = computed(() => props.masters?.total ?? rows.value.length)
@@ -436,11 +538,131 @@ function selectRow(row) {
 }
 
 function onRowDoubleClick(row) {
-    if (currentScope.value !== 'lending') return
     selectRow(row)
-    detailChoiceRow.value = row
-    detailChoiceError.value = ''
-    detailChoiceOpen.value = true
+    if (currentScope.value === 'lending') {
+        detailChoiceRow.value = row
+        detailChoiceError.value = ''
+        detailChoiceOpen.value = true
+        return
+    }
+    openEditDialog(row)
+}
+
+function isDateColumn(column) {
+    return DATE_COLUMNS.has(column)
+}
+
+function isNumberColumn(column) {
+    return NUMBER_COLUMNS.has(column)
+}
+
+function isReadonlyColumn(column) {
+    return READONLY_COLUMNS.has(column)
+}
+
+function isFullWidthColumn(column) {
+    return FULL_WIDTH_COLUMNS.has(column)
+}
+
+function toEditDateValue(value) {
+    if (value == null || value === '') return ''
+    return String(value).slice(0, 10)
+}
+
+function openEditDialog(row) {
+    if (!row) return
+    editError.value = ''
+    for (const key of Object.keys(editForm)) {
+        delete editForm[key]
+    }
+    for (const column of editColumns.value) {
+        const value = row[column]
+        if (isDateColumn(column)) {
+            editForm[column] = toEditDateValue(value)
+        } else if (column === props.statusColumn || isNumberColumn(column)) {
+            editForm[column] = value == null || value === '' ? '' : String(value)
+        } else {
+            editForm[column] = value == null ? '' : String(value)
+        }
+    }
+    editDialogOpen.value = true
+}
+
+function closeEditDialog() {
+    if (editSaving.value) return
+    editDialogOpen.value = false
+    editError.value = ''
+}
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function nullableEditValue(value) {
+    if (value === '' || value === undefined) return null
+    return value
+}
+
+async function saveEditDialog() {
+    const id = editForm.id
+    if (!id) {
+        editError.value = '更新対象の id がありません。'
+        return
+    }
+
+    editSaving.value = true
+    editError.value = ''
+    try {
+        const body = {}
+        for (const column of editColumns.value) {
+            if (column === 'id') continue
+            let value = nullableEditValue(editForm[column])
+            if (
+                (column === props.statusColumn || NUMBER_COLUMNS.has(column))
+                && value != null
+                && value !== ''
+            ) {
+                const num = Number(value)
+                value = Number.isFinite(num) ? num : value
+            }
+            body[column] = value
+        }
+
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/master/${id}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(body),
+            },
+        )
+        if (!result) throw new Error('保存に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `保存に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        editDialogOpen.value = false
+        loading.value = true
+        router.reload({
+            only: ['masters'],
+            preserveScroll: true,
+            onFinish: () => {
+                loading.value = false
+            },
+        })
+    } catch (e) {
+        editError.value = e.message || '保存に失敗しました。'
+    } finally {
+        editSaving.value = false
+    }
 }
 
 function closeDetailChoice() {
@@ -715,7 +937,7 @@ function goToPage(url) {
 .table-wrap {
     overflow: auto;
     max-height: calc((100vh / 1.1) - 180px);
-    border: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     border-radius: 6px;
 }
 
@@ -724,23 +946,32 @@ table {
     min-width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    background: #f0f0f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 th,
 td {
-    border: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     padding: 6px 8px;
     text-align: left;
     vertical-align: top;
     white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 th {
     position: sticky;
     top: 0;
-    z-index: 1;
-    background: #f8fafc;
-    color: #334155;
+    z-index: 10;
+    background: #2f63cc;
+    color: #fff;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+td {
+    background: #f5f5f5;
 }
 
 .sort-button {
@@ -764,12 +995,9 @@ th {
     cursor: pointer;
 }
 
-.data-row:hover {
-    background: #f8fafc;
-}
-
-.data-row.selected {
-    background: #dbeafe;
+.data-row.selected td {
+    color: rgb(255, 255, 255) !important;
+    background-color: #7e25eb !important;
 }
 
 .status-select {
@@ -779,8 +1007,13 @@ th {
     border: 1px solid #94a3b8;
     border-radius: 4px;
     background: #fff;
+    color: #111827;
     font: inherit;
     font-weight: 700;
+}
+
+.data-row.selected .status-select {
+    color: #111827;
 }
 
 .empty {
@@ -872,5 +1105,91 @@ th {
 
 .detail-choice-btn:hover {
     background: #2563eb;
+}
+
+.edit-dialog {
+    width: 50vw;
+    max-width: 50vw;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.edit-dialog-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.edit-save-btn {
+    min-height: 34px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.edit-save-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.edit-dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    overflow: auto;
+}
+
+.edit-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.edit-label {
+    flex: 0 0 140px;
+    width: 140px;
+}
+
+.edit-input {
+    width: 400px;
+    max-width: 400px;
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    font: inherit;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.edit-field--full {
+    width: 100%;
+}
+
+.edit-field--full .edit-input {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+}
+
+.edit-input:disabled {
+    background: #e2e8f0;
+    color: #64748b;
 }
 </style>
