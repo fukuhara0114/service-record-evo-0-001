@@ -278,7 +278,7 @@ class LoanerMasterController extends Controller
 
         return ServiceRecord::query()
             ->whereIn('orderID', $ids)
-            ->get(['orderID', 'status', 'sentOut'])
+            ->get(['orderID', 'status', 'shippingOut_requiredDate'])
             ->keyBy(fn (ServiceRecord $parent) => (int) $parent->orderID);
     }
 
@@ -321,16 +321,17 @@ class LoanerMasterController extends Controller
         if ($includeParentInfo) {
             $associatedId = (int) ($row->associatedID ?? 0);
             $parent = $associatedId > 0 ? $parents->get($associatedId) : null;
-            $sentOut = null;
-            if ($parent?->sentOut instanceof \DateTimeInterface) {
-                $sentOut = $parent->sentOut->format('Y-m-d');
-            } elseif ($parent?->sentOut !== null && $parent->sentOut !== '') {
-                $raw = substr((string) $parent->sentOut, 0, 10);
-                $sentOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
+            $shippingOut = null;
+            $shippingRaw = $parent?->shippingOut_requiredDate;
+            if ($shippingRaw instanceof \DateTimeInterface) {
+                $shippingOut = $shippingRaw->format('Y-m-d');
+            } elseif ($shippingRaw !== null && $shippingRaw !== '') {
+                $raw = substr((string) $shippingRaw, 0, 10);
+                $shippingOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
             }
 
             $out['parentStatus'] = $parent?->status;
-            $out['parentSentOut'] = $sentOut;
+            $out['parentShippingOut'] = $shippingOut;
         }
 
         return $out;

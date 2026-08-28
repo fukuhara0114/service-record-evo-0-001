@@ -278,8 +278,9 @@ function tokyoTodayYmd() {
     }).format(new Date())
 }
 
-function elapsedDaysFromSentOut(sentOut) {
-    const ymd = toYmd(sentOut)
+/** today − shippingOut（出荷日から何日経ったか） */
+function elapsedDaysFromShippingOut(shippingOut) {
+    const ymd = toYmd(shippingOut)
     if (!ymd) return null
     const today = tokyoTodayYmd()
     if (ymd > today) return null
@@ -297,7 +298,7 @@ function lendingParentCell(row) {
     if (!Number.isFinite(statusNum)) return '—'
     if (statusNum < PARENT_COMPLETE_STATUS) return '作業中'
 
-    const days = elapsedDaysFromSentOut(row?.parentSentOut)
+    const days = elapsedDaysFromShippingOut(row?.parentShippingOut)
     if (days == null) return '—'
     return `出荷完了後${days}日経過`
 }

@@ -564,7 +564,7 @@ async function onComplete() {
         await updateRecord({
             ...deliveryPayload(),
             status: LOGISTICS_COMPLETE_STATUS,
-            sentOut: tokyoTodayYmd(),
+            shippingOut_requiredDate: tokyoTodayYmd(),
         })
         emit('workflow-done', { action: 'complete', status: LOGISTICS_COMPLETE_STATUS })
     } catch (e) {
