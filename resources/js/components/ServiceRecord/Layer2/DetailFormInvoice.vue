@@ -158,7 +158,7 @@
                                     <td>{{ loaner.productName || '—' }}</td>
                                     <td>{{ loaner.SN || '—' }}</td>
                                     <td>{{ loanerPeriod(loaner) }}</td>
-                                    <td class="col-amount">{{ formatPrice(loanerDisplayPrice(loaner)) }}</td>
+                                    <td class="col-amount">{{ formatPrice(loaner.price) }}</td>
                                     <td>
                                         <a
                                             v-if="loaner.orderID"
@@ -654,6 +654,8 @@ function loanerHref(orderId) {
 }
 
 const loanerPrice = computed(() => {
+    // 親 service 案件では紐づく貸出機は請求しない（貸出機案件側で請求）
+    if (!isLoanerRecord.value) return 0
     const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
     if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
     return (props.loaners ?? []).reduce((sum, loaner) => {

@@ -2234,16 +2234,19 @@ function caseParentOrderDate() {
     return props.draftRecord?.orderDate ?? props.record?.orderDate
 }
 
-/** 紐づく loaner 行は自身の受注日ルール。AttachedLoaner は案件の as-of。 */
+/**
+ * 紐づく loaner 行の as-of。
+ * loaner 案件の受注日を優先し、親 service の受注日はフォールバックのみ。
+ */
 function loanerLineAsOfDate(loaner) {
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
     if (orderType === 'loaner' || orderType === 'waiting_list' || loaner?.orderID != null) {
-        const fromApi = normalizePriceAsOfDate(loaner?.priceAsOfDate)
-        if (fromApi) return fromApi
         const own = loaner?.orderDate ?? loaner?.order_date ?? null
         if (isLoanerOwnOrderDateUsable(own)) {
             return normalizePriceAsOfDate(own)
         }
+        const fromApi = normalizePriceAsOfDate(loaner?.priceAsOfDate)
+        if (fromApi) return fromApi
         return resolveLinkedLoanerPriceAsOfDate(
             { ...loaner, orderDate: own },
             caseParentOrderDate(),
@@ -2253,33 +2256,25 @@ function loanerLineAsOfDate(loaner) {
 }
 
 /**
- * LoanerDetail の有償表示に合わせる。
- * as-of が取れないときに priceVersions へ null を渡すと最新版になるため、
- * その場合はサーバ計算済み masterPrice を使う。
+ * 紐づく loaner は loaner 案件の受注日版 loanermaster を表示する（LoanerDetail の有償表示と同じ）。
+ * 親 service の受注日や保存済み price（親日付で同期された値）は使わない。
  */
 function loanerDisplayPrice(loaner) {
     const returnCode = currentReturnCode.value
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
 
     if (orderType === 'loaner' || orderType === 'waiting_list') {
-        if (!PAID_LOANER_RETURN_CODES.includes(Number(returnCode))) return 0
         const stored = Number(loaner?.price)
+        // 貸出詳細で無償（price=0）にした案件は 0
         if (Number.isFinite(stored) && Math.abs(stored) < 0.00001) return 0
 
         const asOf = loanerLineAsOfDate(loaner)
-        const serverMaster = Number(loaner?.masterPrice)
-
-        // as-of があるときだけクライアントで版を選ぶ（null だと最新版に落ちる）
-        if (asOf && Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
-            const calc = findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
-            if (calc > 0) return calc
-        }
-
-        if (Number.isFinite(serverMaster) && serverMaster > 0) return serverMaster
-
         if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+            // as-of あり: その日の版 / なし: 最新版（親 service 日付は使わない）
             return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
         }
+        const serverMaster = Number(loaner?.masterPrice)
+        if (Number.isFinite(serverMaster) && serverMaster > 0) return serverMaster
         return Number.isFinite(stored) ? stored : 0
     }
 
