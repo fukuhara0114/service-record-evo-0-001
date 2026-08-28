@@ -66,12 +66,16 @@ class LoanerMasterController extends Controller
             ->paginate(100)
             ->withQueryString();
 
+        $collection = $masters->getCollection();
         $parentById = $scope === 'lending'
-            ? $this->loadParentsByAssociatedId($masters->getCollection())
+            ? $this->loadParentsByAssociatedId($collection)
+            : collect();
+        $loanerOrderByKey = $scope === 'lending'
+            ? $this->loadLoanerOrderIdsByParentAndLoaner($collection)
             : collect();
 
         $masters->setCollection(
-            $masters->getCollection()->map(
+            $collection->map(
                 fn (LoanerMaster $row) => $this->serializeRow(
                     $row,
                     $columns,
@@ -79,6 +83,7 @@ class LoanerMasterController extends Controller
                     $statusLabels,
                     $parentById,
                     $scope === 'lending',
+                    $loanerOrderByKey,
                 )
             )
         );
@@ -323,9 +328,65 @@ class LoanerMasterController extends Controller
     }
 
     /**
+     * parentID(=associatedID) + loanerID で貸出中の loaner 案件 orderID を解決。
+     * キー: "{parentID}:{loanerID}"
+     *
+     * @param  Collection<int, LoanerMaster>  $rows
+     * @return Collection<string, int>
+     */
+    private function loadLoanerOrderIdsByParentAndLoaner(Collection $rows): Collection
+    {
+        $parentIds = [];
+        $loanerIds = [];
+        foreach ($rows as $row) {
+            $parentId = (int) ($row->associatedID ?? 0);
+            $loanerId = (int) ($row->loanerID ?? 0);
+            if ($parentId > 0 && $loanerId > 0) {
+                $parentIds[] = $parentId;
+                $loanerIds[] = $loanerId;
+            }
+        }
+
+        $parentIds = array_values(array_unique($parentIds));
+        $loanerIds = array_values(array_unique($loanerIds));
+        if ($parentIds === [] || $loanerIds === []) {
+            return collect();
+        }
+
+        $records = ServiceRecord::query()
+            ->where('order_type', 'loaner')
+            ->whereIn('parentID', $parentIds)
+            ->whereIn('loanerID', $loanerIds)
+            ->orderByDesc('orderID')
+            ->get(['orderID', 'parentID', 'loanerID', 'status']);
+
+        $map = collect();
+        foreach ($records as $record) {
+            $key = ((int) $record->parentID).':'.((int) $record->loanerID);
+            $candidate = [
+                'orderID' => (int) $record->orderID,
+                'status' => (int) ($record->status ?? 0),
+            ];
+            if (! $map->has($key)) {
+                // orderByDesc(orderID) のため、先に見た方が新しい
+                $map->put($key, $candidate);
+                continue;
+            }
+            $existing = $map->get($key);
+            // 貸出中(388)を優先して差し替え
+            if ((int) ($existing['status'] ?? 0) !== 388 && $candidate['status'] === 388) {
+                $map->put($key, $candidate);
+            }
+        }
+
+        return $map->map(fn (array $item) => $item['orderID']);
+    }
+
+    /**
      * @param  array<int, string>  $columns
      * @param  array<string, string>  $statusLabels
      * @param  Collection<int, ServiceRecord>|null  $parentById
+     * @param  Collection<string, int>|null  $loanerOrderByKey
      * @return array<string, mixed>
      */
     private function serializeRow(
@@ -335,9 +396,11 @@ class LoanerMasterController extends Controller
         array $statusLabels,
         ?Collection $parentById = null,
         bool $includeParentInfo = false,
+        ?Collection $loanerOrderByKey = null,
     ): array {
         $out = [];
         $parents = $parentById ?? collect();
+        $loanerOrders = $loanerOrderByKey ?? collect();
 
         foreach ($columns as $column) {
             $value = $row->getAttribute($column);
@@ -360,6 +423,7 @@ class LoanerMasterController extends Controller
 
         if ($includeParentInfo) {
             $associatedId = (int) ($row->associatedID ?? 0);
+            $loanerId = (int) ($row->loanerID ?? 0);
             $parent = $associatedId > 0 ? $parents->get($associatedId) : null;
             $shippingOut = null;
             $shippingRaw = $parent?->shippingOut_requiredDate;
@@ -372,6 +436,9 @@ class LoanerMasterController extends Controller
 
             $out['parentStatus'] = $parent?->status;
             $out['parentShippingOut'] = $shippingOut;
+            $out['loanerOrderID'] = ($associatedId > 0 && $loanerId > 0)
+                ? ($loanerOrders->get($associatedId.':'.$loanerId) ?? null)
+                : null;
         }
 
         return $out;

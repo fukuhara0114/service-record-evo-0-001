@@ -99,6 +99,7 @@
                             class="data-row"
                             :class="{ selected: Number(selectedId) === Number(row.id) }"
                             @click="selectRow(row)"
+                            @dblclick="onRowDoubleClick(row)"
                         >
                             <td v-for="column in displayColumns" :key="`${row.id}-${column}`">
                                 <span
@@ -136,6 +137,40 @@
                 </table>
             </div>
         </section>
+
+        <div
+            v-if="detailChoiceOpen"
+            class="dialog-overlay"
+            @click.self="closeDetailChoice"
+        >
+            <div
+                class="dialog-panel detail-choice-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="detail-choice-title"
+            >
+                <header class="detail-choice-header">
+                    <h3 id="detail-choice-title">詳細を開く</h3>
+                    <button
+                        type="button"
+                        class="detail-choice-close"
+                        aria-label="閉じる"
+                        @click="closeDetailChoice"
+                    >
+                        X
+                    </button>
+                </header>
+                <p v-if="detailChoiceError" class="detail-choice-error">{{ detailChoiceError }}</p>
+                <div class="detail-choice-actions">
+                    <button type="button" class="detail-choice-btn" @click="openParentDetail">
+                        親案件詳細
+                    </button>
+                    <button type="button" class="detail-choice-btn" @click="openLoanerDetail">
+                        loaner詳細
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -143,6 +178,7 @@
 import { computed, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
+import { loanerDetailUrl, serviceRecordUrl } from '@/utils/serviceRecordPath'
 
 const props = defineProps({
     columns: {
@@ -189,6 +225,9 @@ const savingStatus = ref(false)
 const selectedId = ref(null)
 const searchInput = ref(props.q || '')
 const quickFilter = ref('')
+const detailChoiceOpen = ref(false)
+const detailChoiceRow = ref(null)
+const detailChoiceError = ref('')
 watch(() => props.q, (value) => {
     searchInput.value = value || ''
 })
@@ -394,6 +433,42 @@ function clearSearch() {
 
 function selectRow(row) {
     selectedId.value = row?.id ?? null
+}
+
+function onRowDoubleClick(row) {
+    if (currentScope.value !== 'lending') return
+    selectRow(row)
+    detailChoiceRow.value = row
+    detailChoiceError.value = ''
+    detailChoiceOpen.value = true
+}
+
+function closeDetailChoice() {
+    detailChoiceOpen.value = false
+    detailChoiceRow.value = null
+    detailChoiceError.value = ''
+}
+
+function openParentDetail() {
+    const associatedId = Number(detailChoiceRow.value?.associatedID)
+    if (!Number.isFinite(associatedId) || associatedId <= 0) {
+        detailChoiceError.value = '親案件ID（associatedID）がありません。'
+        return
+    }
+    const url = new URL(serviceRecordUrl('administrator'))
+    url.searchParams.set('openOrderID', String(associatedId))
+    window.open(url.href, '_blank', 'noopener,noreferrer')
+    closeDetailChoice()
+}
+
+function openLoanerDetail() {
+    const loanerOrderId = Number(detailChoiceRow.value?.loanerOrderID)
+    if (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0) {
+        detailChoiceError.value = '対応する loaner 案件が見つかりません。'
+        return
+    }
+    window.open(loanerDetailUrl(loanerOrderId), '_blank', 'noopener,noreferrer')
+    closeDetailChoice()
 }
 
 function toggleSort(column) {
@@ -717,5 +792,85 @@ th {
 .lending-elapsed-red {
     color: #dc2626;
     font-weight: 800;
+}
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+}
+
+.dialog-panel {
+    width: min(420px, calc(100vw - 32px));
+    background: #f8fafc;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    box-sizing: border-box;
+}
+
+.detail-choice-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #cbd5e1;
+    background: #1e293b;
+    color: #fff;
+    border-radius: 8px 8px 0 0;
+}
+
+.detail-choice-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.detail-choice-close {
+    min-width: 36px;
+    min-height: 34px;
+    border: none;
+    border-radius: 4px;
+    background: #475569;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.detail-choice-error {
+    margin: 12px 14px 0;
+    color: #b91c1c;
+    font-size: 13px;
+}
+
+.detail-choice-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 14px;
+}
+
+.detail-choice-btn {
+    min-height: 42px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #4a4a4a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+}
+
+.detail-choice-btn:hover {
+    background: #2563eb;
 }
 </style>
