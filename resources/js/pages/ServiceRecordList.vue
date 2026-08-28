@@ -320,11 +320,11 @@
                             <SortableTh sort-key="productName" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                             <SortableTh sort-key="item" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
                             <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
-                            <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany</SortableTh>
-                            <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_depart</SortableTh>
-                            <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_zipcode</SortableTh>
-                            <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address1</SortableTh>
-                            <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address2</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">会社名</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">〒</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">都道府県</SortableTh>
+                            <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">住所</SortableTh>
                         </tr>
                         <tr v-else>
                             <SortableTh
@@ -456,11 +456,11 @@
                                     <SortableTh sort-key="productName" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                                     <SortableTh sort-key="item" class="logistics-loaner-col-200" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">item</SortableTh>
                                     <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">SN</SortableTh>
-                                    <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany</SortableTh>
-                                    <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_depart</SortableTh>
-                                    <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_zipcode</SortableTh>
-                                    <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address1</SortableTh>
-                                    <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">deliveryCompany_address2</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_company" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">会社名</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_depart" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">部署</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_zipcode" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">〒</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_address1" class="logistics-loaner-col-100" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">都道府県</SortableTh>
+                                    <SortableTh sort-key="deliveryDestination_address2" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">住所</SortableTh>
                                 </tr>
                                 <tr v-else>
                                     <SortableTh
