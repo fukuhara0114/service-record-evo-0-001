@@ -3018,7 +3018,7 @@ defineExpose({
     position: sticky;
     top: 0;
     z-index: 1;
-    background: #1e3a8a;
+    background: #15803d;
     color: #fff;
     font-weight: 700;
     text-align: center;
