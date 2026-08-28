@@ -48,7 +48,17 @@
                                                 </option>
                                             </select>
                                         </dd>
-                                        <dt class="dt-product-name">製品名</dt>
+                                        <dt class="dt-product-name">
+                                            <button
+                                                type="button"
+                                                class="product-name-copy-btn"
+                                                :disabled="!productNameCopyValue"
+                                                :title="productNameCopyValue ? '製品名をクリップボードにコピー' : 'コピーする製品名がありません'"
+                                                @click.prevent="copyProductName"
+                                            >
+                                                {{ productNameCopyFeedback || '製品名' }}
+                                            </button>
+                                        </dt>
                                         <dd class="dd-product-name">
                                             <button type="button" class="field-button" @click="openServiceMasterSelect">
                                                 {{ draftRecord?.productName || record?.productName || '選択してください' }}
@@ -933,6 +943,12 @@ const emit = defineEmits(['open-dialog', 'files-updated', 'reload-attachments', 
 
 const fetchedParentOrderDate = ref(null)
 
+const productNameCopyValue = computed(() =>
+    String(props.draftRecord?.productName ?? props.record?.productName ?? '').trim(),
+)
+const productNameCopyFeedback = ref('')
+let productNameCopyFeedbackTimer = null
+
 /**
  * loaner: 受注日が 2000年以前または 2099年以降なら親 service の受注日。
  * それ以外の loaner / service: 自身の受注日（未定・2000年以前は最新版）。
@@ -1352,6 +1368,45 @@ async function previewEmailDraft(templateType) {
         emailDraftError.value = e.message || 'メールプレビューの取得に失敗しました。'
     } finally {
         emailDraftCreating.value = false
+    }
+}
+
+async function writeTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        return
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    if (!ok) throw new Error('クリップボードへのコピーに失敗しました。')
+}
+
+async function copyProductName() {
+    const value = productNameCopyValue.value
+    if (!value) return
+
+    try {
+        await writeTextToClipboard(value)
+        if (productNameCopyFeedbackTimer) clearTimeout(productNameCopyFeedbackTimer)
+        productNameCopyFeedback.value = 'コピー済'
+        productNameCopyFeedbackTimer = setTimeout(() => {
+            productNameCopyFeedback.value = ''
+            productNameCopyFeedbackTimer = null
+        }, 1200)
+    } catch {
+        productNameCopyFeedback.value = '失敗'
+        if (productNameCopyFeedbackTimer) clearTimeout(productNameCopyFeedbackTimer)
+        productNameCopyFeedbackTimer = setTimeout(() => {
+            productNameCopyFeedback.value = ''
+            productNameCopyFeedbackTimer = null
+        }, 1200)
     }
 }
 
@@ -3317,6 +3372,29 @@ defineExpose({
     align-self: start;
     box-sizing: border-box;
     min-height: 30px;
+}
+
+.dt-product-name .product-name-copy-btn {
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid #64748b;
+    border-radius: 2px;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dt-product-name .product-name-copy-btn:hover:not(:disabled) {
+    background: #e2e8f0;
+}
+
+.dt-product-name .product-name-copy-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .dd-product-name .field-button {
