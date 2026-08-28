@@ -13,11 +13,18 @@
             <div class="header-actions">
                 <span v-if="success" class="msg success">{{ success }}</span>
                 <span v-if="error" class="msg error">{{ error }}</span>
-                <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
-                    {{ saving ? '保存中...' : '保存' }}
-                </button>
-                <a :href="listUrl" class="btn btn-secondary">一覧へ戻る</a>
-                <CloseToHomeButton :href="homeUrl" />
+                <div class="header-extra-actions">
+                    <button type="button" class="btn btn-dark" @click="openDuplicateDialog">複製を保存</button>
+                    <button type="button" class="btn btn-dark">保守サービス保証書</button>
+                    <button type="button" class="btn btn-dark">再校正チケット</button>
+                </div>
+                <div class="header-main-actions">
+                    <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
+                        {{ saving ? '保存中...' : '保存' }}
+                    </button>
+                    <a :href="listUrl" class="btn btn-secondary">一覧へ戻る</a>
+                    <CloseToHomeButton :href="homeUrl" />
+                </div>
             </div>
         </header>
 
@@ -240,6 +247,57 @@
         <p class="meta-foot">
             最終更新: {{ form.lastEditPerson || '—' }} / {{ form.lastEditDate || '—' }}
         </p>
+
+        <div
+            v-if="duplicateDialogOpen"
+            class="dialog-overlay"
+            @click.self="closeDuplicateDialog"
+        >
+            <div class="dialog-panel duplicate-dialog" role="dialog" aria-modal="true" aria-labelledby="duplicate-dialog-title">
+                <div class="duplicate-dialog-header">
+                    <h3 id="duplicate-dialog-title">複製を保存</h3>
+                    <div class="duplicate-dialog-actions">
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            :disabled="duplicating"
+                            @click="confirmDuplicate"
+                        >
+                            {{ duplicating ? '作成中...' : 'OK' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            :disabled="duplicating"
+                            @click="closeDuplicateDialog"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+                <p v-if="duplicateError" class="msg error duplicate-error">{{ duplicateError }}</p>
+                <div class="duplicate-toggle-list">
+                    <button
+                        type="button"
+                        class="toggle-btn"
+                        :class="{ on: duplicateSections.all }"
+                        @click="toggleDuplicateAll"
+                    >
+                        全て
+                    </button>
+                    <button
+                        v-for="item in duplicateSectionItems"
+                        :key="item.key"
+                        type="button"
+                        class="toggle-btn"
+                        :class="{ on: duplicateSections[item.key] }"
+                        @click="toggleDuplicateSection(item.key)"
+                    >
+                        {{ item.label }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -271,6 +329,31 @@ const leftPaneSize = ref(50)
 const rightPaneSize = ref(50)
 const amountFocused = ref(false)
 const amountEditText = ref('')
+
+const duplicateDialogOpen = ref(false)
+const duplicating = ref(false)
+const duplicateError = ref('')
+
+const duplicateSectionItems = [
+    { key: 'product', label: '製品' },
+    { key: 'contract', label: '契約情報' },
+    { key: 'order', label: '受注' },
+    { key: 'dealer', label: 'dealer' },
+    { key: 'endUser', label: 'endUser' },
+    { key: 'description', label: 'description' },
+    { key: 'additional_information', label: 'additional information' },
+]
+
+const duplicateSections = reactive({
+    all: true,
+    product: true,
+    contract: true,
+    order: true,
+    dealer: true,
+    endUser: true,
+    description: true,
+    additional_information: true,
+})
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/maintenance-contracts`)
@@ -370,47 +453,142 @@ function nullable(value) {
     return value
 }
 
+function buildContractPayload() {
+    return {
+        dealer: nullable(form.dealer),
+        branch: nullable(form.branch),
+        contact: nullable(form.contact),
+        phone: nullable(form.phone),
+        email: nullable(form.email),
+        address: nullable(form.address),
+        endUser: nullable(form.endUser),
+        endUser_depart: nullable(form.endUser_depart),
+        endUser_contact: nullable(form.endUser_contact),
+        endUser_phone: nullable(form.endUser_phone),
+        endUser_email: nullable(form.endUser_email),
+        endUser_address: nullable(form.endUser_address),
+        instrumentName: nullable(form.instrumentName),
+        SN: nullable(form.SN),
+        shippingDate: nullable(form.shippingDate),
+        yayoi_PO: nullable(form.yayoi_PO),
+        orderedDate: nullable(form.orderedDate),
+        mapics_PO: nullable(form.mapics_PO),
+        invoice_num: nullable(form.invoice_num),
+        startDate: nullable(form.startDate),
+        expireDate: nullable(form.expireDate),
+        certificationTicket: nullable(form.certificationTicket),
+        certificationExpireDate: nullable(form.certificationExpireDate),
+        renewalInformation: nullable(form.renewalInformation),
+        informedDate: nullable(form.informedDate),
+        renewedDate: nullable(form.renewedDate),
+        contractType: form.contractType === '' ? null : Number(form.contractType),
+        informed: !!form.informed,
+        amount: form.amount === '' ? null : Number(form.amount),
+        status: nullable(form.status),
+        RefNumber: nullable(form.RefNumber),
+        description: nullable(form.description),
+        additional_information: nullable(form.additional_information),
+    }
+}
+
+function syncDuplicateAllFromSections() {
+    duplicateSections.all = duplicateSectionItems.every((item) => duplicateSections[item.key])
+}
+
+function setAllDuplicateSections(value) {
+    duplicateSections.all = value
+    for (const item of duplicateSectionItems) {
+        duplicateSections[item.key] = value
+    }
+}
+
+function openDuplicateDialog() {
+    setAllDuplicateSections(true)
+    duplicateError.value = ''
+    duplicateDialogOpen.value = true
+}
+
+function closeDuplicateDialog() {
+    if (duplicating.value) return
+    duplicateDialogOpen.value = false
+    duplicateError.value = ''
+}
+
+function toggleDuplicateAll() {
+    setAllDuplicateSections(!duplicateSections.all)
+}
+
+function toggleDuplicateSection(key) {
+    duplicateSections[key] = !duplicateSections[key]
+    syncDuplicateAllFromSections()
+}
+
+async function confirmDuplicate() {
+    const sections = {
+        product: !!duplicateSections.product,
+        contract: !!duplicateSections.contract,
+        order: !!duplicateSections.order,
+        dealer: !!duplicateSections.dealer,
+        endUser: !!duplicateSections.endUser,
+        description: !!duplicateSections.description,
+        additional_information: !!duplicateSections.additional_information,
+    }
+
+    if (!Object.values(sections).some(Boolean)) {
+        duplicateError.value = 'コピーする項目を1つ以上選択してください。'
+        return
+    }
+
+    duplicating.value = true
+    duplicateError.value = ''
+    error.value = ''
+    success.value = ''
+
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${form.id}/duplicate`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    sections,
+                    ...buildContractPayload(),
+                }),
+            },
+        )
+        if (!result) throw new Error('複製に失敗しました。')
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `複製に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        const newId = data.contract?.id
+        if (!newId) throw new Error('複製後のIDを取得できませんでした。')
+
+        duplicateDialogOpen.value = false
+        window.location.href = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${newId}`
+    } catch (e) {
+        duplicateError.value = e.message || '複製に失敗しました。'
+    } finally {
+        duplicating.value = false
+    }
+}
+
 async function save() {
     saving.value = true
     error.value = ''
     success.value = ''
 
     try {
-        const body = {
-            dealer: nullable(form.dealer),
-            branch: nullable(form.branch),
-            contact: nullable(form.contact),
-            phone: nullable(form.phone),
-            email: nullable(form.email),
-            address: nullable(form.address),
-            endUser: nullable(form.endUser),
-            endUser_depart: nullable(form.endUser_depart),
-            endUser_contact: nullable(form.endUser_contact),
-            endUser_phone: nullable(form.endUser_phone),
-            endUser_email: nullable(form.endUser_email),
-            endUser_address: nullable(form.endUser_address),
-            instrumentName: nullable(form.instrumentName),
-            SN: nullable(form.SN),
-            shippingDate: nullable(form.shippingDate),
-            yayoi_PO: nullable(form.yayoi_PO),
-            orderedDate: nullable(form.orderedDate),
-            mapics_PO: nullable(form.mapics_PO),
-            invoice_num: nullable(form.invoice_num),
-            startDate: nullable(form.startDate),
-            expireDate: nullable(form.expireDate),
-            certificationTicket: nullable(form.certificationTicket),
-            certificationExpireDate: nullable(form.certificationExpireDate),
-            renewalInformation: nullable(form.renewalInformation),
-            informedDate: nullable(form.informedDate),
-            renewedDate: nullable(form.renewedDate),
-            contractType: form.contractType === '' ? null : Number(form.contractType),
-            informed: !!form.informed,
-            amount: form.amount === '' ? null : Number(form.amount),
-            status: nullable(form.status),
-            RefNumber: nullable(form.RefNumber),
-            description: nullable(form.description),
-            additional_information: nullable(form.additional_information),
-        }
+        const body = buildContractPayload()
 
         const result = await apiFetch(
             `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${form.id}`,
@@ -484,8 +662,29 @@ async function save() {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     flex-wrap: wrap;
+}
+
+.header-actions .msg {
+    margin-right: 8px;
+}
+
+.header-extra-actions {
+    display: flex;
+    align-items: center;
+    gap: 50px;
+    margin-right: 100px;
+}
+
+.header-main-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-dark {
+    background: #4a4a4a;
 }
 
 .msg {
@@ -670,5 +869,76 @@ async function save() {
     .field.checkbox-field {
         padding-bottom: 0;
     }
+}
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.dialog-panel {
+    width: min(420px, calc(100vw - 32px));
+    background: #f8fafc;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.duplicate-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.duplicate-dialog-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.duplicate-dialog-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.duplicate-error {
+    margin: 0 0 10px;
+}
+
+.duplicate-toggle-list {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.toggle-btn {
+    min-height: 36px;
+    padding: 8px 14px;
+    border: 1px solid #94a3b8;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+}
+
+.toggle-btn.on {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #fff;
 }
 </style>

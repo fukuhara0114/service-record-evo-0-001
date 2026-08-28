@@ -77,8 +77,9 @@
                 <table>
                     <thead>
                         <tr>
-                            <th v-for="column in columns" :key="column">
+                            <th v-for="column in displayColumns" :key="column">
                                 <button
+                                    v-if="column !== LENDING_PARENT_COLUMN"
                                     type="button"
                                     class="sort-button"
                                     :disabled="loading"
@@ -86,12 +87,13 @@
                                 >
                                     {{ column }}{{ sortIndicator(column) }}
                                 </button>
+                                <span v-else class="sort-button static-header">{{ column }}</span>
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="filteredRows.length === 0">
-                            <td :colspan="columns.length || 1" class="empty">データがありません。</td>
+                            <td :colspan="displayColumns.length || 1" class="empty">データがありません。</td>
                         </tr>
                         <tr
                             v-for="row in filteredRows"
@@ -100,9 +102,13 @@
                             :class="{ selected: Number(selectedId) === Number(row.id) }"
                             @click="selectRow(row)"
                         >
-                            <td v-for="column in columns" :key="`${row.id}-${column}`">
+                            <td v-for="column in displayColumns" :key="`${row.id}-${column}`">
+                                <span
+                                    v-if="column === LENDING_PARENT_COLUMN"
+                                    :class="{ 'lending-elapsed-red': isLendingElapsedText(lendingParentCell(row)) }"
+                                >{{ lendingParentCell(row) }}</span>
                                 <select
-                                    v-if="column === statusColumn"
+                                    v-else-if="column === statusColumn"
                                     class="status-select"
                                     :value="statusSelectValue(row[column])"
                                     :disabled="savingStatus"
@@ -175,6 +181,9 @@ const props = defineProps({
     },
 })
 
+const LENDING_PARENT_COLUMN = '親案件'
+const PARENT_COMPLETE_STATUS = 400
+
 const page = usePage()
 const loading = ref(false)
 const savingStatus = ref(false)
@@ -192,6 +201,13 @@ const currentDirection = computed(() => props.direction === 'desc' ? 'desc' : 'a
 const currentScope = computed(() => props.scope || 'all')
 const currentSearch = computed(() => props.q || '')
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/master`)
+const displayColumns = computed(() => {
+    const cols = props.columns ?? []
+    if (currentScope.value === 'lending') {
+        return [LENDING_PARENT_COLUMN, ...cols]
+    }
+    return cols
+})
 const filteredRows = computed(() => {
     const queries = String(quickFilter.value || '')
         .toLowerCase()
@@ -204,8 +220,11 @@ const filteredRows = computed(() => {
     }
 
     return rows.value.filter((row) => {
-        const rowText = (props.columns ?? [])
+        const rowText = displayColumns.value
             .map((column) => {
+                if (column === LENDING_PARENT_COLUMN) {
+                    return lendingParentCell(row)
+                }
                 const value = row?.[column]
                 if (value == null || value === '') return ''
                 if (column === props.statusColumn) {
@@ -242,6 +261,49 @@ const uniqueStatusOptions = computed(() => {
 function displayCell(value) {
     if (value == null || value === '') return '—'
     return String(value)
+}
+
+function toYmd(value) {
+    if (value == null || value === '') return null
+    const raw = String(value).slice(0, 10)
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
+}
+
+function tokyoTodayYmd() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
+}
+
+function elapsedDaysFromSentOut(sentOut) {
+    const ymd = toYmd(sentOut)
+    if (!ymd) return null
+    const today = tokyoTodayYmd()
+    if (ymd > today) return null
+    const [y1, m1, d1] = ymd.split('-').map(Number)
+    const [y2, m2, d2] = today.split('-').map(Number)
+    const diff = Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000)
+    return Number.isFinite(diff) ? diff : null
+}
+
+/** 貸出中スコープ先頭カラム: 親 status < 400 → 作業中 / >=400 → 出荷完了後xx日経過 */
+function lendingParentCell(row) {
+    const status = row?.parentStatus
+    if (status == null || status === '') return '—'
+    const statusNum = Number(status)
+    if (!Number.isFinite(statusNum)) return '—'
+    if (statusNum < PARENT_COMPLETE_STATUS) return '作業中'
+
+    const days = elapsedDaysFromSentOut(row?.parentSentOut)
+    if (days == null) return '—'
+    return `出荷完了後${days}日経過`
+}
+
+function isLendingElapsedText(text) {
+    return String(text ?? '').startsWith('出荷完了後')
 }
 
 function statusSelectValue(value) {
@@ -328,7 +390,7 @@ function selectRow(row) {
 }
 
 function toggleSort(column) {
-    if (!column || loading.value) return
+    if (!column || loading.value || column === LENDING_PARENT_COLUMN) return
 
     const nextDirection = currentSort.value === column && currentDirection.value === 'asc'
         ? 'desc'
@@ -643,5 +705,15 @@ th {
     text-align: center;
     color: #64748b;
     padding: 24px;
+}
+
+.sort-button.static-header {
+    cursor: default;
+    font-weight: 700;
+}
+
+.lending-elapsed-red {
+    color: #dc2626;
+    font-weight: 800;
 }
 </style>

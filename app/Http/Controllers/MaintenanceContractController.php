@@ -94,6 +94,67 @@ class MaintenanceContractController extends Controller
     {
         $contract = MaintenanceContractMaster::query()->findOrFail($id);
 
+        $validated = $this->validateContractPayload($request);
+
+        $validated['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
+        $validated['lastEditDate'] = now();
+
+        $contract->fill($validated);
+        $contract->save();
+        $contract->load('maintenanceContractType:id,contractType,description');
+
+        return response()->json([
+            'message' => '保守契約を更新しました。',
+            'contract' => $this->serializeDetail($contract),
+        ]);
+    }
+
+    /**
+     * 詳細画面の「複製を保存」:
+     * 選択されたセクションの値だけをコピーして新規 Maintenance Contract を作成する。
+     */
+    public function duplicate(Request $request, int $id)
+    {
+        MaintenanceContractMaster::query()->findOrFail($id);
+
+        $sectionRules = [
+            'sections' => 'required|array',
+            'sections.product' => 'required|boolean',
+            'sections.contract' => 'required|boolean',
+            'sections.order' => 'required|boolean',
+            'sections.dealer' => 'required|boolean',
+            'sections.endUser' => 'required|boolean',
+            'sections.description' => 'required|boolean',
+            'sections.additional_information' => 'required|boolean',
+        ];
+
+        $sectionInput = $request->validate($sectionRules);
+        $sections = $sectionInput['sections'];
+
+        if (! collect($sections)->contains(true)) {
+            return response()->json([
+                'message' => 'コピーする項目を1つ以上選択してください。',
+            ], 422);
+        }
+
+        $payload = $this->validateContractPayload($request);
+        $attributes = $this->attributesForDuplicateSections($payload, $sections);
+        $attributes['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
+        $attributes['lastEditDate'] = now();
+
+        $contract = new MaintenanceContractMaster();
+        $contract->fill($attributes);
+        $contract->save();
+        $contract->load('maintenanceContractType:id,contractType,description');
+
+        return response()->json([
+            'message' => '保守契約を複製しました。',
+            'contract' => $this->serializeDetail($contract),
+        ], 201);
+    }
+
+    private function validateContractPayload(Request $request): array
+    {
         $validated = $request->validate([
             'dealer' => 'nullable|string|max:255',
             'branch' => 'nullable|string|max:255',
@@ -136,17 +197,64 @@ class MaintenanceContractController extends Controller
             }
         }
 
-        $validated['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
-        $validated['lastEditDate'] = now();
+        return $validated;
+    }
 
-        $contract->fill($validated);
-        $contract->save();
-        $contract->load('maintenanceContractType:id,contractType,description');
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, bool>  $sections
+     * @return array<string, mixed>
+     */
+    private function attributesForDuplicateSections(array $payload, array $sections): array
+    {
+        $map = [
+            'product' => ['instrumentName', 'SN', 'status'],
+            'contract' => [
+                'RefNumber',
+                'contractType',
+                'amount',
+                'startDate',
+                'expireDate',
+                'certificationTicket',
+                'certificationExpireDate',
+            ],
+            'order' => [
+                'informedDate',
+                'informed',
+                'renewalInformation',
+                'renewedDate',
+                'shippingDate',
+                'orderedDate',
+                'yayoi_PO',
+                'mapics_PO',
+                'invoice_num',
+            ],
+            'dealer' => ['dealer', 'branch', 'contact', 'phone', 'email', 'address'],
+            'endUser' => [
+                'endUser',
+                'endUser_depart',
+                'endUser_contact',
+                'endUser_phone',
+                'endUser_email',
+                'endUser_address',
+            ],
+            'description' => ['description'],
+            'additional_information' => ['additional_information'],
+        ];
 
-        return response()->json([
-            'message' => '保守契約を更新しました。',
-            'contract' => $this->serializeDetail($contract),
-        ]);
+        $attributes = [];
+        foreach ($map as $section => $keys) {
+            if (empty($sections[$section])) {
+                continue;
+            }
+            foreach ($keys as $key) {
+                if (array_key_exists($key, $payload)) {
+                    $attributes[$key] = $payload[$key];
+                }
+            }
+        }
+
+        return $attributes;
     }
 
     /**

@@ -667,7 +667,8 @@ class LoanerRecordController extends Controller
             $attached->save();
 
             if ($loanerId !== null && $loanerId !== '') {
-                $this->setLoanerInventoryStatus($loanerId, 0);
+                // 完了扱い: associatedID=-1 / currentStatus=0
+                $this->releaseLoanerMasterOnComplete($loanerId);
             }
         });
 
@@ -1189,10 +1190,19 @@ class LoanerRecordController extends Controller
             $attached->fill($attachedPayload);
             $attached->save();
 
+            $newLoanerId = $record->loanerID ?? $attached->loanerID;
+
+            // 個体差し替え時は旧個体の associatedID をクリア
+            if (
+                $previousLoanerId !== null && $previousLoanerId !== ''
+                && (string) $previousLoanerId !== (string) ($newLoanerId ?? '')
+            ) {
+                $this->syncLoanerMasterAssociatedIdFromParent($previousLoanerId, null);
+            }
+
             if ($record->order_type === 'loaner') {
                 $newStatus = (int) $record->status;
                 $oldStatus = (int) $previousStatus;
-                $newLoanerId = $record->loanerID ?? $attached->loanerID;
 
                 // 個体を差し替えたときは旧個体を在庫(0)へ戻す
                 if (
@@ -1202,13 +1212,23 @@ class LoanerRecordController extends Controller
                     $this->setLoanerInventoryStatus($previousLoanerId, 0);
                 }
 
-                // 詳細の status（processID_new）を loanermaster.currentStatus へ同期
-                $this->syncLoanerMasterCurrentStatus($record, $newLoanerId);
+                if ($newStatus === LoanerStatusFlow::COMPLETE) {
+                    // 完了: associatedID=-1 / currentStatus=0
+                    $this->releaseLoanerMasterOnComplete($newLoanerId);
+                } else {
+                    // 親 service の orderID を loanermaster.associatedID へ反映（未設定ならクリア）
+                    $this->syncLoanerMasterAssociatedIdFromParent($newLoanerId, $record->parentID);
+                    // 詳細の status（processID_new）を loanermaster.currentStatus へ同期
+                    $this->syncLoanerMasterCurrentStatus($record, $newLoanerId);
+                }
 
                 if (LoanerStatusFlow::crossedToInactiveList($oldStatus, $newStatus)) {
                     $promotionTriggered = true;
                     $promotionCandidates = $this->markPromotionCandidatesForReturnedLoaner($record);
                 }
+            } else {
+                // waiting_list など: 親紐づけのみ反映
+                $this->syncLoanerMasterAssociatedIdFromParent($newLoanerId, $record->parentID);
             }
         });
 
@@ -1489,6 +1509,12 @@ class LoanerRecordController extends Controller
                 $this->setLoanerInventoryStatus($available->loanerID, $loanerMasterStatus);
             }
 
+            // 親 service があるときは loanermaster.associatedID に親 orderID を入れる
+            $this->syncLoanerMasterAssociatedIdFromParent(
+                $sourceUnit?->loanerID ?? $requestedLoanerId,
+                $parentId,
+            );
+
             if ($fileIds->isNotEmpty()) {
                 AttachedFile::query()
                     ->whereIn('id', $fileIds)
@@ -1686,6 +1712,11 @@ class LoanerRecordController extends Controller
         $record->fill($update);
         $record->save();
 
+        $this->syncLoanerMasterAssociatedIdFromParent(
+            $record->loanerID ?? $attached->loanerID,
+            $record->parentID,
+        );
+
         return response()->json([
             'message' => 'service 案件に紐づけました。',
             'parentID' => $record->parentID,
@@ -1834,10 +1865,13 @@ class LoanerRecordController extends Controller
                     $record->lastEditDate = now();
                     $record->save();
                     if ($isLoaner && array_key_exists('status', $validated)) {
-                        $this->syncLoanerMasterCurrentStatus(
-                            $record,
-                            $record->loanerID ?? $attached->loanerID,
-                        );
+                        $loanerId = $record->loanerID ?? $attached->loanerID;
+                        if ((int) $record->status === LoanerStatusFlow::COMPLETE) {
+                            $this->releaseLoanerMasterOnComplete($loanerId);
+                        } else {
+                            $this->syncLoanerMasterAssociatedIdFromParent($loanerId, $record->parentID);
+                            $this->syncLoanerMasterCurrentStatus($record, $loanerId);
+                        }
                     }
                 }
             }
@@ -2273,6 +2307,60 @@ class LoanerRecordController extends Controller
             : LoanerStatusFlow::STOCK;
 
         $this->setLoanerInventoryStatus($id, $masterStatus);
+    }
+
+    /**
+     * loaner 案件に紐づく loanermaster（同一 loanerID の全版）の associatedID を更新する。
+     * 親が service 案件ならその orderID、未設定または service 以外なら null。
+     */
+    private function syncLoanerMasterAssociatedIdFromParent(mixed $loanerId, mixed $parentId): void
+    {
+        if ($loanerId === null || $loanerId === '' || (int) $loanerId === 0) {
+            return;
+        }
+
+        if (! Schema::hasColumn((new LoanerMaster)->getTable(), 'associatedID')) {
+            return;
+        }
+
+        $associatedId = null;
+        if ($parentId !== null && $parentId !== '' && (int) $parentId !== 0) {
+            $parent = ServiceRecord::query()
+                ->where('orderID', (int) $parentId)
+                ->first(['orderID', 'order_type']);
+
+            if ($parent) {
+                $parentOrderType = $parent->order_type;
+                // store / linkParent と同様: null/空も service 扱い、明示的に service 以外は紐づけない
+                if ($parentOrderType === null || $parentOrderType === '' || $parentOrderType === 'service') {
+                    $associatedId = (int) $parent->orderID;
+                }
+            }
+        }
+
+        LoanerMaster::query()
+            ->where('loanerID', $loanerId)
+            ->update(['associatedID' => $associatedId]);
+    }
+
+    /**
+     * loaner 案件が完了(400)のとき: associatedID=-1 / currentStatus=0（同一 loanerID の全版）。
+     */
+    private function releaseLoanerMasterOnComplete(mixed $loanerId): void
+    {
+        if ($loanerId === null || $loanerId === '' || (int) $loanerId === 0) {
+            return;
+        }
+
+        $this->setLoanerInventoryStatus($loanerId, LoanerStatusFlow::STOCK);
+
+        if (! Schema::hasColumn((new LoanerMaster)->getTable(), 'associatedID')) {
+            return;
+        }
+
+        LoanerMaster::query()
+            ->where('loanerID', $loanerId)
+            ->update(['associatedID' => -1]);
     }
 
     /**

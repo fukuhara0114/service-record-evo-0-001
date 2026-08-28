@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\LoanerMaster;
+use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -55,8 +57,24 @@ class LoanerMasterController extends Controller
             ->orderBy('loanerID')
             ->orderByDesc('id')
             ->paginate(100)
-            ->withQueryString()
-            ->through(fn (LoanerMaster $row) => $this->serializeRow($row, $columns, $statusColumn, $statusLabels));
+            ->withQueryString();
+
+        $parentById = $scope === 'lending'
+            ? $this->loadParentsByAssociatedId($masters->getCollection())
+            : collect();
+
+        $masters->setCollection(
+            $masters->getCollection()->map(
+                fn (LoanerMaster $row) => $this->serializeRow(
+                    $row,
+                    $columns,
+                    $statusColumn,
+                    $statusLabels,
+                    $parentById,
+                    $scope === 'lending',
+                )
+            )
+        );
 
         return Inertia::render('LoanerMasterList', [
             'columns' => $columns,
@@ -239,8 +257,35 @@ class LoanerMasterController extends Controller
     }
 
     /**
+     * associatedID（親 service の orderID）から親案件の status / sentOut を一括取得。
+     *
+     * @param  Collection<int, LoanerMaster>  $rows
+     * @return Collection<int, ServiceRecord>
+     */
+    private function loadParentsByAssociatedId(Collection $rows): Collection
+    {
+        $ids = $rows
+            ->pluck('associatedID')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        return ServiceRecord::query()
+            ->whereIn('orderID', $ids)
+            ->get(['orderID', 'status', 'sentOut'])
+            ->keyBy(fn (ServiceRecord $parent) => (int) $parent->orderID);
+    }
+
+    /**
      * @param  array<int, string>  $columns
      * @param  array<string, string>  $statusLabels
+     * @param  Collection<int, ServiceRecord>|null  $parentById
      * @return array<string, mixed>
      */
     private function serializeRow(
@@ -248,8 +293,11 @@ class LoanerMasterController extends Controller
         array $columns,
         string $statusColumn,
         array $statusLabels,
+        ?Collection $parentById = null,
+        bool $includeParentInfo = false,
     ): array {
         $out = [];
+        $parents = $parentById ?? collect();
 
         foreach ($columns as $column) {
             $value = $row->getAttribute($column);
@@ -268,6 +316,21 @@ class LoanerMasterController extends Controller
             } else {
                 $out[$column] = $value;
             }
+        }
+
+        if ($includeParentInfo) {
+            $associatedId = (int) ($row->associatedID ?? 0);
+            $parent = $associatedId > 0 ? $parents->get($associatedId) : null;
+            $sentOut = null;
+            if ($parent?->sentOut instanceof \DateTimeInterface) {
+                $sentOut = $parent->sentOut->format('Y-m-d');
+            } elseif ($parent?->sentOut !== null && $parent->sentOut !== '') {
+                $raw = substr((string) $parent->sentOut, 0, 10);
+                $sentOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
+            }
+
+            $out['parentStatus'] = $parent?->status;
+            $out['parentSentOut'] = $sentOut;
         }
 
         return $out;
