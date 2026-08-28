@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -23,7 +24,11 @@ class LoanerMasterController extends Controller
         $scope = $this->normalizeScope((string) $request->query('scope', 'all'));
         $search = trim((string) $request->query('q', ''));
 
-        if (!in_array($sort, $columns, true)) {
+        $allowedSorts = $columns;
+        if ($scope === 'lending') {
+            $allowedSorts[] = 'lending_parent_status';
+        }
+        if (!in_array($sort, $allowedSorts, true)) {
             $sort = 'item';
         }
 
@@ -42,7 +47,9 @@ class LoanerMasterController extends Controller
         $this->applyStatusScope($query, $statusColumn, $scope);
         $this->applySearch($query, $columns, $search);
 
-        if ($sort === 'item') {
+        if ($sort === 'lending_parent_status') {
+            $this->applyLendingParentStatusSort($query, $table, $direction);
+        } elseif ($sort === 'item') {
             // MySQL 5.7/8 共通: 【使用不可】【サービス終了】を除いてソート（REGEXP_REPLACE 非使用）
             $query
                 ->orderByRaw(
@@ -257,7 +264,40 @@ class LoanerMasterController extends Controller
     }
 
     /**
-     * associatedID（親 service の orderID）から親案件の status / sentOut を一括取得。
+     * 貸出中の「親案件状況」表示文字列順に近いソート。
+     * グループ: — → 作業中 → 出荷完了後xx日経過（xx は日数）
+     */
+    private function applyLendingParentStatusSort($query, string $table, string $direction): void
+    {
+        $dir = $direction === 'desc' ? 'DESC' : 'ASC';
+        $today = Carbon::now('Asia/Tokyo')->toDateString();
+        $statusExpr = "(SELECT status FROM servicerecord WHERE orderID = CAST(`{$table}`.associatedID AS SIGNED) LIMIT 1)";
+        $shipExpr = "(SELECT shippingOut_requiredDate FROM servicerecord WHERE orderID = CAST(`{$table}`.associatedID AS SIGNED) LIMIT 1)";
+
+        // 表示文字列の並び: — / 作業中 / 出荷完了後…
+        $groupExpr = "CASE
+            WHEN {$statusExpr} IS NULL OR {$statusExpr} = '' THEN 0
+            WHEN CAST({$statusExpr} AS SIGNED) < 400 THEN 1
+            WHEN {$shipExpr} IS NULL OR {$shipExpr} = '' THEN 0
+            ELSE 2
+        END";
+
+        $daysExpr = "CASE
+            WHEN CAST({$statusExpr} AS SIGNED) >= 400
+                AND {$shipExpr} IS NOT NULL
+                AND {$shipExpr} != ''
+                AND DATE({$shipExpr}) <= '{$today}'
+            THEN DATEDIFF('{$today}', DATE({$shipExpr}))
+            ELSE NULL
+        END";
+
+        $query
+            ->orderByRaw("{$groupExpr} {$dir}")
+            ->orderByRaw("{$daysExpr} {$dir}");
+    }
+
+    /**
+     * associatedID（親 service の orderID）から親案件の status / shippingOut を一括取得。
      *
      * @param  Collection<int, LoanerMaster>  $rows
      * @return Collection<int, ServiceRecord>

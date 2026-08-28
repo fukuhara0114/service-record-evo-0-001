@@ -79,15 +79,13 @@
                         <tr>
                             <th v-for="column in displayColumns" :key="column">
                                 <button
-                                    v-if="column !== LENDING_PARENT_COLUMN"
                                     type="button"
                                     class="sort-button"
                                     :disabled="loading"
                                     @click="toggleSort(column)"
                                 >
-                                    {{ column }}{{ sortIndicator(column) }}
+                                    {{ columnLabel(column) }}{{ sortIndicator(column) }}
                                 </button>
-                                <span v-else class="sort-button static-header">{{ column }}</span>
                             </th>
                         </tr>
                     </thead>
@@ -104,7 +102,7 @@
                         >
                             <td v-for="column in displayColumns" :key="`${row.id}-${column}`">
                                 <span
-                                    v-if="column === LENDING_PARENT_COLUMN"
+                                    v-if="column === LENDING_PARENT_STATUS_COLUMN"
                                     :class="{ 'lending-elapsed-red': isLendingElapsedText(lendingParentCell(row)) }"
                                 >{{ lendingParentCell(row) }}</span>
                                 <select
@@ -181,7 +179,8 @@ const props = defineProps({
     },
 })
 
-const LENDING_PARENT_COLUMN = '親案件'
+const LENDING_PARENT_STATUS_COLUMN = 'lending_parent_status'
+const ASSOCIATED_ID_COLUMN = 'associatedID'
 const PARENT_COMPLETE_STATUS = 400
 
 const page = usePage()
@@ -204,7 +203,8 @@ const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/loaner/ma
 const displayColumns = computed(() => {
     const cols = props.columns ?? []
     if (currentScope.value === 'lending') {
-        return [LENDING_PARENT_COLUMN, ...cols]
+        const rest = cols.filter((column) => column !== ASSOCIATED_ID_COLUMN)
+        return [LENDING_PARENT_STATUS_COLUMN, ASSOCIATED_ID_COLUMN, ...rest]
     }
     return cols
 })
@@ -222,7 +222,7 @@ const filteredRows = computed(() => {
     return rows.value.filter((row) => {
         const rowText = displayColumns.value
             .map((column) => {
-                if (column === LENDING_PARENT_COLUMN) {
+                if (column === LENDING_PARENT_STATUS_COLUMN) {
                     return lendingParentCell(row)
                 }
                 const value = row?.[column]
@@ -239,6 +239,12 @@ const filteredRows = computed(() => {
         return queries.every((q) => rowText.includes(q))
     })
 })
+
+function columnLabel(column) {
+    if (column === LENDING_PARENT_STATUS_COLUMN) return '親案件状況'
+    if (column === ASSOCIATED_ID_COLUMN && currentScope.value === 'lending') return '親案件ID'
+    return column
+}
 const scopeButtons = [
     { id: 'all', label: '全件' },
     { id: 'stock', label: '在庫' },
@@ -391,7 +397,7 @@ function selectRow(row) {
 }
 
 function toggleSort(column) {
-    if (!column || loading.value || column === LENDING_PARENT_COLUMN) return
+    if (!column || loading.value) return
 
     const nextDirection = currentSort.value === column && currentDirection.value === 'asc'
         ? 'desc'
@@ -706,11 +712,6 @@ th {
     text-align: center;
     color: #64748b;
     padding: 24px;
-}
-
-.sort-button.static-header {
-    cursor: default;
-    font-weight: 700;
 }
 
 .lending-elapsed-red {
