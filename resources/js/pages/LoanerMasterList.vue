@@ -275,7 +275,7 @@ const props = defineProps({
     },
     sort: {
         type: String,
-        default: 'item',
+        default: 'groupName',
     },
     direction: {
         type: String,
@@ -336,7 +336,7 @@ const editColumns = computed(() =>
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const rows = computed(() => props.masters?.data ?? [])
 const totalCount = computed(() => props.masters?.total ?? rows.value.length)
-const currentSort = computed(() => props.sort || 'item')
+const currentSort = computed(() => props.sort || 'groupName')
 const currentDirection = computed(() => props.direction === 'desc' ? 'desc' : 'asc')
 const currentScope = computed(() => props.scope || 'all')
 const currentSearch = computed(() => props.q || '')

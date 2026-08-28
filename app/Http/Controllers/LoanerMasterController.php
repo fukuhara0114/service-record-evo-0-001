@@ -19,7 +19,8 @@ class LoanerMasterController extends Controller
         $columns = Schema::getColumnListing($table);
         $statusColumn = $this->resolveStatusColumn();
         $statusLabels = $this->buildStatusLabelMap();
-        $sort = (string) $request->query('sort', 'item');
+        $defaultSort = in_array('groupName', $columns, true) ? 'groupName' : 'item';
+        $sort = (string) $request->query('sort', $defaultSort);
         $direction = strtolower((string) $request->query('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
         $scope = $this->normalizeScope((string) $request->query('scope', 'all'));
         $search = trim((string) $request->query('q', ''));
@@ -29,7 +30,7 @@ class LoanerMasterController extends Controller
             $allowedSorts[] = 'lending_parent_status';
         }
         if (!in_array($sort, $allowedSorts, true)) {
-            $sort = 'item';
+            $sort = $defaultSort;
         }
 
         $query = LoanerMaster::query()
