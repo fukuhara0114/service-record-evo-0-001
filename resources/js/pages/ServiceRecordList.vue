@@ -2191,7 +2191,7 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
         jsonData.push({
             orderid: orderID,
             signature: currentUserSignature.value,
-            EmployeeID: currentUserEmployeeId.value,
+            employeeid: currentUserEmployeeId.value,
             sm_workorder,
             entityid: entityID,
             sn,
