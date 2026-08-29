@@ -58,7 +58,12 @@ class AssignNotificationMailer
         $workDescription = $this->returnCodeDescription($record->returnCode);
 
         $subject = "【新規案件assign】  orderID: {$orderId}, {$dealer}, {$productName}, {$sn}";
-        $link = url('/servicerecord/open/'.$record->orderID);
+        // DetailFormA「受注」アサイン通知: Engineer 一覧で詳細を開く
+        $link = url('/servicerecord/engineer').'?'.http_build_query([
+            'orderType' => 'service',
+            'arrival' => 'all',
+            'openOrderID' => $orderId,
+        ]);
         $body = "orderID: {$orderId}\n"
             ."dealer ： {$dealer}\n"
             ."製品名 ： {$productName}\n"
