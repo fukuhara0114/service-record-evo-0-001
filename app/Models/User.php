@@ -33,6 +33,7 @@ class User extends Authenticatable
         'laborID',
         'receive_info',
         'signature',
+        'EmployeeID',
     ];
 
     // JSONなどに出さない（セキュリティ）
