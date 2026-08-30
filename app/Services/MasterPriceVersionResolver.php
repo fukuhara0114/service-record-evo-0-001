@@ -96,20 +96,14 @@ class MasterPriceVersionResolver
     }
 
     /**
-     * loaner の価格版 as-of。受注日が 2000年以前 / 2099年以降 / 未定なら親 service の受注日。
+     * loaner の価格版 as-of。
+     * 基点は常に loaner 案件自身の受注日（親 service の受注日は使わない）。
+     * $serviceOrderDate は互換のため残すが参照しない。
      * 発送予定日・出荷日は使わない。
      */
-    public function resolveLoanerPriceAsOf(mixed $loanerOrderDate, mixed $serviceOrderDate): ?string
+    public function resolveLoanerPriceAsOf(mixed $loanerOrderDate, mixed $serviceOrderDate = null): ?string
     {
-        if ($this->isLoanerOwnOrderDateUsable($loanerOrderDate)) {
-            return $this->normalizePriceAsOfDate($loanerOrderDate);
-        }
-
-        if ($this->isLoanerOwnOrderDateUsable($serviceOrderDate)) {
-            return $this->normalizePriceAsOfDate($serviceOrderDate);
-        }
-
-        return null;
+        return $this->normalizePriceAsOfDate($loanerOrderDate);
     }
 
     public function firstValidAsOf(mixed ...$dates): ?string

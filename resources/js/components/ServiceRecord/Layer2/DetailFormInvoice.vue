@@ -387,7 +387,15 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice } from '@/utils/resolveServiceWorkPrice'
+import {
+    findServiceMaster,
+    findPartMaster,
+    normalizePriceAsOfDate,
+    applyPartMasterAsOf,
+    resolveLoanerMasterLinePrice,
+    resolveLinkedLoanerPriceAsOfDate,
+    findLoanerMasterPrice,
+} from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
@@ -433,7 +441,7 @@ function resolveInvoiceCompleteStatus(currentStatus, orderType, rma) {
 
 const page = usePage()
 
-/** 価格版は servicerecord.orderDate のみ */
+/** 価格版の as-of。loaner / service とも当該案件の受注日（親受注日は使わない）。 */
 const priceAsOfDate = computed(() =>
     normalizePriceAsOfDate(props.draftRecord?.orderDate ?? props.record?.orderDate),
 )
@@ -537,8 +545,22 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-/** Invoice の作業価格は常に servicerecord.price（マスタ再計算しない） */
+/**
+ * 作業価格:
+ * - loaner: 当該 loaner 案件の受注日版 loanermaster（無償=price 0 は 0）
+ * - service: servicerecord.price
+ */
 const workPrice = computed(() => {
+    if (isLoanerRecord.value) {
+        const storedRaw = props.draftRecord?.price ?? props.record?.price
+        if (storedRaw != null && storedRaw !== '') {
+            const stored = Number(storedRaw)
+            if (Number.isFinite(stored) && stored === 0) return 0
+        }
+        const versions = props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? []
+        const loanerID = props.draftRecord?.loanerID ?? props.record?.loanerID
+        return findLoanerMasterPrice(versions, loanerID, priceAsOfDate.value)
+    }
     const raw = props.draftRecord?.price ?? props.record?.price
     const value = Number(raw)
     return Number.isFinite(value) ? value : 0

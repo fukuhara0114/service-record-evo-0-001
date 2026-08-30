@@ -1075,7 +1075,7 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
-import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord } from '@/utils/resolveServiceWorkPrice'
+import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
 const SHIP_PREP_STATUS_ID = 300
 
@@ -1331,12 +1331,10 @@ const form = reactive({
     incident: stringValue(props.record.incident),
 })
 
+/** loaner 案件の価格版は常に当該案件の受注日が基点（親受注日は使わない） */
 const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
     orderType: props.record?.order_type,
     orderDate: form.orderDate ?? props.record?.orderDate,
-    parentOrderDate: parentInfo.value?.orderDate
-        ?? props.parentRecord?.orderDate
-        ?? parentOrderDateFromRecord(props.record),
 }))
 
 const selectedUnit = computed(() => {

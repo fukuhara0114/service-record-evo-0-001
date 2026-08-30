@@ -55,7 +55,7 @@ function orderDateYear(value) {
 
 /**
  * loaner 自身の受注日を価格版に使えるか。
- * 未定・2000年以前・2099年以降は使わず、親 service の受注日にフォールバックする。
+ * 未定・2000年以前・2099年以降は as-of に使わない（最新版フォールバック）。
  */
 export function isLoanerOwnOrderDateUsable(value) {
     const year = orderDateYear(value)
@@ -63,34 +63,31 @@ export function isLoanerOwnOrderDateUsable(value) {
     return year > 2000 && year < 2099
 }
 
-/** loaner 表示価格の as-of。範囲外なら親 service の受注日。 */
-export function resolveLoanerPriceAsOfDate(loanerOrderDate, serviceOrderDate) {
-    if (isLoanerOwnOrderDateUsable(loanerOrderDate)) {
-        return normalizePriceAsOfDate(loanerOrderDate)
-    }
-    if (isLoanerOwnOrderDateUsable(serviceOrderDate)) {
-        return normalizePriceAsOfDate(serviceOrderDate)
-    }
-    return null
+/**
+ * loaner 案件の価格版 as-of。
+ * 基点は常に loaner 案件自身の受注日（親 service の受注日は使わない）。
+ * serviceOrderDate 引数は互換のため残すが参照しない。
+ */
+export function resolveLoanerPriceAsOfDate(loanerOrderDate, _serviceOrderDate = null) {
+    return normalizePriceAsOfDate(loanerOrderDate)
 }
 
-/** 画面表示価格の as-of。loaner は上記ルール、それ以外は自身の受注日。 */
-export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderDate } = {}) {
+/** 画面表示価格の as-of。loaner / それ以外とも自身の受注日。 */
+export function resolveDisplayPriceAsOfDate({ orderType, orderDate, parentOrderDate: _parentOrderDate } = {}) {
     if (String(orderType ?? '').trim().toLowerCase() === 'loaner') {
-        return resolveLoanerPriceAsOfDate(orderDate, parentOrderDate)
+        return resolveLoanerPriceAsOfDate(orderDate)
     }
     return normalizePriceAsOfDate(orderDate)
 }
 
 /**
  * 親 Service 画面に紐づく loaner 行の as-of。
- * 親の受注日ではなく、loaner 自身の受注日ルールを優先する。
+ * loaner 案件自身の受注日のみ（親の受注日は使わない）。
  */
-export function resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate) {
+export function resolveLinkedLoanerPriceAsOfDate(loaner, _parentOrderDate = null) {
     return resolveDisplayPriceAsOfDate({
         orderType: 'loaner',
         orderDate: loaner?.orderDate,
-        parentOrderDate,
     })
 }
 
