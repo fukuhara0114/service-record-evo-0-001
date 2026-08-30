@@ -1399,7 +1399,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolveRecordWorkPrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -3850,7 +3850,8 @@ function resolveDetailFormAPrice(draft, parts = []) {
         serviceID: draft.serviceID,
     }, asOfDate)
 
-    const workPrice = resolveRecordWorkPrice({
+    const a2laOn = draft.a2la === 1 || draft.a2la === '1' || draft.a2la === true
+    const totals = resolvePriceCardTotals({
         orderType: draft.order_type,
         returnCode: draft.returnCode,
         serviceMaster: master,
@@ -3859,24 +3860,18 @@ function resolveDetailFormAPrice(draft, parts = []) {
         asOfDate,
         storedPrice: draft.price,
         loanerNoCharge: draft.loaner_no_charge,
+        a2laOn,
+        parts,
+        partsMaster: page.props.partsMaster ?? [],
+        discountService: draft.discount_service ?? 0,
     })
-    const a2laOn = draft.a2la === 1 || draft.a2la === '1' || draft.a2la === true
-    const a2laRaw = a2laOn ? Number(master?.price_a2la ?? 0) : 0
-    const a2laPrice = Number.isFinite(a2laRaw) ? a2laRaw : 0
-
-    const partsTotal = (parts ?? []).reduce((sum, part) => {
-        const versioned = findPartMaster(page.props.partsMaster, part.partID, asOfDate)
-        const raw = versioned?.price_discounted
-            ?? part.part_master?.price_discounted
-            ?? part.partMaster?.price_discounted
-        const value = Number(raw)
-        return sum + (Number.isFinite(value) ? value : 0)
-    }, 0)
-
-    const discountRaw = Number(draft.discount_service ?? 0)
-    const discount = Number.isFinite(discountRaw) ? discountRaw : 0
-    const total = workPrice + a2laPrice + partsTotal + discount
-    return Number.isFinite(total) ? total : null
+    // 保存する price は作業内容（計ではない）。service は returnCode マスタ、loaner は既存 price を維持。
+    const orderType = String(draft.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') {
+        const stored = Number(draft.price)
+        return Number.isFinite(stored) ? stored : totals.workPrice
+    }
+    return totals.workPrice
 }
 
 function confirmPendingTbcIfStatus300Plus(status) {

@@ -265,7 +265,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { tokyoTodayYmd } from '@/utils/businessDays'
-import { findServiceMaster, resolveRecordWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
@@ -387,7 +387,7 @@ const selectedServiceMaster = computed(() => findServiceMaster(page.props.servic
     serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
 }, priceAsOfDate.value))
 
-const workPrice = computed(() => resolveRecordWorkPrice({
+const priceCard = computed(() => resolvePriceCardTotals({
     orderType: props.draftRecord?.order_type ?? props.record?.order_type,
     returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
     serviceMaster: selectedServiceMaster.value,
@@ -396,13 +396,18 @@ const workPrice = computed(() => resolveRecordWorkPrice({
     asOfDate: priceAsOfDate.value,
     storedPrice: props.draftRecord?.price ?? props.record?.price,
     loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+    a2laOn: isA2laOn.value,
+    parts: props.parts ?? [],
+    partsMaster: page.props.partsMaster ?? [],
+    discountService: props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0,
 }))
 
-const a2laPrice = computed(() => {
-    if (!isA2laOn.value) return 0
-    const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
-    return Number.isFinite(value) ? value : 0
-})
+const workPrice = computed(() => priceCard.value.workPrice)
+const a2laPrice = computed(() => priceCard.value.a2laPrice)
+const partsPriceTotal = computed(() => priceCard.value.partsPriceTotal)
+const adjustmentAmount = computed(() => priceCard.value.adjustmentAmount)
+const subtotal = computed(() => priceCard.value.subtotal)
+const grandTotal = computed(() => priceCard.value.grandTotal)
 
 function resolvedPartMaster(part) {
     return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
@@ -445,36 +450,20 @@ watch(
     { immediate: true },
 )
 
-const partsPriceTotal = computed(() =>
-    (props.parts ?? []).reduce((sum, part) => sum + partVersionPrice(part), 0),
-)
-
 const loanerLabel = computed(() => {
     const first = (props.loaners ?? [])[0]
     if (!first) return '—'
     return first.loanerID || first.productName || first.SN || first.orderID || '—'
 })
 
-const loanerPrice = computed(() => {
-    // 親 service 案件では紐づく貸出機は請求しない（貸出機案件側で請求）
-    if (!isLoanerRecord.value) return 0
-    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
-    if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
-    const parentOrderDate = props.draftRecord?.orderDate ?? props.record?.orderDate
-    return (props.loaners ?? []).reduce((sum, loaner) => {
-        const asOf = resolveLinkedLoanerPriceAsOfDate(loaner, parentOrderDate)
-        const value = Number(resolveLoanerMasterLinePrice(loaner, currentReturnCode.value, asOf))
-        return sum + (Number.isFinite(value) ? value : 0)
-    }, 0)
-})
+/** 紐づく貸出機は価格カードに計上しない（loaner 案件は作業内容=servicerecord.price） */
+const loanerPrice = computed(() => 0)
 
-const adjustmentAmount = computed(() => {
-    const value = Number(props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
-    return Number.isFinite(value) ? value : 0
-})
-
-const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
-const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
+watch(workPrice, (value) => {
+    if (!props.draftRecord) return
+    if (isLoanerRecord.value) return
+    props.draftRecord.price = value
+}, { immediate: true })
 
 function formatPrice(value) {
     const num = Number(value)

@@ -921,7 +921,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPrice, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolvePriceCardTotals, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -1550,39 +1550,36 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-const workPrice = computed(() => resolveRecordWorkPrice({
-    orderType: props.draftRecord?.order_type ?? props.record?.order_type,
-    returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
-    serviceMaster: selectedServiceMaster.value,
-    loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
-    loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
-    asOfDate: priceAsOfDate.value,
-    storedPrice: props.draftRecord?.price ?? props.record?.price,
-    loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
-}))
-
-const a2laPrice = computed(() => {
-    if (!isA2laOn.value) return 0
-    const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
-    return Number.isFinite(value) ? value : 0
-})
-
-const partsPriceTotal = computed(() =>
-    (props.parts ?? []).reduce((sum, part) => {
-        const versioned = findPartMaster(
-            page.props.partsMaster,
-            part.partID,
-            priceAsOfDate.value,
-        )
-        const raw = versioned?.price_discounted
-            ?? part.part_master?.price_discounted
-            ?? part.partMaster?.price_discounted
-        const value = Number(raw)
-        return sum + (Number.isNaN(value) ? 0 : value)
-    }, 0),
+const isLoanerOrderType = computed(() =>
+    String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase() === 'loaner',
 )
 
-const basePrice = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value)
+/** Invoice / Closing / Logistics と同じ価格カード計算。表示「価格」= 計 */
+const priceCard = computed(() => {
+    const discountSource = sessionAdjustmentAmount.value != null && sessionAdjustmentAmount.value !== ''
+        ? sessionAdjustmentAmount.value
+        : (props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
+    return resolvePriceCardTotals({
+        orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+        returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+        serviceMaster: selectedServiceMaster.value,
+        loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+        loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+        asOfDate: priceAsOfDate.value,
+        storedPrice: props.draftRecord?.price ?? props.record?.price,
+        loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+        a2laOn: isA2laOn.value,
+        parts: props.parts ?? [],
+        partsMaster: page.props.partsMaster ?? [],
+        discountService: discountSource,
+    })
+})
+
+const workPrice = computed(() => priceCard.value.workPrice)
+const a2laPrice = computed(() => priceCard.value.a2laPrice)
+const partsPriceTotal = computed(() => priceCard.value.partsPriceTotal)
+const basePrice = computed(() => priceCard.value.subtotal)
+const displayPrice = computed(() => priceCard.value.grandTotal)
 
 const displayAdjustmentAmount = computed(() => {
     if (sessionAdjustmentAmount.value != null && sessionAdjustmentAmount.value !== '') {
@@ -1591,19 +1588,13 @@ const displayAdjustmentAmount = computed(() => {
     return props.draftRecord?.discount_service ?? props.record?.discount_service ?? ''
 })
 
-const displayPrice = computed(() => {
-    const discount = Number(displayAdjustmentAmount.value)
-    const discountValue = Number.isFinite(discount) ? discount : 0
-    return basePrice.value + discountValue
-})
-
-// 画面上の「価格」数値を price カラムへ反映（draft 差し替え時も再同期）
+/** service は作業内容価格のみ draft.price へ同期（計は discount_service と合わせて表示）。loaner は潰さない。 */
 watch(
-    [displayPrice, () => props.draftRecord],
+    [workPrice, () => props.draftRecord],
     () => {
         if (!props.draftRecord) return
-        const num = Number(displayPrice.value)
-        props.draftRecord.price = Number.isFinite(num) ? num : null
+        if (isLoanerOrderType.value) return
+        props.draftRecord.price = workPrice.value
     },
     { immediate: true },
 )
@@ -1849,11 +1840,12 @@ async function confirmPriceAdjust() {
             throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
         }
 
-        // discount_service を更新し、表示価格（displayPrice）は watch 経由で price へ反映
+        // 調整額のみ更新。作業内容価格（workPrice）は別 watch で draft.price へ同期。表示「価格」= 計
         props.draftRecord.discount_service = amount
         sessionAdjustmentAmount.value = amount
-        const num = Number(displayPrice.value)
-        props.draftRecord.price = Number.isFinite(num) ? num : null
+        if (!isLoanerOrderType.value) {
+            props.draftRecord.price = workPrice.value
+        }
         showPriceAdjustDialog.value = false
         emit('save')
         emit('reload-attachments')
@@ -1883,8 +1875,9 @@ function updateDraftDateValue(field, value) {
     props.draftRecord[field] = value || null
     if (field === 'orderDate') {
         applyLinePricesForAsOf()
-        const num = Number(displayPrice.value)
-        props.draftRecord.price = Number.isFinite(num) ? num : null
+        if (!isLoanerOrderType.value) {
+            props.draftRecord.price = workPrice.value
+        }
     }
 }
 

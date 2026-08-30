@@ -395,7 +395,7 @@ import {
     resolveLoanerMasterLinePrice,
     resolveLinkedLoanerPriceAsOfDate,
     findLoanerMasterPrice,
-    resolveRecordWorkPrice,
+    resolvePriceCardTotals,
 } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
@@ -546,11 +546,8 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-/**
- * 作業価格: 当該案件の受注日版マスタを参照する。
- * service → servicemaster / loaner → loanermaster（無償=price 0 は 0）
- */
-const workPrice = computed(() => resolveRecordWorkPrice({
+/** 価格カード共通: service=returnCodeマスタ / loaner=servicerecord.price → 小計 → 調整 → 計 */
+const priceCard = computed(() => resolvePriceCardTotals({
     orderType: props.draftRecord?.order_type ?? props.record?.order_type,
     returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
     serviceMaster: selectedServiceMaster.value,
@@ -559,15 +556,20 @@ const workPrice = computed(() => resolveRecordWorkPrice({
     asOfDate: priceAsOfDate.value,
     storedPrice: props.draftRecord?.price ?? props.record?.price,
     loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+    a2laOn: isA2laOn.value,
+    parts: props.parts ?? [],
+    partsMaster: page.props.partsMaster ?? [],
+    discountService: props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0,
 }))
 
-const a2laPrice = computed(() => {
-    if (!isA2laOn.value) return 0
-    const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
-    return Number.isFinite(value) ? value : 0
-})
+const workPrice = computed(() => priceCard.value.workPrice)
+const a2laPrice = computed(() => priceCard.value.a2laPrice)
+const partsPriceTotal = computed(() => priceCard.value.partsPriceTotal)
+const adjustmentAmount = computed(() => priceCard.value.adjustmentAmount)
+const subtotal = computed(() => priceCard.value.subtotal)
+const grandTotal = computed(() => priceCard.value.grandTotal)
 
-/** service は表示価格を draft.price へ同期（保存時も受注日版と一致させる）。loaner の有償/無償は潰さない。 */
+/** service の作業内容価格を draft.price へ同期（計ではなく作業内容）。loaner は潰さない。 */
 watch(workPrice, (value) => {
     if (!props.draftRecord) return
     if (isLoanerRecord.value) return
@@ -636,10 +638,6 @@ watch(
     { immediate: true },
 )
 
-const partsPriceTotal = computed(() =>
-    (props.parts ?? []).reduce((sum, part) => sum + partVersionPrice(part), 0),
-)
-
 const loanerLabel = computed(() => {
     const first = (props.loaners ?? [])[0]
     if (!first) return props.draftRecord?.loanerID || props.record?.loanerID || '—'
@@ -665,24 +663,8 @@ function loanerHref(orderId) {
     return loanerDetailUrl(orderId, returnUrl ? { returnUrl } : {})
 }
 
-const loanerPrice = computed(() => {
-    // 親 service 案件では紐づく貸出機は請求しない（貸出機案件側で請求）
-    if (!isLoanerRecord.value) return 0
-    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
-    if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
-    return (props.loaners ?? []).reduce((sum, loaner) => {
-        const value = Number(loanerDisplayPrice(loaner))
-        return sum + (Number.isFinite(value) ? value : 0)
-    }, 0)
-})
-
-const adjustmentAmount = computed(() => {
-    const value = Number(props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0)
-    return Number.isFinite(value) ? value : 0
-})
-
-const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value + loanerPrice.value)
-const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
+/** 紐づく貸出機は価格カードに計上しない（loaner 案件は作業内容=servicerecord.price） */
+const loanerPrice = computed(() => 0)
 
 function formatPrice(value) {
     const num = Number(value)

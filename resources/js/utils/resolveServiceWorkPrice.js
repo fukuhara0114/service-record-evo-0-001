@@ -300,9 +300,9 @@ export function resolveRecordWorkPriceFromMasters({
 }
 
 /**
- * 案件本体の作業価格（表示・請求用）。
- * service / loaner とも受注日（asOfDate）版マスタを参照する。
- * loaner の無償のみ storedPrice === 0（または loanerNoCharge）で 0 を返す。
+ * 案件本体の「作業内容」価格（価格カード共通）。
+ * - service: returnCode → 受注日版 servicemaster
+ * - loaner: servicerecord.price（未設定時のみ受注日版 loanermaster）
  */
 export function resolveRecordWorkPrice({
     orderType,
@@ -314,26 +314,77 @@ export function resolveRecordWorkPrice({
     storedPrice = null,
     loanerNoCharge = null,
 } = {}) {
-    if (String(orderType ?? '').trim() === 'loaner') {
+    if (String(orderType ?? '').trim().toLowerCase() === 'loaner') {
         if (loanerNoCharge === 1 || loanerNoCharge === '1' || loanerNoCharge === true) {
             return 0
         }
-        if (storedRawIsZero(storedPrice)) return 0
+        if (storedPrice != null && storedPrice !== '') {
+            const stored = Number(storedPrice)
+            if (Number.isFinite(stored)) return stored
+        }
+        return findLoanerMasterPrice(loanerPriceVersions, loanerID, asOfDate)
     }
-    return resolveRecordWorkPriceFromMasters({
+    return resolveServiceWorkPrice(serviceMaster, returnCode)
+}
+
+/**
+ * 価格カードの小計・計（Invoice / Closing / Logistics / DetailFormA 共通）。
+ * 作業内容 + a2la + parts = 小計、小計 + 調整 = 計。
+ * 親 service の紐づく貸出機は請求に含めない（loaner 案件は作業内容=servicerecord.price）。
+ */
+export function resolvePriceCardTotals({
+    orderType,
+    returnCode,
+    serviceMaster,
+    loanerID,
+    loanerPriceVersions = [],
+    asOfDate = null,
+    storedPrice = null,
+    loanerNoCharge = null,
+    a2laOn = false,
+    parts = [],
+    partsMaster = [],
+    discountService = 0,
+} = {}) {
+    const workPrice = resolveRecordWorkPrice({
         orderType,
         returnCode,
         serviceMaster,
         loanerID,
         loanerPriceVersions,
         asOfDate,
+        storedPrice,
+        loanerNoCharge,
     })
-}
 
-function storedRawIsZero(storedPrice) {
-    if (storedPrice == null || storedPrice === '') return false
-    const stored = Number(storedPrice)
-    return Number.isFinite(stored) && stored === 0
+    let a2laPrice = 0
+    if (a2laOn) {
+        const raw = Number(serviceMaster?.price_a2la ?? 0)
+        a2laPrice = Number.isFinite(raw) ? raw : 0
+    }
+
+    const partsPriceTotal = (parts ?? []).reduce((sum, part) => {
+        const versioned = findPartMaster(partsMaster, part?.partID, asOfDate)
+        const raw = versioned?.price_discounted
+            ?? part?.part_master?.price_discounted
+            ?? part?.partMaster?.price_discounted
+        const value = Number(raw)
+        return sum + (Number.isFinite(value) ? value : 0)
+    }, 0)
+
+    const adjustmentRaw = Number(discountService ?? 0)
+    const adjustmentAmount = Number.isFinite(adjustmentRaw) ? adjustmentRaw : 0
+    const subtotal = workPrice + a2laPrice + partsPriceTotal
+    const grandTotal = subtotal + adjustmentAmount
+
+    return {
+        workPrice,
+        a2laPrice,
+        partsPriceTotal,
+        adjustmentAmount,
+        subtotal,
+        grandTotal,
+    }
 }
 
 /**
