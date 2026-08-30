@@ -518,7 +518,10 @@ function resolveCompleteNextStatus(orderType, currentStatus) {
     if (currentStatus === 90) {
         return 180
     }
-    if (currentStatus === 180 || currentStatus === 185) {
+    if (currentStatus === 180) {
+        return 185
+    }
+    if (currentStatus === 185) {
         return 190
     }
     return null

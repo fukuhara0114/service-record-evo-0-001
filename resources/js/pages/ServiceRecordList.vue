@@ -224,10 +224,21 @@
                     <button
                         v-if="mode === 'engineer'"
                         type="button"
-                        class="sm-mode-btn"
+                        class="sm-mode-btn sm-mode-btn-spaced sm-mode-btn-sm-submit"
+                        :class="{ active: engineerSmSubmitMode }"
+                        @click="toggleEngineerSmSubmitMode"
+                    >SM Submit</button>
+                    <button
+                        v-if="mode === 'engineer'"
+                        type="button"
+                        class="sm-mode-btn sm-mode-btn-spaced sm-mode-btn-daily-report"
                         :class="{ active: engineerDailyReportMode }"
                         @click="toggleEngineerDailyReportMode"
                     >Daily Report</button>
+                    <span
+                        v-if="mode === 'engineer' && smQuoteCopyMessage"
+                        class="sm-quote-copy-message"
+                    >{{ smQuoteCopyMessage }}</span>
                     <button
                         v-if="!isRestrictedListMode"
                         type="button"
@@ -660,7 +671,14 @@
                     </span>
                 </label>
             </div>
-            <table id="myLargeTable" :class="{ 'daily-report-table': engineerDailyReportMode }">
+            <table
+                id="myLargeTable"
+                :class="{
+                    'daily-report-table': engineerDailyReportMode,
+                    'quote-co-table': mode === 'engineer' && engineerQuoteCoMode,
+                    'sm-submit-table': mode === 'engineer' && engineerSmSubmitMode,
+                }"
+            >
                 <thead>
                     <tr v-if="mode === 'engineer' && engineerDailyReportMode">
                         <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">orderID</SortableTh>
@@ -684,7 +702,7 @@
                     </tr>
                     <tr v-else-if="mode === 'engineer'">
                         <SortableTh sort-key="orderID" :active-key="listColumnSortKey" :direction="listColumnSortDir" style="width: 80px; text-align: center;" @sort="toggleColumnSort">OrderID</SortableTh>
-                        <th v-if="engineerQuoteCoMode" style="width: 44px; text-align: center;">
+                        <th v-if="engineerQuoteCoLikeMode" style="width: 44px; text-align: center;">
                             <input
                                 type="checkbox"
                                 :checked="abroadAllVisibleSelected"
@@ -927,7 +945,7 @@
                         </template>
                         <template v-else-if="mode === 'engineer'">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
-                            <td v-if="engineerQuoteCoMode" style="text-align: center;" @click.stop @dblclick.stop>
+                            <td v-if="engineerQuoteCoLikeMode" style="text-align: center;" @click.stop @dblclick.stop>
                                 <input
                                     type="checkbox"
                                     :checked="isAbroadSelected(r.orderID)"
@@ -1707,6 +1725,12 @@ const smListAutoRefreshTimer = ref(null)
 const smListAutoRefreshing = ref(false)
 const engineerQuoteCoMode = ref(false)
 const engineerQuoteCoBusy = ref(false)
+const engineerSmSubmitMode = ref(false)
+const smQuoteCopyMessage = ref('')
+let smQuoteCopyMessageTimer = null
+const engineerQuoteCoLikeMode = computed(() =>
+    engineerQuoteCoMode.value || engineerSmSubmitMode.value,
+)
 const engineerDailyReportMode = ref(false)
 const engineerDailyReportDrafts = ref({})
 const showDailyReportEmailPreview = ref(false)
@@ -2034,9 +2058,23 @@ function onCheckSmHeaderClick() {
 function toggleEngineerQuoteCoMode() {
     engineerQuoteCoMode.value = !engineerQuoteCoMode.value
     if (engineerQuoteCoMode.value) {
+        engineerSmSubmitMode.value = false
         engineerDailyReportMode.value = false
         showDailyReportEmailPreview.value = false
         abroadSelectedIds.value = new Set()
+    } else {
+        clearAbroadSelection()
+    }
+}
+
+function toggleEngineerSmSubmitMode() {
+    engineerSmSubmitMode.value = !engineerSmSubmitMode.value
+    if (engineerSmSubmitMode.value) {
+        engineerQuoteCoMode.value = false
+        engineerDailyReportMode.value = false
+        showDailyReportEmailPreview.value = false
+        abroadSelectedIds.value = new Set()
+        clearAbroadSelection()
     } else {
         clearAbroadSelection()
     }
@@ -2115,6 +2153,7 @@ function toggleEngineerDailyReportMode() {
     engineerDailyReportMode.value = !engineerDailyReportMode.value
     if (engineerDailyReportMode.value) {
         engineerQuoteCoMode.value = false
+        engineerSmSubmitMode.value = false
         abroadSelectedIds.value = new Set()
         showDailyReportEmailPreview.value = false
         dailyReportForceTodayOnOpen.value = true
@@ -2125,8 +2164,34 @@ function toggleEngineerDailyReportMode() {
     }
 }
 
+async function copySmQuoteFromRecord(record) {
+    const text = String(record?.sm_quote ?? '').trim()
+    if (!text) {
+        smQuoteCopyMessage.value = 'sm_quote が空です'
+        if (smQuoteCopyMessageTimer) clearTimeout(smQuoteCopyMessageTimer)
+        smQuoteCopyMessageTimer = setTimeout(() => {
+            smQuoteCopyMessage.value = ''
+        }, 2000)
+        return
+    }
+    try {
+        await writeTextToClipboard(text)
+        smQuoteCopyMessage.value = `sm_quote をコピーしました: ${text}`
+    } catch {
+        smQuoteCopyMessage.value = 'コピーに失敗しました'
+    }
+    if (smQuoteCopyMessageTimer) clearTimeout(smQuoteCopyMessageTimer)
+    smQuoteCopyMessageTimer = setTimeout(() => {
+        smQuoteCopyMessage.value = ''
+    }, 2000)
+}
+
 function onListRowDblClick(record) {
     if (engineerDailyReportMode.value) return
+    if (engineerSmSubmitMode.value) {
+        copySmQuoteFromRecord(record)
+        return
+    }
     openSecondLayer(record)
 }
 
@@ -2596,6 +2661,13 @@ const filteredRecords = computed(() => {
     if (props.mode === 'engineer') {
         if (engineerDailyReportMode.value) {
             records = records.filter((r) => matchesDailyReportStatus(r))
+        } else if (engineerSmSubmitMode.value) {
+            records = records.filter((r) => {
+                const orderType = r?.order_type ?? 'service'
+                const status = Number(r?.status)
+                return (orderType === 'service' || orderType === '' || orderType == null)
+                    && status === 185
+            })
         } else if (engineerQuoteCoMode.value) {
             records = records.filter((r) => {
                 const orderType = r?.order_type ?? 'service'
@@ -4329,6 +4401,30 @@ async function saveRecord() {
     color: #fff;
 }
 
+.search-area button.sm-mode-btn.sm-mode-btn-spaced {
+    margin-left: 50px;
+}
+
+.search-area button.sm-mode-btn.sm-mode-btn-sm-submit.active {
+    background: #eab308;
+    border-color: #ca8a04;
+    color: #111827;
+}
+
+.search-area button.sm-mode-btn.sm-mode-btn-daily-report.active {
+    background: #111;
+    border-color: #111;
+    color: #fff;
+}
+
+.sm-quote-copy-message {
+    margin-left: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f766e;
+    white-space: nowrap;
+}
+
 .abroad-sync-sm-btn {
     background: #0f766e;
 }
@@ -4405,6 +4501,15 @@ async function saveRecord() {
 
 #myLargeTable.daily-report-table thead th {
     background: #111 !important;
+}
+
+#myLargeTable.quote-co-table thead th {
+    background: #0f766e !important;
+}
+
+#myLargeTable.sm-submit-table thead th {
+    background: #eab308 !important;
+    color: #111827 !important;
 }
 
 #myLargeTable.daily-report-table td {
