@@ -265,7 +265,17 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { tokyoTodayYmd } from '@/utils/businessDays'
-import { findServiceMaster, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
+import {
+    findServiceMaster,
+    findPartMaster,
+    normalizePriceAsOfDate,
+    toOrderDateYmd,
+    applyPartMasterAsOf,
+    resolveLoanerMasterLinePrice,
+    resolveLinkedLoanerPriceAsOfDate,
+    resolvePriceCardTotals,
+    findLoanerMasterPrice,
+} from '@/utils/resolveServiceWorkPrice'
 
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
@@ -358,14 +368,33 @@ function fieldValue(field) {
     return ''
 }
 
-/** 価格版は servicerecord.orderDate のみ */
-const priceAsOfDate = computed(() =>
-    normalizePriceAsOfDate(props.draftRecord?.orderDate ?? props.record?.orderDate),
+const isLoanerRecord = computed(() => {
+    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '')
+        .trim()
+        .toLowerCase()
+    return orderType === 'loaner'
+})
+
+/** loaner / service とも当該案件の受注日（order_date 表記ゆれも見る） */
+const recordOrderDate = computed(() =>
+    props.draftRecord?.orderDate
+    ?? props.draftRecord?.order_date
+    ?? props.record?.orderDate
+    ?? props.record?.order_date
+    ?? null,
 )
 
-const isLoanerRecord = computed(() => {
-    const orderType = props.draftRecord?.order_type ?? props.record?.order_type
-    return orderType === 'loaner'
+/** 価格版の as-of。loaner 作業内容は必ずこの受注日で版を選ぶ */
+const priceAsOfDate = computed(() =>
+    normalizePriceAsOfDate(toOrderDateYmd(recordOrderDate.value) ?? recordOrderDate.value),
+)
+
+const loanerPriceVersions = computed(() => {
+    const fromDraft = props.draftRecord?.priceVersions
+    if (Array.isArray(fromDraft) && fromDraft.length) return fromDraft
+    const fromRecord = props.record?.priceVersions
+    if (Array.isArray(fromRecord) && fromRecord.length) return fromRecord
+    return []
 })
 
 const returnCodeLabel = computed(() => {
@@ -392,7 +421,7 @@ const priceCard = computed(() => resolvePriceCardTotals({
     returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
     serviceMaster: selectedServiceMaster.value,
     loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
-    loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+    loanerPriceVersions: loanerPriceVersions.value,
     asOfDate: priceAsOfDate.value,
     storedPrice: props.draftRecord?.price ?? props.record?.price,
     loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
@@ -402,12 +431,32 @@ const priceCard = computed(() => resolvePriceCardTotals({
     discountService: props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0,
 }))
 
-const workPrice = computed(() => priceCard.value.workPrice)
+/**
+ * loaner の作業内容は受注日版 loanermaster を明示解決（無償 price=0 は 0）。
+ * priceCard と同値になるが、Logistics では受注日参照をここで保証する。
+ */
+const workPrice = computed(() => {
+    if (isLoanerRecord.value) {
+        const storedRaw = props.draftRecord?.price ?? props.record?.price
+        if (storedRaw != null && storedRaw !== '') {
+            const stored = Number(storedRaw)
+            if (Number.isFinite(stored) && stored === 0) return 0
+        }
+        const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
+        if (noCharge === 1 || noCharge === '1' || noCharge === true) return 0
+        return findLoanerMasterPrice(
+            loanerPriceVersions.value,
+            props.draftRecord?.loanerID ?? props.record?.loanerID,
+            priceAsOfDate.value,
+        )
+    }
+    return priceCard.value.workPrice
+})
 const a2laPrice = computed(() => priceCard.value.a2laPrice)
 const partsPriceTotal = computed(() => priceCard.value.partsPriceTotal)
 const adjustmentAmount = computed(() => priceCard.value.adjustmentAmount)
-const subtotal = computed(() => priceCard.value.subtotal)
-const grandTotal = computed(() => priceCard.value.grandTotal)
+const subtotal = computed(() => workPrice.value + a2laPrice.value + partsPriceTotal.value)
+const grandTotal = computed(() => subtotal.value + adjustmentAmount.value)
 
 function resolvedPartMaster(part) {
     return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
@@ -456,7 +505,7 @@ const loanerLabel = computed(() => {
     return first.loanerID || first.productName || first.SN || first.orderID || '—'
 })
 
-/** 紐づく貸出機は価格カードに計上しない（loaner 案件は作業内容=servicerecord.price） */
+/** 紐づく貸出機は価格カードに計上しない（loaner は作業内容=受注日版マスタ） */
 const loanerPrice = computed(() => 0)
 
 watch(workPrice, (value) => {

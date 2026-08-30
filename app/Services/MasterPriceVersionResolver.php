@@ -246,8 +246,9 @@ class MasterPriceVersionResolver
                     ->orWhere('id', $loanerId);
             })->reorder()
         )
-            ->get(['loanerID', 'price', 'validDateMin', 'validDateMax'])
+            ->get(['id', 'loanerID', 'price', 'validDateMin', 'validDateMax'])
             ->map(fn (LoanerMaster $row) => [
+                'id' => $row->id,
                 'loanerID' => $row->loanerID,
                 'price' => (float) ($row->price ?? 0),
                 'validDateMin' => $this->normalizeDate($row->validDateMin),

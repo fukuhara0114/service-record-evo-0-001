@@ -268,12 +268,19 @@ export function findPartMaster(partsMaster, partID, asOfDate = null) {
 
 /**
  * LoanerMaster 価格版を loanerID + 受注日で解決する（受注日未定なら最新版）。
+ * versions が既に当該 loaner 向けの場合、loanerID 不一致で空になっても一覧全体を使う。
  */
 export function findLoanerMasterPrice(versionsOrRows, loanerID, asOfDate = null) {
     const list = Array.isArray(versionsOrRows) ? versionsOrRows : []
-    const versions = loanerID == null || loanerID === ''
-        ? list
-        : list.filter(item => String(item.loanerID) === String(loanerID) || String(item.id) === String(loanerID))
+    if (!list.length) return 0
+    let versions = list
+    if (loanerID != null && loanerID !== '') {
+        const filtered = list.filter(item =>
+            String(item.loanerID ?? '') === String(loanerID)
+            || String(item.id ?? '') === String(loanerID),
+        )
+        if (filtered.length) versions = filtered
+    }
     const picked = pickMasterVersion(versions, asOfDate)
     const value = Number(picked?.price)
     return Number.isFinite(value) ? value : 0
