@@ -302,7 +302,7 @@ export function resolveRecordWorkPriceFromMasters({
 /**
  * 案件本体の「作業内容」価格（価格カード共通）。
  * - service: returnCode → 受注日版 servicemaster
- * - loaner: servicerecord.price（未設定時のみ受注日版 loanermaster）
+ * - loaner: 無償（price=0）は 0。有償は当該 loaner 案件の受注日版 loanermaster
  */
 export function resolveRecordWorkPrice({
     orderType,
@@ -320,7 +320,7 @@ export function resolveRecordWorkPrice({
         }
         if (storedPrice != null && storedPrice !== '') {
             const stored = Number(storedPrice)
-            if (Number.isFinite(stored)) return stored
+            if (Number.isFinite(stored) && stored === 0) return 0
         }
         return findLoanerMasterPrice(loanerPriceVersions, loanerID, asOfDate)
     }
@@ -330,7 +330,7 @@ export function resolveRecordWorkPrice({
 /**
  * 価格カードの小計・計（Invoice / Closing / Logistics / DetailFormA 共通）。
  * 作業内容 + a2la + parts = 小計、小計 + 調整 = 計。
- * 親 service の紐づく貸出機は請求に含めない（loaner 案件は作業内容=servicerecord.price）。
+ * loaner の作業内容は受注日版 loanermaster（無償は 0）。
  */
 export function resolvePriceCardTotals({
     orderType,

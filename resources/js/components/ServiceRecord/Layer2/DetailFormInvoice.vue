@@ -546,7 +546,7 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-/** 価格カード共通: service=returnCodeマスタ / loaner=servicerecord.price → 小計 → 調整 → 計 */
+/** 価格カード共通: service=returnCodeマスタ / loaner=受注日版loanermaster（無償0）→ 小計 → 調整 → 計 */
 const priceCard = computed(() => resolvePriceCardTotals({
     orderType: props.draftRecord?.order_type ?? props.record?.order_type,
     returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
