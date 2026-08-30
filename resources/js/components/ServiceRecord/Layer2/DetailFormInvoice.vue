@@ -387,7 +387,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, resolveRecordWorkPriceFromMasters, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, resolveRecordWorkPrice, findPartMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolveLoanerMasterLinePrice, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
@@ -537,18 +537,16 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-const workPrice = computed(() => {
-    const noCharge = props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge
-    if (isLoanerRecord.value && (noCharge === 1 || noCharge === '1' || noCharge === true)) return 0
-    return resolveRecordWorkPriceFromMasters({
-        orderType: props.draftRecord?.order_type ?? props.record?.order_type,
-        returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
-        serviceMaster: selectedServiceMaster.value,
-        loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
-        loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
-        asOfDate: priceAsOfDate.value,
-    })
-})
+const workPrice = computed(() => resolveRecordWorkPrice({
+    orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+    returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+    serviceMaster: selectedServiceMaster.value,
+    loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+    loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+    asOfDate: priceAsOfDate.value,
+    storedPrice: props.draftRecord?.price ?? props.record?.price,
+    loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+}))
 
 const a2laPrice = computed(() => {
     if (!isA2laOn.value) return 0

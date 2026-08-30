@@ -303,6 +303,40 @@ export function resolveRecordWorkPriceFromMasters({
 }
 
 /**
+ * 案件本体の作業価格（表示・請求用）。
+ * loaner は servicerecord.price（Loaner詳細で保存した有償/無償）を優先し、
+ * 未設定時のみマスタへフォールバック。service は従来どおりマスタ。
+ */
+export function resolveRecordWorkPrice({
+    orderType,
+    returnCode,
+    serviceMaster,
+    loanerID,
+    loanerPriceVersions = [],
+    asOfDate = null,
+    storedPrice = null,
+    loanerNoCharge = null,
+} = {}) {
+    if (String(orderType ?? '').trim() === 'loaner') {
+        if (loanerNoCharge === 1 || loanerNoCharge === '1' || loanerNoCharge === true) {
+            return 0
+        }
+        if (storedPrice != null && storedPrice !== '') {
+            const stored = Number(storedPrice)
+            if (Number.isFinite(stored)) return stored
+        }
+    }
+    return resolveRecordWorkPriceFromMasters({
+        orderType,
+        returnCode,
+        serviceMaster,
+        loanerID,
+        loanerPriceVersions,
+        asOfDate,
+    })
+}
+
+/**
  * 紐づく貸出行の価格。servicerecord.orderDate 版の loanermaster のみ参照する。
  */
 export function resolveLoanerMasterLinePrice(loaner, returnCode, asOfDate = null) {
