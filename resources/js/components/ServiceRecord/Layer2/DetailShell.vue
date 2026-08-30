@@ -226,6 +226,12 @@ import DetailFormClosing from './DetailFormClosing.vue'
 import DetailFormInvoice from './DetailFormInvoice.vue'
 import DetailFormEngineer from './DetailFormEngineer.vue'
 import DetailFormLogistics from './DetailFormLogistics.vue'
+import {
+    findServiceMaster,
+    normalizePriceAsOfDate,
+    toOrderDateYmd,
+    resolvePriceCardTotals,
+} from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -337,10 +343,40 @@ const headerReturnCodeLabel = computed(() => {
     return found?.description || (id != null && id !== '' ? String(id) : '—')
 })
 
+/** Logistics ヘッダー価格 = 価格カードの「計」（受注日版作業内容 + a2la + parts + 調整） */
 const headerPrice = computed(() => {
-    const value = props.draftRecord?.price ?? props.record?.price
-    if (value === null || value === undefined || value === '') return '—'
-    const num = Number(value)
+    const orderDate = props.draftRecord?.orderDate
+        ?? props.draftRecord?.order_date
+        ?? props.record?.orderDate
+        ?? props.record?.order_date
+        ?? null
+    const asOfDate = normalizePriceAsOfDate(toOrderDateYmd(orderDate) ?? orderDate)
+    const a2laRaw = props.draftRecord?.a2la ?? props.record?.a2la
+    const a2laOn = a2laRaw === 1 || a2laRaw === '1' || a2laRaw === true
+    const serviceMaster = findServiceMaster(page.props.servicesMaster, {
+        productName: props.draftRecord?.productName ?? props.record?.productName,
+        entityID: props.draftRecord?.entityID ?? props.record?.entityID,
+        serviceID: props.draftRecord?.serviceID ?? props.record?.serviceID,
+    }, asOfDate)
+    const priceVersions = (Array.isArray(props.draftRecord?.priceVersions) && props.draftRecord.priceVersions.length)
+        ? props.draftRecord.priceVersions
+        : (Array.isArray(props.record?.priceVersions) ? props.record.priceVersions : [])
+
+    const totals = resolvePriceCardTotals({
+        orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+        returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+        serviceMaster,
+        loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+        loanerPriceVersions: priceVersions,
+        asOfDate,
+        storedPrice: props.draftRecord?.price ?? props.record?.price,
+        loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+        a2laOn,
+        parts: props.parts ?? [],
+        partsMaster: page.props.partsMaster ?? [],
+        discountService: props.draftRecord?.discount_service ?? props.record?.discount_service ?? 0,
+    })
+    const num = Number(totals.grandTotal)
     if (!Number.isFinite(num)) return '—'
     return num.toLocaleString('ja-JP')
 })
