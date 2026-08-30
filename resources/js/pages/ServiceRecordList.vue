@@ -1399,7 +1399,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolveRecordWorkPriceFromMasters } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, findPartMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolveRecordWorkPrice } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import SortableTh from '@/components/SortableTh.vue'
 import CapturedImageGallery from '@/components/ServiceRecord/CapturedImageGallery.vue'
@@ -3843,7 +3843,6 @@ function resolveDetailFormAPrice(draft, parts = []) {
     const asOfDate = resolveDisplayPriceAsOfDate({
         orderType: draft.order_type,
         orderDate: draft.orderDate,
-        parentOrderDate: parentOrderDateFromRecord(draft),
     })
     const master = findServiceMaster(page.props.servicesMaster, {
         productName: draft.productName,
@@ -3851,22 +3850,16 @@ function resolveDetailFormAPrice(draft, parts = []) {
         serviceID: draft.serviceID,
     }, asOfDate)
 
-    const orderType = String(draft.order_type ?? '').trim().toLowerCase()
-    let workPrice = 0
-    if (orderType === 'loaner') {
-        workPrice = resolveRecordWorkPriceFromMasters({
-            orderType: 'loaner',
-            returnCode: draft.returnCode,
-            loanerID: draft.loanerID,
-            loanerPriceVersions: draft.priceVersions ?? [],
-            asOfDate,
-        })
-        if (!(workPrice > 0)) {
-            workPrice = resolveServiceWorkPrice(master, draft.returnCode)
-        }
-    } else {
-        workPrice = resolveServiceWorkPrice(master, draft.returnCode)
-    }
+    const workPrice = resolveRecordWorkPrice({
+        orderType: draft.order_type,
+        returnCode: draft.returnCode,
+        serviceMaster: master,
+        loanerID: draft.loanerID,
+        loanerPriceVersions: draft.priceVersions ?? [],
+        asOfDate,
+        storedPrice: draft.price,
+        loanerNoCharge: draft.loaner_no_charge,
+    })
     const a2laOn = draft.a2la === 1 || draft.a2la === '1' || draft.a2la === true
     const a2laRaw = a2laOn ? Number(master?.price_a2la ?? 0) : 0
     const a2laPrice = Number.isFinite(a2laRaw) ? a2laRaw : 0
@@ -4052,7 +4045,6 @@ async function saveRecord() {
         }, resolveDisplayPriceAsOfDate({
             orderType: draftRecord.value.order_type,
             orderDate: draftRecord.value.orderDate,
-            parentOrderDate: parentOrderDateFromRecord(draftRecord.value),
         }))
 
         // 受注日・作業内容変更時: 子 loaner の保存済み価格を反映

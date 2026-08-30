@@ -921,7 +921,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, resolveServiceWorkPrice, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPriceFromMasters, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolveRecordWorkPrice, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -949,16 +949,10 @@ const productNameCopyValue = computed(() =>
 const productNameCopyFeedback = ref('')
 let productNameCopyFeedbackTimer = null
 
-/**
- * loaner: 受注日が 2000年以前または 2099年以降なら親 service の受注日。
- * それ以外の loaner / service: 自身の受注日（未定・2000年以前は最新版）。
- */
+/** 価格版の as-of。service / loaner とも当該案件の受注日（未定・2000年以前は最新版）。 */
 const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
     orderType: props.draftRecord?.order_type ?? props.record?.order_type,
     orderDate: props.draftRecord?.orderDate ?? props.record?.orderDate,
-    parentOrderDate: parentOrderDateFromRecord(props.draftRecord)
-        ?? parentOrderDateFromRecord(props.record)
-        ?? fetchedParentOrderDate.value,
 }))
 
 const leftPaneSize = ref(64)
@@ -1556,21 +1550,16 @@ const selectedServiceMaster = computed(() => {
     }, priceAsOfDate.value)
 })
 
-const workPrice = computed(() => {
-    const returnCode = props.draftRecord?.returnCode ?? props.record?.returnCode
-    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
-    if (orderType === 'loaner') {
-        const fromLoanerMaster = resolveRecordWorkPriceFromMasters({
-            orderType: 'loaner',
-            returnCode,
-            loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
-            loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
-            asOfDate: priceAsOfDate.value,
-        })
-        if (fromLoanerMaster > 0) return fromLoanerMaster
-    }
-    return resolveServiceWorkPrice(selectedServiceMaster.value, returnCode)
-})
+const workPrice = computed(() => resolveRecordWorkPrice({
+    orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+    returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+    serviceMaster: selectedServiceMaster.value,
+    loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+    loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+    asOfDate: priceAsOfDate.value,
+    storedPrice: props.draftRecord?.price ?? props.record?.price,
+    loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+}))
 
 const a2laPrice = computed(() => {
     if (!isA2laOn.value) return 0

@@ -395,6 +395,7 @@ import {
     resolveLoanerMasterLinePrice,
     resolveLinkedLoanerPriceAsOfDate,
     findLoanerMasterPrice,
+    resolveRecordWorkPrice,
 } from '@/utils/resolveServiceWorkPrice'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
@@ -546,31 +547,32 @@ const selectedServiceMaster = computed(() => {
 })
 
 /**
- * 作業価格:
- * - loaner: 当該 loaner 案件の受注日版 loanermaster（無償=price 0 は 0）
- * - service: servicerecord.price
+ * 作業価格: 当該案件の受注日版マスタを参照する。
+ * service → servicemaster / loaner → loanermaster（無償=price 0 は 0）
  */
-const workPrice = computed(() => {
-    if (isLoanerRecord.value) {
-        const storedRaw = props.draftRecord?.price ?? props.record?.price
-        if (storedRaw != null && storedRaw !== '') {
-            const stored = Number(storedRaw)
-            if (Number.isFinite(stored) && stored === 0) return 0
-        }
-        const versions = props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? []
-        const loanerID = props.draftRecord?.loanerID ?? props.record?.loanerID
-        return findLoanerMasterPrice(versions, loanerID, priceAsOfDate.value)
-    }
-    const raw = props.draftRecord?.price ?? props.record?.price
-    const value = Number(raw)
-    return Number.isFinite(value) ? value : 0
-})
+const workPrice = computed(() => resolveRecordWorkPrice({
+    orderType: props.draftRecord?.order_type ?? props.record?.order_type,
+    returnCode: props.draftRecord?.returnCode ?? props.record?.returnCode,
+    serviceMaster: selectedServiceMaster.value,
+    loanerID: props.draftRecord?.loanerID ?? props.record?.loanerID,
+    loanerPriceVersions: props.draftRecord?.priceVersions ?? props.record?.priceVersions ?? [],
+    asOfDate: priceAsOfDate.value,
+    storedPrice: props.draftRecord?.price ?? props.record?.price,
+    loanerNoCharge: props.draftRecord?.loaner_no_charge ?? props.record?.loaner_no_charge,
+}))
 
 const a2laPrice = computed(() => {
     if (!isA2laOn.value) return 0
     const value = Number(selectedServiceMaster.value?.price_a2la ?? 0)
     return Number.isFinite(value) ? value : 0
 })
+
+/** service は表示価格を draft.price へ同期（保存時も受注日版と一致させる）。loaner の有償/無償は潰さない。 */
+watch(workPrice, (value) => {
+    if (!props.draftRecord) return
+    if (isLoanerRecord.value) return
+    props.draftRecord.price = value
+}, { immediate: true })
 
 function resolvedPartMaster(part) {
     return findPartMaster(page.props.partsMaster, part.partID, priceAsOfDate.value)
