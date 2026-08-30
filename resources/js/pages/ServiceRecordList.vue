@@ -374,7 +374,10 @@
                             v-for="r in filteredRecords"
                             :key="r.orderID"
                             class="table-row"
-                            :class="{ 'active-row': selectedOrderId === r.orderID }"
+                            :class="[
+                                { 'active-row': selectedOrderId === r.orderID },
+                                listRowToneClass(r),
+                            ]"
                             @click="selectedOrderId = r.orderID"
                             @dblclick="openSecondLayer(r)"
                         >
@@ -510,7 +513,10 @@
                                     v-for="r in filteredRecords"
                                     :key="r.orderID"
                                     class="table-row"
-                                    :class="{ 'active-row': selectedOrderId === r.orderID }"
+                                    :class="[
+                                        { 'active-row': selectedOrderId === r.orderID },
+                                        listRowToneClass(r),
+                                    ]"
                                     @click="selectedOrderId = r.orderID"
                                     @dblclick="openSecondLayer(r)"
                                 >
@@ -869,10 +875,13 @@
                         v-for="r in filteredRecords"
                         :key="r.orderID"
                         class="table-row"
-                        :class="{
-                            'active-row': selectedOrderId === r.orderID,
-                            'promotion-ready-row': isPromotionReady(r),
-                        }"
+                        :class="[
+                            {
+                                'active-row': selectedOrderId === r.orderID,
+                                'promotion-ready-row': isPromotionReady(r),
+                            },
+                            listRowToneClass(r),
+                        ]"
                         :title="promotionRowTitle(r)"
                         @click="selectedOrderId = r.orderID"
                         @dblclick="onListRowDblClick(r)"
@@ -2466,6 +2475,31 @@ function nextBusinessDayYmd(fromYmd = tokyoTodayYmd()) {
 
 function isLogisticsLoanerLending(record) {
     return (record?.order_type === 'loaner') && Number(record?.status) === LOANER_LENDING_STATUS
+}
+
+/** Invoice / Closing / Logistics 一覧の行文字色対象か */
+function isListRowToneTarget() {
+    return props.mode === 'logistics'
+        || orderTypeFilter.value === 'invoice'
+        || orderTypeFilter.value === 'closing'
+}
+
+/** RMA が数字のみか（前後空白を除く） */
+function isNumericRma(rma) {
+    return /^\d+$/.test(String(rma ?? '').trim())
+}
+
+/**
+ * Invoice / Closing / Logistics 一覧の行文字色。
+ * - loaner → 深い緑
+ * - それ以外で RMA が数字でない → 赤
+ */
+function listRowToneClass(record) {
+    if (!isListRowToneTarget()) return ''
+    const orderType = String(record?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') return 'list-row-tone-loaner'
+    if (!isNumericRma(record?.RMA)) return 'list-row-tone-non-numeric-rma'
+    return ''
 }
 
 function toggleLogisticsLoanerFilter() {
@@ -5083,6 +5117,15 @@ async function saveRecord() {
 
 .table-row {
     cursor: pointer;
+}
+
+/* Invoice / Closing / Logistics: loaner=深い緑、非数字RMA=赤 */
+#myLargeTable tbody tr.list-row-tone-loaner td {
+    color: #14532d;
+}
+
+#myLargeTable tbody tr.list-row-tone-non-numeric-rma td {
+    color: #dc2626;
 }
 
 .promotion-ready-row td {
