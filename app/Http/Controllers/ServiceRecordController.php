@@ -70,12 +70,16 @@ class ServiceRecordController extends Controller
             $yearOptions[] = $y;
         }
 
+        $orderTypeRaw = trim((string) $request->input('order_type', 'service'));
+        $orderType = in_array($orderTypeRaw, ['service', 'loaner'], true) ? $orderTypeRaw : 'service';
+
         $filters = [
             'dealer' => trim((string) $request->input('dealer', '')),
             'productName' => trim((string) $request->input('productName', '')),
             'SN' => trim((string) $request->input('SN', '')),
             'endUser' => trim((string) $request->input('endUser', '')),
             'year' => null,
+            'order_type' => $orderType,
         ];
 
         $yearRaw = trim((string) $request->input('year', ''));
@@ -113,6 +117,16 @@ class ServiceRecordController extends Controller
                 'endUser_phone',
             ])
             ->with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
+
+        if ($orderType === 'loaner') {
+            $query->whereIn('order_type', ['loaner', 'waiting_list']);
+        } else {
+            $query->where(function ($q) {
+                $q->where('order_type', 'service')
+                    ->orWhereNull('order_type')
+                    ->orWhere('order_type', '');
+            });
+        }
 
         if ($filters['year'] === 'all') {
             // 受注年条件なし

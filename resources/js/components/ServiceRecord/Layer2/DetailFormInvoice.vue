@@ -376,6 +376,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import {
     findServiceMaster,
     findPartMaster,
@@ -992,6 +993,18 @@ async function uploadDroppedFiles(files) {
 async function updateRecordFields(payload) {
     if (!props.record?.orderID) {
         throw new Error('案件が選択されていません。')
+    }
+
+    const savingOrderType = payload.order_type
+        ?? props.draftRecord?.order_type
+        ?? props.record?.order_type
+    if (!confirmOrderTypeOriginalMismatchForRecord(
+        props.draftRecord ?? props.record,
+        savingOrderType,
+    )) {
+        const err = new Error('cancelled')
+        err.cancelled = true
+        throw err
     }
 
     const result = await apiFetch(getRecordApiUrl(), {

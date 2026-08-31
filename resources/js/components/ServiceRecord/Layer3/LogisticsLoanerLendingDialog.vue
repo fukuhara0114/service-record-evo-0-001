@@ -93,6 +93,7 @@
 <script setup>
 import { ref } from 'vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 
 const LOANER_RETURNED_STATUS = 393
 
@@ -134,6 +135,10 @@ async function onReturn() {
 
     if (!props.record?.orderID) {
         errorMessage.value = '案件が選択されていません。'
+        return
+    }
+
+    if (!confirmOrderTypeOriginalMismatchForRecord(props.record)) {
         return
     }
 

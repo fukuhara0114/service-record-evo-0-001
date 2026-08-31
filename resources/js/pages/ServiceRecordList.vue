@@ -1463,6 +1463,7 @@ import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 import { findServiceMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
@@ -3827,9 +3828,11 @@ async function onDialogSaved(result) {
             })
             await finishEngineerWorkflow()
         } catch (e) {
-            saveError.value = e.message || '差戻処理に失敗しました。'
-            if (activeRecord.value?.orderID) {
-                await loadAttachments(activeRecord.value.orderID)
+            if (!e.cancelled) {
+                saveError.value = e.message || '差戻処理に失敗しました。'
+                if (activeRecord.value?.orderID) {
+                    await loadAttachments(activeRecord.value.orderID)
+                }
             }
         }
         return
@@ -3845,6 +3848,12 @@ async function onDialogSaved(result) {
 async function updateActiveRecordStatus(status, options = {}) {
     if (!activeRecord.value?.orderID) {
         throw new Error('案件が選択されていません。')
+    }
+
+    if (!confirmOrderTypeOriginalMismatchForRecord(draftRecord.value ?? activeRecord.value)) {
+        const err = new Error('cancelled')
+        err.cancelled = true
+        throw err
     }
 
     const url = `${window.location.origin}${getBasePath()}/${activeRecord.value.orderID}`
@@ -3998,6 +4007,10 @@ async function saveRecord() {
     }
 
     if (!confirmPendingTbcIfStatus300Plus(draftRecord.value.status)) {
+        return
+    }
+
+    if (!confirmOrderTypeOriginalMismatchForRecord(draftRecord.value)) {
         return
     }
 

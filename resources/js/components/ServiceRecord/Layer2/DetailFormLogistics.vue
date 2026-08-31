@@ -293,6 +293,7 @@ import AssociatedCapturedImages from '@/components/ServiceRecord/AssociatedCaptu
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { tokyoTodayYmd } from '@/utils/businessDays'
 import {
     findServiceMaster,
@@ -616,6 +617,18 @@ async function updateRecord(payload) {
         throw new Error('案件が選択されていません。')
     }
 
+    const savingOrderType = payload.order_type
+        ?? props.draftRecord?.order_type
+        ?? props.record?.order_type
+    if (!confirmOrderTypeOriginalMismatchForRecord(
+        props.draftRecord ?? props.record,
+        savingOrderType,
+    )) {
+        const err = new Error('cancelled')
+        err.cancelled = true
+        throw err
+    }
+
     const result = await apiFetch(getRecordApiUrl(), {
         method: 'POST',
         headers: {
@@ -667,7 +680,9 @@ async function onComplete() {
         })
         emit('workflow-done', { action: 'complete', status: LOGISTICS_COMPLETE_STATUS })
     } catch (e) {
-        actionMessage.value = e.message || '完了処理に失敗しました。'
+        if (!e.cancelled) {
+            actionMessage.value = e.message || '完了処理に失敗しました。'
+        }
     } finally {
         statusActionSaving.value = false
     }

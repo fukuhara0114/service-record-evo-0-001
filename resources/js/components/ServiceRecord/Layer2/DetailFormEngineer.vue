@@ -285,6 +285,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { countBusinessDaysBetween, normalizeDateYmd, tokyoTodayYmd } from '@/utils/businessDays'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
@@ -416,6 +417,10 @@ function getFilesApiBase() {
 async function toggleFlag(field) {
     if (!props.draftRecord || !props.record?.orderID || flagSaving.value) return
 
+    if (!confirmOrderTypeOriginalMismatchForRecord(props.draftRecord ?? props.record)) {
+        return
+    }
+
     const next = isFlagOn(field) ? 0 : 1
     const previous = props.draftRecord[field]
     props.draftRecord[field] = next
@@ -447,6 +452,12 @@ async function toggleFlag(field) {
 async function updateRecordStatus(status, extra = {}) {
     if (!props.record?.orderID) {
         throw new Error('案件が選択されていません。')
+    }
+
+    if (!confirmOrderTypeOriginalMismatchForRecord(props.draftRecord ?? props.record)) {
+        const err = new Error('cancelled')
+        err.cancelled = true
+        throw err
     }
 
     const payload = { status, ...extra }
@@ -569,7 +580,9 @@ async function onComplete() {
         await updateRecordStatus(nextStatus, extra)
         emit('workflow-done', { action: 'complete', status: nextStatus })
     } catch (e) {
-        actionMessage.value = e.message || '完了処理に失敗しました。'
+        if (!e.cancelled) {
+            actionMessage.value = e.message || '完了処理に失敗しました。'
+        }
     } finally {
         statusActionSaving.value = false
     }

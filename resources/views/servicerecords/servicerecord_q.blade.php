@@ -102,7 +102,7 @@
         display: flex !important;
         flex-wrap: nowrap !important;
         align-items: flex-end !important;
-        justify-content: center !important;
+        justify-content: flex-start !important;
         gap: 12px !important;
     }
 
@@ -110,7 +110,7 @@
         display: flex;
         flex-wrap: nowrap;
         align-items: flex-end;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 12px;
         max-width: 100%;
         min-width: 0;
@@ -157,6 +157,43 @@
         border-radius: 4px;
         font-size: 13px;
         font-weight: 700;
+    }
+
+    .query-type-toggles {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-bottom: 1px;
+        flex: 0 0 auto;
+        margin-right: 4px;
+    }
+
+    .query-type-btn {
+        padding: 6px 14px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        border: 2px solid #2563eb;
+        background: #fff;
+        color: #2563eb;
+    }
+
+    .query-type-btn.is-active {
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .query-type-btn-loaner {
+        border-color: #dc2626;
+        color: #dc2626;
+    }
+
+    .query-type-btn-loaner.is-active {
+        background: #dc2626;
+        color: #fff;
+        border-color: #dc2626;
     }
 
     .query-actions {
@@ -309,15 +346,23 @@
 </head>
 <body>
 @php
-    $filters = $filters ?? ['dealer' => '', 'productName' => '', 'SN' => '', 'endUser' => '', 'year' => null];
+    $filters = $filters ?? ['dealer' => '', 'productName' => '', 'SN' => '', 'endUser' => '', 'year' => null, 'order_type' => 'service'];
     $yearOptions = $yearOptions ?? [];
     $selectedYear = $filters['year'] ?? null;
+    $orderType = ($filters['order_type'] ?? 'service') === 'loaner' ? 'loaner' : 'service';
 @endphp
 
-    <!-- ① 検索窓（query設定 + Quick Filter を中央配置） -->
+    <!-- ① 検索窓（Service/Loaner + query設定 + Quick Filter） -->
     <div class="fixed-header-zone">
         <div class="header-filters-center">
             <form method="get" action="{{ url('/servicerecord_q') }}" class="query-search-row">
+                <input type="hidden" name="order_type" value="{{ $orderType }}">
+                <div class="query-type-toggles">
+                    <button type="submit" name="order_type" value="service"
+                            class="query-type-btn {{ $orderType === 'service' ? 'is-active' : '' }}">Service</button>
+                    <button type="submit" name="order_type" value="loaner"
+                            class="query-type-btn query-type-btn-loaner {{ $orderType === 'loaner' ? 'is-active' : '' }}">Loaner</button>
+                </div>
                 <label class="query-field">
                     <input type="text" name="dealer" value="{{ $filters['dealer'] ?? '' }}" placeholder="dealer" aria-label="dealer">
                 </label>

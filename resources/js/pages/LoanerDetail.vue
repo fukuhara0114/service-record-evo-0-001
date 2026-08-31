@@ -1074,6 +1074,7 @@ import ServiceMasterSelectDialog from '@/components/ServiceRecord/Layer3/Service
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
+import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
 import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
@@ -2557,6 +2558,10 @@ async function save(options = {}) {
     if (savingStatus === shipPrepCompleteStatusId.value && !form.shippingOut_requiredDate) {
         error.value = 'status が「貸出機出荷準備完了＿起伝依頼」のときは発送予定日を設定してください。'
         openShippingDateDialog()
+        return false
+    }
+
+    if (!confirmOrderTypeOriginalMismatchForRecord(props.record, form.order_type ?? props.record?.order_type)) {
         return false
     }
 
