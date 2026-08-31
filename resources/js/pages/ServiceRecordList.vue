@@ -2508,9 +2508,10 @@ function isLogisticsLoanerLending(record) {
     return (record?.order_type === 'loaner') && Number(record?.status) === LOANER_LENDING_STATUS
 }
 
-/** Invoice / Closing / Logistics(status=350側) の RMA# バッジ対象か */
+/** Invoice / Closing / Logistics / 出荷準備 の RMA# バッジ対象か */
 function isLoanerCaseRmaBadgeTarget() {
     return props.mode === 'logistics'
+        || props.mode === 'shippingPrep'
         || orderTypeFilter.value === 'invoice'
         || orderTypeFilter.value === 'closing'
 }
