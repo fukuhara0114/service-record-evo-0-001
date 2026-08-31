@@ -85,6 +85,9 @@ class ServiceRecordController extends Controller
         $yearRaw = trim((string) $request->input('year', ''));
         if ($yearRaw === 'all') {
             $filters['year'] = 'all';
+        } elseif ($yearRaw === 'past1') {
+            // Loaner 用: 明示的な「過去1年」
+            $filters['year'] = 'past1';
         } elseif ($yearRaw !== '' && ctype_digit($yearRaw)) {
             $year = (int) $yearRaw;
             $filters['year'] = in_array($year, $yearOptions, true) ? $year : null;
@@ -119,7 +122,8 @@ class ServiceRecordController extends Controller
             ->with(['returnCodeMaster', 'laborMaster', 'statusMaster', 'statusMasterLoaner']);
 
         if ($orderType === 'loaner') {
-            $query->whereIn('order_type', ['loaner', 'waiting_list']);
+            // Loaner ボタン: order_type=loaner のみ（status 制限なし）
+            $query->where('order_type', 'loaner');
         } else {
             $query->where(function ($q) {
                 $q->where('order_type', 'service')
@@ -128,7 +132,18 @@ class ServiceRecordController extends Controller
             });
         }
 
-        if ($filters['year'] === 'all') {
+        // Loaner は全 status 表示のため、デフォルト「過去1年」は適用しない。
+        // 年 / 過去1年を明示選択したときだけ受注日で絞る。
+        if ($orderType === 'loaner') {
+            if (is_int($filters['year'])) {
+                $query->whereNotNull('orderDate')
+                    ->whereYear('orderDate', $filters['year']);
+            } elseif ($filters['year'] === 'past1') {
+                $query->whereNotNull('orderDate')
+                    ->whereDate('orderDate', '>=', Carbon::today()->subYear()->toDateString());
+            }
+            // year=null / all → 受注日条件なし（全 status）
+        } elseif ($filters['year'] === 'all') {
             // 受注年条件なし
         } elseif (is_int($filters['year'])) {
             $query->whereNotNull('orderDate')

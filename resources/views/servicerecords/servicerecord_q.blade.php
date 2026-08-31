@@ -102,7 +102,7 @@
         display: flex !important;
         flex-wrap: nowrap !important;
         align-items: flex-end !important;
-        justify-content: flex-start !important;
+        justify-content: center !important;
         gap: 12px !important;
     }
 
@@ -110,10 +110,11 @@
         display: flex;
         flex-wrap: nowrap;
         align-items: flex-end;
-        justify-content: flex-start;
+        justify-content: center;
         gap: 12px;
         max-width: 100%;
         min-width: 0;
+        flex: 0 1 auto;
     }
 
     .query-search-row {
@@ -359,7 +360,8 @@
                 <input type="hidden" name="order_type" value="{{ $orderType }}">
                 <div class="query-type-toggles">
                     <button type="submit" name="order_type" value="service"
-                            class="query-type-btn {{ $orderType === 'service' ? 'is-active' : '' }}">Service</button>
+                            class="query-type-btn {{ $orderType === 'service' ? 'is-active' : '' }}"
+                            onclick="var y=this.form.elements.namedItem('year'); if(y){ y.value=''; }">Service</button>
                     <button type="submit" name="order_type" value="loaner"
                             class="query-type-btn query-type-btn-loaner {{ $orderType === 'loaner' ? 'is-active' : '' }}">Loaner</button>
                 </div>
@@ -377,8 +379,14 @@
                 </label>
                 <label class="query-field query-field-year">
                     <select name="year">
-                        <option value="" @selected($selectedYear === null)>過去1年</option>
-                        <option value="all" @selected($selectedYear === 'all')>全件</option>
+                        @if ($orderType === 'loaner')
+                            {{-- Loaner: デフォルトは全 status（受注日制限なし）。「過去1年」は明示選択 --}}
+                            <option value="all" @selected($selectedYear === null || $selectedYear === 'all')>全件</option>
+                            <option value="past1" @selected($selectedYear === 'past1')>過去1年</option>
+                        @else
+                            <option value="" @selected($selectedYear === null)>過去1年</option>
+                            <option value="all" @selected($selectedYear === 'all')>全件</option>
+                        @endif
                         @foreach ($yearOptions as $year)
                             <option value="{{ $year }}" @selected($selectedYear === (int) $year)>
                                 {{ $year }}
