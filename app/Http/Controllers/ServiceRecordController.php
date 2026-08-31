@@ -2524,6 +2524,7 @@ class ServiceRecordController extends Controller
                     $loanerOrderDate = $this->toOrderDateYmd($loaner->orderDate);
                     $loanerAsOf = $resolver->resolveLoanerPriceAsOf($loanerOrderDate);
                     $priceVersions = $resolver->loanerPriceVersions($loaner->loanerID);
+                    $master = $resolver->loanerMaster($loaner->loanerID, $loanerAsOf);
                     $masterPrice = $resolver->loanerChargePrice(
                         $parentRecord?->returnCode,
                         $loaner->loanerID,
@@ -2538,6 +2539,7 @@ class ServiceRecordController extends Controller
                             ? null
                             : StatusLoaner::resolveLabel($loaner->statusMasterLoaner),
                         'productName' => $loaner->productName,
+                        'item' => $master?->item,
                         'SN' => $loaner->SN,
                         'price' => $loaner->price,
                         'orderDate' => $loanerOrderDate,
@@ -2661,6 +2663,7 @@ class ServiceRecordController extends Controller
                     'id' => $attached->id,
                     'loanerID' => $attached->loanerID ?? $master?->loanerID,
                     'productName' => $productName !== '' ? $productName : null,
+                    'item' => $master?->item,
                     'SN' => $sn !== '' ? $sn : null,
                     'manageNum' => $manageNum !== '' ? $manageNum : null,
                     'price' => $priceValue,

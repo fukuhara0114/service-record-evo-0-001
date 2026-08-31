@@ -137,40 +137,29 @@
                         </table>
                     </section>
 
-                    <section v-if="attachedLoaners.length" class="panel panel-loaner">
+                    <section v-if="showLoanerCard" class="panel panel-loaner">
                         <div class="panel-header">
-                            <h3>貸出機（{{ attachedLoaners.length }}件）</h3>
+                            <h3>Loaner（{{ loanerCardRows.length }}件）</h3>
                         </div>
-                        <table class="data-table loaner-table">
+                        <table v-if="loanerCardRows.length" class="data-table loaner-table">
                             <thead>
                                 <tr>
                                     <th>loanerID</th>
                                     <th>productName</th>
+                                    <th>item</th>
                                     <th>SN</th>
-                                    <th>期間</th>
-                                    <th class="col-amount">price</th>
-                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="loaner in attachedLoaners" :key="loaner.orderID || loaner.attachedLoanerId">
+                                <tr v-for="loaner in loanerCardRows" :key="loaner._key">
                                     <td>{{ loaner.loanerID || '—' }}</td>
                                     <td>{{ loaner.productName || '—' }}</td>
+                                    <td>{{ loaner.item || '—' }}</td>
                                     <td>{{ loaner.SN || '—' }}</td>
-                                    <td>{{ loanerPeriod(loaner) }}</td>
-                                    <td class="col-amount">{{ formatPrice(loaner.price) }}</td>
-                                    <td>
-                                        <a
-                                            v-if="loaner.orderID"
-                                            class="loaner-detail-link"
-                                            :href="loanerHref(loaner.orderID)"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >詳細</a>
-                                    </td>
                                 </tr>
                             </tbody>
                         </table>
+                        <p v-else class="loaner-empty">関連Loanerはありません。</p>
                     </section>
 
                     <section class="panel panel-info">
@@ -397,7 +386,6 @@ import {
     findLoanerMasterPrice,
     resolvePriceCardTotals,
 } from '@/utils/resolveServiceWorkPrice'
-import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 
 const props = defineProps({
@@ -408,6 +396,7 @@ const props = defineProps({
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     loaners: { type: Array, default: () => [] },
+    attachedLoaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
     currentUserKanji: { type: String, default: '' },
@@ -644,24 +633,34 @@ const loanerLabel = computed(() => {
     return first.loanerID || first.productName || first.SN || first.orderID || '—'
 })
 
-const attachedLoaners = computed(() =>
-    (props.loaners ?? []).filter((loaner) => loaner?.attachedLoanerId),
+/** 貸出機案件 / 旧SR Loaner案件 のとき価格カード下に表示 */
+const showLoanerCard = computed(() =>
+    isLoanerRecord.value || isLegacySrLoanerCase.value,
 )
 
-function formatLoanerDate(value) {
-    if (!value) return '—'
-    return String(value).slice(0, 10)
-}
-
-function loanerPeriod(loaner) {
-    if (!loaner?.plannedSentDate && !loaner?.plannedReturnedDate) return '—'
-    return `${formatLoanerDate(loaner.plannedSentDate)} 〜 ${formatLoanerDate(loaner.plannedReturnedDate)}`
-}
-
-function loanerHref(orderId) {
-    const returnUrl = typeof window !== 'undefined' ? window.location.href : ''
-    return loanerDetailUrl(orderId, returnUrl ? { returnUrl } : {})
-}
+/** Loanerカード行: 子loaner案件 + attachedloaners（表示列は loanerID / productName / item / SN） */
+const loanerCardRows = computed(() => {
+    const rows = []
+    for (const loaner of props.loaners ?? []) {
+        rows.push({
+            _key: `case-${loaner.orderID || loaner.attachedLoanerId || loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    for (const loaner of props.attachedLoaners ?? []) {
+        rows.push({
+            _key: `attached-${loaner.id ?? loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    return rows
+})
 
 /** 紐づく貸出機は価格カードに計上しない（loaner 案件は作業内容=servicerecord.price） */
 const loanerPrice = computed(() => 0)
@@ -1325,11 +1324,10 @@ watch(
     border-color: #6ee7b7;
 }
 
-.loaner-detail-link {
-    color: #1d4ed8;
-    font-weight: 700;
-    text-decoration: underline;
-    white-space: nowrap;
+.loaner-empty {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
 }
 
 .panel h3,

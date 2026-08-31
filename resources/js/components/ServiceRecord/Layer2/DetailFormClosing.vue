@@ -149,6 +149,31 @@
                                     </section>
                                 </Pane>
                             </Splitpanes>
+
+                            <section v-if="showLoanerCard" class="panel panel-loaner">
+                                <div class="panel-header">
+                                    <h3>Loaner（{{ loanerCardRows.length }}件）</h3>
+                                </div>
+                                <table v-if="loanerCardRows.length" class="data-table loaner-table">
+                                    <thead>
+                                        <tr>
+                                            <th>loanerID</th>
+                                            <th>productName</th>
+                                            <th>item</th>
+                                            <th>SN</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="loaner in loanerCardRows" :key="loaner._key">
+                                            <td>{{ loaner.loanerID || '—' }}</td>
+                                            <td>{{ loaner.productName || '—' }}</td>
+                                            <td>{{ loaner.item || '—' }}</td>
+                                            <td>{{ loaner.SN || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p v-else class="loaner-empty">関連Loanerはありません。</p>
+                            </section>
                         </Pane>
 
                         <Pane class="left-notes-pane" :size="leftNotesPaneSize" :min-size="20">
@@ -310,7 +335,12 @@ import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOut
 import CapturedImageGalleryDialog from '@/components/ServiceRecord/CapturedImageGalleryDialog.vue'
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
-import { findServiceMaster, normalizePriceAsOfDate, applyPartMasterAsOf, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
+import {
+    findServiceMaster,
+    normalizePriceAsOfDate,
+    applyPartMasterAsOf,
+    resolvePriceCardTotals,
+} from '@/utils/resolveServiceWorkPrice'
 
 const props = defineProps({
     record: Object,
@@ -320,6 +350,7 @@ const props = defineProps({
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     loaners: { type: Array, default: () => [] },
+    attachedLoaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
@@ -442,6 +473,34 @@ const isLegacySrLoanerCase = computed(() => {
     const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
     if (orderType === 'loaner') return false
     return String(props.draftRecord?.RMA ?? props.record?.RMA ?? '').trim().toLowerCase() === 'loaner'
+})
+
+const showLoanerCard = computed(() =>
+    isLoanerRecord.value || isLegacySrLoanerCase.value,
+)
+
+/** Loanerカード行: 子loaner案件 + attachedloaners（表示列は loanerID / productName / item / SN） */
+const loanerCardRows = computed(() => {
+    const rows = []
+    for (const loaner of props.loaners ?? []) {
+        rows.push({
+            _key: `case-${loaner.orderID || loaner.attachedLoanerId || loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    for (const loaner of props.attachedLoaners ?? []) {
+        rows.push({
+            _key: `attached-${loaner.id ?? loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    return rows
 })
 
 const priceCard = computed(() => resolvePriceCardTotals({
@@ -980,7 +1039,23 @@ watch(
     display: flex;
 }
 
-.left-top-pane > .splitpanes,
+.left-top-pane {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.left-top-pane > .splitpanes {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.left-top-pane > .panel-loaner {
+    flex: 0 1 auto;
+    max-height: 42%;
+    overflow: auto;
+}
+
 .price-pane > .panel,
 .info-pane > .panel,
 .left-notes-pane > .panel {
@@ -1018,6 +1093,44 @@ watch(
 
 .panel-price {
     padding: 8px;
+}
+
+.panel-loaner {
+    height: auto;
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+}
+
+.panel-loaner .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+}
+
+.panel-loaner .panel-header h3 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.panel-loaner .loaner-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.panel-loaner .loaner-table th,
+.panel-loaner .loaner-table td {
+    border-bottom: 1px solid #bbf7d0;
+    padding: 4px 6px;
+    text-align: left;
+}
+
+.loaner-empty {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
 }
 
 .panel-info {

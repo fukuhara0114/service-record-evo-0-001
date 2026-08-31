@@ -176,6 +176,10 @@
                                         v-if="isLoanerRecord"
                                         class="loaner-case-badge"
                                     >貸出機案件</span>
+                                    <span
+                                        v-else-if="isLegacySrLoanerCase"
+                                        class="legacy-sr-loaner-badge"
+                                    >旧SR  Loaner案件</span>
                                     <template v-else>{{ returnCodeLabel }}</template>
                                 </td>
                                 <td class="col-amount">{{ formatPrice(workPrice) }}</td>
@@ -213,6 +217,31 @@
                             </tr>
                         </tbody>
                     </table>
+                </section>
+
+                <section v-if="showLoanerCard" class="panel panel-loaner">
+                    <div class="panel-header">
+                        <h3>Loaner（{{ loanerCardRows.length }}件）</h3>
+                    </div>
+                    <table v-if="loanerCardRows.length" class="data-table loaner-table">
+                        <thead>
+                            <tr>
+                                <th>loanerID</th>
+                                <th>productName</th>
+                                <th>item</th>
+                                <th>SN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="loaner in loanerCardRows" :key="loaner._key">
+                                <td>{{ loaner.loanerID || '—' }}</td>
+                                <td>{{ loaner.productName || '—' }}</td>
+                                <td>{{ loaner.item || '—' }}</td>
+                                <td>{{ loaner.SN || '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p v-else class="loaner-empty">関連Loanerはありません。</p>
                 </section>
 
                 <section class="panel panel-notes">
@@ -276,7 +305,6 @@ import {
     resolvePriceCardTotals,
     findLoanerMasterPrice,
 } from '@/utils/resolveServiceWorkPrice'
-
 /** Logistics 完了時の status（一覧の 350 から外れる値） */
 const LOGISTICS_COMPLETE_STATUS = 385
 const LOGISTICS_COMPLETE_LABEL = '貸出機出荷完了＿最終処理(Mappics)'
@@ -289,6 +317,7 @@ const props = defineProps({
     capturedImages: { type: Array, default: () => [] },
     parts: { type: Array, default: () => [] },
     loaners: { type: Array, default: () => [] },
+    attachedLoaners: { type: Array, default: () => [] },
     attachmentsLoading: { type: Boolean, default: false },
     attachmentsError: { type: String, default: '' },
 })
@@ -373,6 +402,40 @@ const isLoanerRecord = computed(() => {
         .trim()
         .toLowerCase()
     return orderType === 'loaner'
+})
+
+const isLegacySrLoanerCase = computed(() => {
+    const orderType = String(props.draftRecord?.order_type ?? props.record?.order_type ?? '').trim().toLowerCase()
+    if (orderType === 'loaner') return false
+    return String(props.draftRecord?.RMA ?? props.record?.RMA ?? '').trim().toLowerCase() === 'loaner'
+})
+
+const showLoanerCard = computed(() =>
+    isLoanerRecord.value || isLegacySrLoanerCase.value,
+)
+
+/** Loanerカード行: 子loaner案件 + attachedloaners（表示列は loanerID / productName / item / SN） */
+const loanerCardRows = computed(() => {
+    const rows = []
+    for (const loaner of props.loaners ?? []) {
+        rows.push({
+            _key: `case-${loaner.orderID || loaner.attachedLoanerId || loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    for (const loaner of props.attachedLoaners ?? []) {
+        rows.push({
+            _key: `attached-${loaner.id ?? loaner.loanerID}`,
+            loanerID: loaner.loanerID,
+            productName: loaner.productName,
+            item: loaner.item,
+            SN: loaner.SN,
+        })
+    }
+    return rows
 })
 
 /** loaner / service とも当該案件の受注日（order_date 表記ゆれも見る） */
@@ -772,6 +835,7 @@ async function patchFileSort(fileId, sortNum) {
 .right-column > .panel-summary,
 .right-column > .panel-delivery,
 .right-column > .panel-price,
+.right-column > .panel-loaner,
 .right-column > .panel-notes {
     flex: 0 0 auto;
 }
@@ -783,6 +847,31 @@ async function patchFileSort(fileId, sortNum) {
 .panel-price {
     padding: 10px 12px;
     background: #fff;
+}
+
+.panel-loaner {
+    padding: 10px 12px;
+    background: #ecfdf5;
+    border-color: #059669;
+}
+
+.panel-loaner .loaner-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.panel-loaner .loaner-table th,
+.panel-loaner .loaner-table td {
+    border-bottom: 1px solid #bbf7d0;
+    padding: 4px 6px;
+    text-align: left;
+}
+
+.loaner-empty {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
 }
 
 .panel {
@@ -1062,6 +1151,18 @@ async function patchFileSort(fileId, sortNum) {
     padding: 2px 10px;
     border-radius: 4px;
     background: #dc2626;
+    color: #fff;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.legacy-sr-loaner-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #16a34a;
     color: #fff;
     font-size: inherit;
     font-weight: 700;
