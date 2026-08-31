@@ -21,13 +21,17 @@
                     </section>
 
                     <div class="action-row">
-                        <input
-                            v-model="actionComment"
-                            type="text"
-                            class="action-input action-input-conum"
-                            placeholder="Co Num"
-                            :disabled="statusActionSaving"
-                        >
+                        <label class="conum-field">
+                            <span class="conum-label">coNum</span>
+                            <input
+                                type="text"
+                                class="action-input action-input-conum"
+                                placeholder="Co Num"
+                                :value="draftRecord?.coNum ?? record?.coNum ?? ''"
+                                :disabled="statusActionSaving || !draftRecord"
+                                @input="onCoNumInput"
+                            >
+                        </label>
                         <button type="button" class="action-btn action-btn-wide" :disabled="statusActionSaving" @click="$emit('save')">
                             保存
                         </button>
@@ -367,9 +371,13 @@ const infoPaneSize = ref(60)
 const selectedFileId = ref(null)
 const selectedNoteId = ref(null)
 const capturedImagesOpen = ref(false)
-const actionComment = ref('')
 const actionMessage = ref('')
 const statusActionSaving = ref(false)
+
+function onCoNumInput(event) {
+    if (!props.draftRecord) return
+    props.draftRecord.coNum = event?.target?.value ?? ''
+}
 const showShippingDialog = ref(false)
 const showGalleryDialog = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
@@ -966,7 +974,6 @@ watch(() => props.notes, () => {
 watch(
     () => props.record?.orderID,
     () => {
-        actionComment.value = ''
         actionMessage.value = ''
         selectedFileId.value = null
         selectedNoteId.value = null
@@ -1570,12 +1577,30 @@ watch(
     border: 1px solid #cbd5e1;
     border-radius: 4px;
     font-size: 13px;
+    background: #fff;
+}
+
+.conum-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.conum-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
 }
 
 .action-input-conum {
     flex: 0 0 150px;
     width: 150px;
     max-width: 150px;
+    background: #ffffff !important;
+    font-weight: 700;
+    color: #0f172a;
 }
 
 .action-btn {

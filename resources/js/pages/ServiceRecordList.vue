@@ -880,6 +880,7 @@
                         <SortableTh sort-key="receivedDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受領日</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
                         <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh sort-key="coNum" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">coNum</SortableTh>
                         <SortableTh sort-key="orderDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">受注日</SortableTh>
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                         <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
@@ -1165,6 +1166,7 @@
                                 >旧貸出機案件</span>
                                 <template v-else>{{ r.RMA }}</template>
                             </td>
+                            <td>{{ r.coNum || '' }}</td>
                             <td>{{ formatListDate(r.orderDate) }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
@@ -2828,6 +2830,7 @@ const filteredRecords = computed(() => {
                     r.order_type,
                     r.RMA,
                     r.invNum,
+                    r.coNum,
                     r.productName,
                     r.item,
                     r.SN,
