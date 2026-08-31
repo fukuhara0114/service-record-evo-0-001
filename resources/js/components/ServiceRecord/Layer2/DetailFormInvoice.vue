@@ -11,7 +11,7 @@
 
         <section class="invoice-toolbar">
             <label class="toolbar-field">
-                <span>券生 Inv:</span>
+                <span>弥生 Inv</span>
                 <input
                     type="text"
                     class="toolbar-input"

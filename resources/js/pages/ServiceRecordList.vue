@@ -358,6 +358,13 @@
                             <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">予定出荷日</SortableTh>
                             <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
                             <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                            <SortableTh
+                                v-if="showInvoiceInvNumColumn"
+                                sort-key="invNum"
+                                :active-key="listColumnSortKey"
+                                :direction="listColumnSortDir"
+                                @sort="toggleColumnSort"
+                            >invNum</SortableTh>
                             <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                             <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
                             <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
@@ -420,6 +427,7 @@
                                 >旧貸出機案件</span>
                                 <template v-else>{{ r.RMA }}</template>
                             </td>
+                            <td v-if="showInvoiceInvNumColumn">{{ r.invNum || '' }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
@@ -504,6 +512,13 @@
                                     <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">予定出荷日</SortableTh>
                                     <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
                                     <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                                    <SortableTh
+                                        v-if="showInvoiceInvNumColumn"
+                                        sort-key="invNum"
+                                        :active-key="listColumnSortKey"
+                                        :direction="listColumnSortDir"
+                                        @sort="toggleColumnSort"
+                                    >invNum</SortableTh>
                                     <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                                     <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
                                     <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
@@ -566,6 +581,7 @@
                                         >旧貸出機案件</span>
                                         <template v-else>{{ r.RMA }}</template>
                                     </td>
+                                    <td v-if="showInvoiceInvNumColumn">{{ r.invNum || '' }}</td>
                                     <td>{{ r.productName }}</td>
                                     <td>{{ r.SN }}</td>
                                     <td>{{ r.return_code_master?.description || '' }}</td>
@@ -842,6 +858,13 @@
                         <SortableTh sort-key="shippingOut_requiredDate" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">出荷予定日</SortableTh>
                         <SortableTh sort-key="status" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">ステータス</SortableTh>
                         <SortableTh sort-key="RMA" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">RMA#</SortableTh>
+                        <SortableTh
+                            v-if="showInvoiceInvNumColumn"
+                            sort-key="invNum"
+                            :active-key="listColumnSortKey"
+                            :direction="listColumnSortDir"
+                            @sort="toggleColumnSort"
+                        >invNum</SortableTh>
                         <SortableTh sort-key="productName" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">製品名</SortableTh>
                         <SortableTh sort-key="SN" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">S/N</SortableTh>
                         <SortableTh sort-key="returnCode" :active-key="listColumnSortKey" :direction="listColumnSortDir" @sort="toggleColumnSort">作業内容</SortableTh>
@@ -1109,6 +1132,7 @@
                                 >旧貸出機案件</span>
                                 <template v-else>{{ r.RMA }}</template>
                             </td>
+                            <td v-if="showInvoiceInvNumColumn">{{ r.invNum || '' }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
@@ -1516,6 +1540,15 @@ const currentUserKanji = computed(() => {
         return String(document.querySelector('meta[name="auth-kanji-name"]')?.content ?? '').trim()
     }
     return ''
+})
+const currentUserLoginName = computed(() => String(page.props.authUser?.name ?? '').trim())
+/**
+ * Invoice / 出荷準備一覧: ログイン名 muehara のとき RMA# と製品名の間に invNum を表示。
+ * （出荷準備画面が Invoice 相当のため shippingPrep も含める）
+ */
+const showInvoiceInvNumColumn = computed(() => {
+    if (currentUserLoginName.value.toLowerCase() !== 'muehara') return false
+    return props.mode === 'shippingPrep' || orderTypeFilter.value === 'invoice'
 })
 const currentUserSignature = computed(() => String(page.props.authUser?.signature ?? '').trim())
 const currentUserEmployeeId = computed(() => {
@@ -2794,6 +2827,7 @@ const filteredRecords = computed(() => {
                     engineerOrderTypeLabel(r),
                     r.order_type,
                     r.RMA,
+                    r.invNum,
                     r.productName,
                     r.item,
                     r.SN,
