@@ -3491,7 +3491,12 @@ class ServiceRecordController extends Controller
         ]);
 
         $data = $request->except('_token');
-        
+        // レガシー一括作成でも order_type は whitelist のみ（null/空は service）
+        $orderType = ServiceRecord::normalizeOrderType($data['order_type'] ?? null);
+        $data['order_type'] = in_array($orderType, ['service', 'loaner', 'waiting_list'], true)
+            ? $orderType
+            : 'service';
+
         ServiceRecord::create($data);
 
         return redirect()->route('servicerecord.index')->with('success', '新規登録しました。');
@@ -3511,7 +3516,15 @@ class ServiceRecordController extends Controller
 
         $record = ServiceRecord::findOrFail($orderID);
 
-        $data = $request->except(['_token', '_method', 'allow_over_capacity', 'notify_remand', 'notify_assign']);
+        // order_type は一般更新では変更しない（loaner↔waiting_list は LoanerRecordController 側）
+        $data = $request->except([
+            '_token',
+            '_method',
+            'allow_over_capacity',
+            'notify_remand',
+            'notify_assign',
+            'order_type',
+        ]);
 
         if (
             array_key_exists('status', $data)

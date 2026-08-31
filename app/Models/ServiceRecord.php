@@ -26,6 +26,38 @@ class ServiceRecord extends Model
     // 既存データベースで自動挿入されない場合はfalse
     public $timestamps = false;
 
+    /** loaner / waiting_list は専用フロー以外で null・service 等へ落とさない */
+    public const PROTECTED_ORDER_TYPES = ['loaner', 'waiting_list'];
+
+    protected static function booted(): void
+    {
+        static::updating(function (ServiceRecord $record) {
+            if (! $record->isDirty('order_type')) {
+                return;
+            }
+
+            $original = self::normalizeOrderType($record->getOriginal('order_type'));
+            $next = self::normalizeOrderType($record->order_type);
+
+            // 既存が loaner / waiting_list のとき、許可遷移は同グループ内のみ
+            if (in_array($original, self::PROTECTED_ORDER_TYPES, true)
+                && ! in_array($next, self::PROTECTED_ORDER_TYPES, true)
+            ) {
+                $record->order_type = $record->getOriginal('order_type');
+            }
+        });
+    }
+
+    public static function normalizeOrderType(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $normalized = strtolower(trim((string) $value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
     // 一括保存・更新を許可するカラム一覧（画像より全件抽出）
     protected $fillable = [
         'receiptNumber',
