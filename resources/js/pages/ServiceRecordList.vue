@@ -374,10 +374,7 @@
                             v-for="r in filteredRecords"
                             :key="r.orderID"
                             class="table-row"
-                            :class="[
-                                { 'active-row': selectedOrderId === r.orderID },
-                                listRowToneClass(r),
-                            ]"
+                            :class="{ 'active-row': selectedOrderId === r.orderID }"
                             @click="selectedOrderId = r.orderID"
                             @dblclick="openSecondLayer(r)"
                         >
@@ -412,7 +409,17 @@
                             </td>
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                             <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
-                            <td>{{ r.RMA }}</td>
+                            <td>
+                                <span
+                                    v-if="loanerCaseRmaBadgeKind(r) === 'loaner'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--loaner"
+                                >貸出機案件</span>
+                                <span
+                                    v-else-if="loanerCaseRmaBadgeKind(r) === 'legacy'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--legacy"
+                                >旧貸出機案件</span>
+                                <template v-else>{{ r.RMA }}</template>
+                            </td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
@@ -513,10 +520,7 @@
                                     v-for="r in filteredRecords"
                                     :key="r.orderID"
                                     class="table-row"
-                                    :class="[
-                                        { 'active-row': selectedOrderId === r.orderID },
-                                        listRowToneClass(r),
-                                    ]"
+                                    :class="{ 'active-row': selectedOrderId === r.orderID }"
                                     @click="selectedOrderId = r.orderID"
                                     @dblclick="openSecondLayer(r)"
                                 >
@@ -551,7 +555,17 @@
                                     </td>
                                     <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                                     <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
-                                    <td>{{ r.RMA }}</td>
+                                    <td>
+                                        <span
+                                            v-if="loanerCaseRmaBadgeKind(r) === 'loaner'"
+                                            class="loaner-case-rma-badge loaner-case-rma-badge--loaner"
+                                        >貸出機案件</span>
+                                        <span
+                                            v-else-if="loanerCaseRmaBadgeKind(r) === 'legacy'"
+                                            class="loaner-case-rma-badge loaner-case-rma-badge--legacy"
+                                        >旧貸出機案件</span>
+                                        <template v-else>{{ r.RMA }}</template>
+                                    </td>
                                     <td>{{ r.productName }}</td>
                                     <td>{{ r.SN }}</td>
                                     <td>{{ r.return_code_master?.description || '' }}</td>
@@ -875,13 +889,10 @@
                         v-for="r in filteredRecords"
                         :key="r.orderID"
                         class="table-row"
-                        :class="[
-                            {
-                                'active-row': selectedOrderId === r.orderID,
-                                'promotion-ready-row': isPromotionReady(r),
-                            },
-                            listRowToneClass(r),
-                        ]"
+                        :class="{
+                            'active-row': selectedOrderId === r.orderID,
+                            'promotion-ready-row': isPromotionReady(r),
+                        }"
                         :title="promotionRowTitle(r)"
                         @click="selectedOrderId = r.orderID"
                         @dblclick="onListRowDblClick(r)"
@@ -1087,7 +1098,17 @@
                             </td>
                             <td>{{ formatListDate(r.shippingOut_requiredDate) }}</td>
                             <td :class="shippingStatusCellUnderlineClass(r)">{{ statusLabel(r) }}</td>
-                            <td>{{ r.RMA }}</td>
+                            <td>
+                                <span
+                                    v-if="loanerCaseRmaBadgeKind(r) === 'loaner'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--loaner"
+                                >貸出機案件</span>
+                                <span
+                                    v-else-if="loanerCaseRmaBadgeKind(r) === 'legacy'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--legacy"
+                                >旧貸出機案件</span>
+                                <template v-else>{{ r.RMA }}</template>
+                            </td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
                             <td>{{ r.return_code_master?.description || '' }}</td>
@@ -1109,7 +1130,17 @@
                             </td>
                             <td>{{ formatListDate(r.receivedDate) }}</td>
                             <td>{{ statusLabel(r) }}</td>
-                            <td>{{ r.RMA }}</td>
+                            <td>
+                                <span
+                                    v-if="loanerCaseRmaBadgeKind(r) === 'loaner'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--loaner"
+                                >貸出機案件</span>
+                                <span
+                                    v-else-if="loanerCaseRmaBadgeKind(r) === 'legacy'"
+                                    class="loaner-case-rma-badge loaner-case-rma-badge--legacy"
+                                >旧貸出機案件</span>
+                                <template v-else>{{ r.RMA }}</template>
+                            </td>
                             <td>{{ formatListDate(r.orderDate) }}</td>
                             <td>{{ r.productName }}</td>
                             <td>{{ r.SN }}</td>
@@ -2477,8 +2508,8 @@ function isLogisticsLoanerLending(record) {
     return (record?.order_type === 'loaner') && Number(record?.status) === LOANER_LENDING_STATUS
 }
 
-/** Invoice / Closing / Logistics 一覧の行文字色対象か */
-function isListRowToneTarget() {
+/** Invoice / Closing / Logistics(status=350側) の RMA# バッジ対象か */
+function isLoanerCaseRmaBadgeTarget() {
     return props.mode === 'logistics'
         || orderTypeFilter.value === 'invoice'
         || orderTypeFilter.value === 'closing'
@@ -2490,16 +2521,17 @@ function isNumericRma(rma) {
 }
 
 /**
- * Invoice / Closing / Logistics 一覧の行文字色。
- * - loaner → 深い緑
- * - それ以外で RMA が数字でない → 赤
+ * RMA# 列の「貸出機案件」バッジ種別。
+ * - loaner → 'loaner'（赤背景・白文字「貸出機案件」）
+ * - 非 loaner かつ RMA が数字でない → 'legacy'（緑背景・白文字「旧貸出機案件」）
+ * - それ以外 → null（通常の RMA 表示）
  */
-function listRowToneClass(record) {
-    if (!isListRowToneTarget()) return ''
+function loanerCaseRmaBadgeKind(record) {
+    if (!isLoanerCaseRmaBadgeTarget()) return null
     const orderType = String(record?.order_type ?? '').trim().toLowerCase()
-    if (orderType === 'loaner') return 'list-row-tone-loaner'
-    if (!isNumericRma(record?.RMA)) return 'list-row-tone-non-numeric-rma'
-    return ''
+    if (orderType === 'loaner') return 'loaner'
+    if (!isNumericRma(record?.RMA)) return 'legacy'
+    return null
 }
 
 function toggleLogisticsLoanerFilter() {
@@ -5119,13 +5151,26 @@ async function saveRecord() {
     cursor: pointer;
 }
 
-/* Invoice / Closing / Logistics: loaner=深い緑、非数字RMA=赤 */
-#myLargeTable tbody tr.list-row-tone-loaner td {
-    color: #14532d;
+/* Invoice / Closing / Logistics: RMA# の「貸出機案件」バッジ（文字は黒） */
+.loaner-case-rma-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: #fff;
 }
 
-#myLargeTable tbody tr.list-row-tone-non-numeric-rma td {
-    color: #dc2626;
+.loaner-case-rma-badge--loaner {
+    background: #dc2626;
+    color: #fff;
+}
+
+.loaner-case-rma-badge--legacy {
+    background: #16a34a;
+    color: #fff;
 }
 
 .promotion-ready-row td {
