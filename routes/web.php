@@ -79,6 +79,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/record/{orderID}', [ServiceRecordController::class, 'record'])->name('servicerecord.record');
     Route::get('/servicerecord/attachments/{orderID}', [ServiceRecordController::class, 'attachments'])->name('servicerecord.attachments');
     Route::get('/servicerecord/files/{fileId}', [ServiceRecordController::class, 'fileContent'])->name('servicerecord.file-content');
+    // PDFビューアの保存名用: URL末尾に元ファイル名（拡張子付き）を載せる
+    Route::get('/servicerecord/files/{fileId}/view/{downloadName}', [ServiceRecordController::class, 'fileContent'])
+        ->where('downloadName', '[^/]+')
+        ->name('servicerecord.file-content.named');
     Route::get('/servicerecord/files/{fileId}/eml-preview', [ServiceRecordController::class, 'emlPreview'])->name('servicerecord.files.eml-preview');
     Route::get('/servicerecord/files/{fileId}/eml-attachment/{index}', [ServiceRecordController::class, 'emlAttachment'])->name('servicerecord.files.eml-attachment');
     Route::post('/servicerecord/files/{fileId}/eml-reply-draft', [ServiceRecordController::class, 'emlReplyDraft'])->name('servicerecord.files.eml-reply-draft');

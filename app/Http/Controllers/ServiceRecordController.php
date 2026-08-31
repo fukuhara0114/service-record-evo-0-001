@@ -1271,7 +1271,7 @@ class ServiceRecordController extends Controller
         ]);
     }
 
-    public function fileContent($fileId)
+    public function fileContent($fileId, $downloadName = null)
     {
         $file = AttachedFile::findOrFail($fileId);
 
@@ -1291,13 +1291,73 @@ class ServiceRecordController extends Controller
         }
 
         $mimeType = $file->fileType ?: 'application/octet-stream';
-        $filename = $file->documentName ?: ('file-' . $file->id);
+        $filename = $this->resolveAttachedFileDownloadName($file);
 
         return response($binary, 200, [
             'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . addslashes($filename) . '"',
+            'Content-Disposition' => $this->buildContentDisposition('inline', $filename),
             'Cache-Control' => 'private, max-age=3600',
         ]);
+    }
+
+    /**
+     * ブラウザの保存ダイアログ用ファイル名（拡張子必須）。
+     */
+    private function resolveAttachedFileDownloadName(AttachedFile $file): string
+    {
+        $name = trim((string) ($file->documentName ?: ''));
+        if ($name === '') {
+            $name = 'file-' . $file->id;
+        }
+
+        $name = str_replace(['/', '\\'], '-', $name);
+
+        if (preg_match('/\.[A-Za-z0-9]{1,8}$/', $name) === 1) {
+            return $name;
+        }
+
+        $ext = $this->extensionForMimeType((string) ($file->fileType ?: ''));
+        if ($ext !== null) {
+            return $name . '.' . $ext;
+        }
+
+        return $name;
+    }
+
+    private function extensionForMimeType(string $mimeType): ?string
+    {
+        $mime = strtolower(trim($mimeType));
+
+        return match ($mime) {
+            'application/pdf' => 'pdf',
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/bmp' => 'bmp',
+            'image/tiff' => 'tif',
+            'message/rfc822', 'application/eml' => 'eml',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'text/plain' => 'txt',
+            'text/csv' => 'csv',
+            default => null,
+        };
+    }
+
+    private function buildContentDisposition(string $disposition, string $filename): string
+    {
+        $fallback = preg_replace('/[^\x20-\x7E]/', '_', $filename) ?: 'file';
+        $fallback = str_replace(['"', '\\'], '', $fallback);
+
+        return sprintf(
+            "%s; filename=\"%s\"; filename*=UTF-8''%s",
+            $disposition,
+            $fallback,
+            rawurlencode($filename)
+        );
     }
 
     public function emlPreview($fileId)

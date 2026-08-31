@@ -24,7 +24,7 @@
                 >
                     {{ draftCreating ? '作成中...' : 'メールドラフト作成' }}
                 </button>
-                <a :href="fileUrl" target="_blank" rel="noopener" class="open-link" @click.stop>別タブで開く</a>
+                <a :href="fileViewUrl" target="_blank" rel="noopener" class="open-link" @click.stop>別タブで開く</a>
             </div>
 
             <div class="file-scroll-nav" @click.stop>
@@ -85,14 +85,14 @@
 
         <div v-if="showPreview && isPdf" class="file-preview" @click.stop>
             <iframe
-                :src="fileUrl"
+                :src="fileViewUrl"
                 class="pdf-frame"
                 title="PDFプレビュー"
             />
         </div>
 
         <div v-else-if="showPreview && isImage" class="file-preview" @click.stop>
-            <img :src="fileUrl" :alt="file.documentName || '画像'" class="image-preview">
+            <img :src="fileViewUrl" :alt="file.documentName || '画像'" class="image-preview">
         </div>
 
         <div v-else-if="showPreview && isEml" class="eml-preview" @click.stop>
@@ -307,7 +307,8 @@ watch(
     },
 )
 
-const fileUrl = computed(() => {
+/** API 用ベース（/files/{id}）。eml-preview 等はこちらを使う */
+const fileApiBaseUrl = computed(() => {
     if (props.fileBaseUrl) {
         return `${props.fileBaseUrl.replace(/\/$/, '')}/${props.file.id}`
     }
@@ -319,10 +320,49 @@ const fileUrl = computed(() => {
     return `${window.location.origin}${basePath}/files/${props.file.id}`
 })
 
-const emlPreviewUrl = computed(() => `${fileUrl.value}/eml-preview`)
+const MIME_EXTENSION_MAP = {
+    'application/pdf': 'pdf',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tif',
+    'message/rfc822': 'eml',
+    'application/eml': 'eml',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'text/plain': 'txt',
+    'text/csv': 'csv',
+}
+
+/** PDFビューア保存ダイアログ用: 元ファイル名＋拡張子 */
+function resolveDownloadFileName(file) {
+    let name = String(file?.documentName || '').trim() || `file-${file?.id ?? 'download'}`
+    name = name.replace(/[\\/]/g, '-')
+    if (/\.[A-Za-z0-9]{1,8}$/.test(name)) return name
+    const ext = MIME_EXTENSION_MAP[String(file?.fileType || '').toLowerCase()]
+    return ext ? `${name}.${ext}` : name
+}
+
+/**
+ * プレビュー／別タブ用 URL。
+ * Chrome PDF ビューアは URL 末尾を保存名に使うため、拡張子付きファイル名を path に載せる。
+ */
+const fileViewUrl = computed(() => {
+    const name = resolveDownloadFileName(props.file)
+    return `${fileApiBaseUrl.value}/view/${encodeURIComponent(name)}`
+})
+
+const fileUrl = fileApiBaseUrl
+
+const emlPreviewUrl = computed(() => `${fileApiBaseUrl.value}/eml-preview`)
 
 function emlAttachmentUrl(index) {
-    return `${fileUrl.value}/eml-attachment/${index}`
+    return `${fileApiBaseUrl.value}/eml-attachment/${index}`
 }
 
 function formatBytes(size) {
