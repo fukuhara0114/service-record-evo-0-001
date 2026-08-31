@@ -29,9 +29,28 @@ class ServiceRecord extends Model
     /** loaner / waiting_list は専用フロー以外で null・service 等へ落とさない */
     public const PROTECTED_ORDER_TYPES = ['loaner', 'waiting_list'];
 
+    /** 作成時に確定する order_type 値 */
+    public const CREATABLE_ORDER_TYPES = ['service', 'loaner', 'waiting_list'];
+
     protected static function booted(): void
     {
+        static::creating(function (ServiceRecord $record) {
+            $orderType = self::normalizeOrderType($record->order_type);
+            // 新規 service 案件は必ず明示的に service（null/空/不明値は service）
+            if (! in_array($orderType, ['loaner', 'waiting_list'], true)) {
+                $orderType = 'service';
+                $record->order_type = 'service';
+            }
+            // 作成時のみ設定。クライアント入力は無視し、以後 update でも変えない
+            $record->original_order_type = $orderType;
+        });
+
         static::updating(function (ServiceRecord $record) {
+            // original_order_type は作成後に絶対変更しない
+            if ($record->isDirty('original_order_type')) {
+                $record->original_order_type = $record->getOriginal('original_order_type');
+            }
+
             if (! $record->isDirty('order_type')) {
                 return;
             }

@@ -3417,7 +3417,8 @@ class ServiceRecordController extends Controller
                 'deliveryDestination_zipcode' => $validated['deliveryDestination_zipcode'] ?? null,
                 'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
                 'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
-                'order_type' => $orderType,
+                // order_type: service は明示。loaner は intake 経路。original_order_type はモデル creating で設定
+                'order_type' => $orderType === 'loaner' ? 'loaner' : 'service',
                 'RMA' => $orderType === 'loaner' ? 'loaner' : null,
                 'lastEditPerson' => $user?->kanji_name,
                 'lastEditDate' => now(),
@@ -3490,10 +3491,11 @@ class ServiceRecordController extends Controller
             'status' => ['nullable', 'integer', Rule::exists('statusmaster', 'processID_new')],
         ]);
 
-        $data = $request->except('_token');
+        $data = $request->except(['_token', 'original_order_type']);
         // レガシー一括作成でも order_type は whitelist のみ（null/空は service）
+        // original_order_type はモデル creating で order_type から自動設定
         $orderType = ServiceRecord::normalizeOrderType($data['order_type'] ?? null);
-        $data['order_type'] = in_array($orderType, ['service', 'loaner', 'waiting_list'], true)
+        $data['order_type'] = in_array($orderType, ServiceRecord::CREATABLE_ORDER_TYPES, true)
             ? $orderType
             : 'service';
 
@@ -3516,7 +3518,8 @@ class ServiceRecordController extends Controller
 
         $record = ServiceRecord::findOrFail($orderID);
 
-        // order_type は一般更新では変更しない（loaner↔waiting_list は LoanerRecordController 側）
+        // order_type / original_order_type は一般更新では変更しない
+        // （loaner↔waiting_list は LoanerRecordController 側、original_order_type は作成時のみ）
         $data = $request->except([
             '_token',
             '_method',
@@ -3524,6 +3527,7 @@ class ServiceRecordController extends Controller
             'notify_remand',
             'notify_assign',
             'order_type',
+            'original_order_type',
         ]);
 
         if (
