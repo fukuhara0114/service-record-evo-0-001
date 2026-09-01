@@ -125,7 +125,6 @@ class LoanerRecordController extends Controller
     {
         $with = [
             'serviceRecord.statusMasterLoaner',
-            'loanerMaster:loanerID,productName,item,SN,manageNum,groupName,price',
         ];
 
         // URL の {id} = 一覧で選んだ orderID → servicerecord を開く
@@ -184,6 +183,10 @@ class LoanerRecordController extends Controller
         }
 
         $columns = Schema::getColumnListing('attachedloaners');
+        $resolver = app(MasterPriceVersionResolver::class);
+        $loanerId = $attached->loanerID ?? $record->loanerID;
+        $priceAsOf = $resolver->resolveLoanerPriceAsOf($record->orderDate);
+        $versionedMaster = $resolver->loanerMaster($loanerId, $priceAsOf);
 
         return Inertia::render('LoanerDetail', [
             'attached' => [
@@ -198,7 +201,7 @@ class LoanerRecordController extends Controller
                 'comment' => $attached->comment,
                 'enduser_SN' => $attached->getAttribute('repairInstrument-SN'),
             ],
-            'record' => $record->only([
+            'record' => array_merge($record->only([
                 'orderID',
                 'parentID',
                 'order_type',
@@ -247,28 +250,19 @@ class LoanerRecordController extends Controller
                 'incident',
                 'promotion_ready_at',
                 'promotion_source_orderID',
-            ]) + [
+            ]), [
+                'orderDate' => $resolver->normalizeDate($record->orderDate),
+                'quoteDate' => $resolver->normalizeDate($record->quoteDate),
+                'shippingOut_requiredDate' => $resolver->normalizeDate($record->shippingOut_requiredDate),
                 'status_label' => $record->order_type === 'loaner'
                     ? StatusLoaner::resolveLabel($record->statusMasterLoaner)
                     : null,
-            ],
+            ]),
             'parentReturnCode' => $parentReturnCode,
             'parentRecord' => $parentRecord,
-            'loanerMaster' => $attached->loanerMaster?->only([
-                'loanerID',
-                'productName',
-                'item',
-                'SN',
-                'manageNum',
-                'groupName',
-                'certificatedDate',
-                'note1',
-                'note2',
-                'note3',
-                'price',
-                'validDateMin',
-                'validDateMax',
-            ]),
+            'loanerMaster' => $versionedMaster
+                ? $this->serializeLoanerMasterRow($versionedMaster, $resolver)
+                : null,
             'availableUnits' => $this->serializeAvailableUnitsForProduct(
                 $record->productName,
                 $record->order_type === 'waiting_list' ? $record : null,
@@ -297,31 +291,8 @@ class LoanerRecordController extends Controller
                 ->select(['id', 'incidentNum', 'companyName', 'depart', 'customerNum'])
                 ->orderByDesc('incidentNum')
                 ->get(),
-            // 価格計算用に同一 loanerID の全版を渡す（選択ダイアログ側で最新版に絞る）
-            'loanerUnits' => LoanerMaster::query()
-                ->whereNotNull('loanerID')
-                ->where('loanerID', '!=', '')
-                ->orderBy('productName')
-                ->orderBy('loanerID')
-                ->orderByDesc('validDateMin')
-                ->orderByDesc('id')
-                ->get([
-                    'id',
-                    'loanerID',
-                    'productName',
-                    'item',
-                    'SN',
-                    'manageNum',
-                    'groupName',
-                    'certificatedDate',
-                    'note1',
-                    'note2',
-                    'note3',
-                    'price',
-                    'validDateMin',
-                    'validDateMax',
-                    $this->resolveStatusColumn(),
-                ]),
+            // 価格計算用に同一 loanerID の全版を渡す（日付は Y-m-d。選択ダイアログ側で最新版に絞る）
+            'loanerUnits' => $this->serializeLoanerUnitsForDetail($resolver),
             'dateFields' => [
                 'hasPlannedSent' => in_array('plannedSentDate', $columns, true),
                 'hasPlannedReturned' => in_array('plannedReturnedDate', $columns, true),
@@ -1136,19 +1107,26 @@ class LoanerRecordController extends Controller
                 unset($recordPayload['status']);
             }
 
-            // 価格: 有償=マスタ価格 / 無償=0。調整後の表示額は price に入れず discount_service で持つ
-            if ($record->order_type === 'loaner' && array_key_exists('price', $validated)) {
-                $recordPayload['price'] = $validated['price'] === null ? 0 : (float) $validated['price'];
+            // 価格: 有償=受注日版 loanermaster / 無償=0。調整額は discount_service
+            $parentId = array_key_exists('parentID', $validated)
+                ? $validated['parentID']
+                : $record->parentID;
+            $loanerId = array_key_exists('loanerID', $validated)
+                ? $validated['loanerID']
+                : ($attached->loanerID ?? $record->loanerID);
+            $orderDate = array_key_exists('orderDate', $validated)
+                ? $validated['orderDate']
+                : $record->orderDate;
+            if ($record->order_type === 'loaner') {
+                $incomingPrice = array_key_exists('price', $validated)
+                    ? $validated['price']
+                    : $record->price;
+                if ($incomingPrice === null || (float) $incomingPrice === 0.0) {
+                    $recordPayload['price'] = 0;
+                } else {
+                    $recordPayload['price'] = $this->resolveLoanerMasterPriceByOrderDate($loanerId, $orderDate);
+                }
             } else {
-                $parentId = array_key_exists('parentID', $validated)
-                    ? $validated['parentID']
-                    : $record->parentID;
-                $loanerId = array_key_exists('loanerID', $validated)
-                    ? $validated['loanerID']
-                    : ($attached->loanerID ?? $record->loanerID);
-                $orderDate = array_key_exists('orderDate', $validated)
-                    ? $validated['orderDate']
-                    : $record->orderDate;
                 $recordPayload['price'] = $this->resolveLoanerChargePrice($parentId, $loanerId, $orderDate);
             }
 
@@ -1266,9 +1244,11 @@ class LoanerRecordController extends Controller
         $promotionFromLending = $promotionTriggered
             && LoanerStatusFlow::crossedToInactiveList($previousStatus, $record->status);
 
+        $resolver = app(MasterPriceVersionResolver::class);
+
         return response()->json([
             'message' => '貸出詳細を保存しました。',
-            'record' => $record->only([
+            'record' => array_merge($record->only([
                 'orderID',
                 'parentID',
                 'order_type',
@@ -1288,6 +1268,11 @@ class LoanerRecordController extends Controller
                 'coNum',
                 'shippingOut_requiredDate',
                 'receivedDate',
+            ]), [
+                'orderDate' => $resolver->normalizeDate($record->orderDate),
+                'quoteDate' => $resolver->normalizeDate($record->quoteDate),
+                'shippingOut_requiredDate' => $resolver->normalizeDate($record->shippingOut_requiredDate),
+                'receivedDate' => $resolver->normalizeDate($record->receivedDate),
             ]),
             'attached' => [
                 'id' => $attached->id,
@@ -2873,10 +2858,22 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * 貸出案件の課金価格を算出する。
+     * 有償 loaner のマスタ価格。版は当該案件の受注日（未定・2000年以前は最新版）。
+     * 親 service の受注日・returnCode は見ない。
+     */
+    private function resolveLoanerMasterPriceByOrderDate(mixed $loanerId, mixed $orderDate = null): float
+    {
+        $resolver = app(MasterPriceVersionResolver::class);
+        $asOf = $resolver->resolveLoanerPriceAsOf($orderDate);
+        $master = $resolver->loanerMaster($loanerId, $asOf);
+
+        return (float) ($master->price ?? 0);
+    }
+
+    /**
+     * waiting_list など親付き案件の課金価格。
      * parent の returnCode が 1,2,7,13 のとき loanermaster の版価格、それ以外／親なしは 0。
-     * 受注日は loaner 自身（2001〜2098年）→ それ以外は親 service の受注日。
-     * 発送予定日・出荷日は使わない。未設定・2000年以前なら最新版。
+     * 版の基点は loaner 自身の受注日。発送予定日・出荷日は使わない。未設定・2000年以前なら最新版。
      */
     private function resolveLoanerChargePrice(mixed $parentId, mixed $loanerId, mixed $orderDate = null): float
     {
@@ -2893,9 +2890,75 @@ class LoanerRecordController extends Controller
         }
 
         $resolver = app(MasterPriceVersionResolver::class);
-        $asOf = $resolver->resolveLoanerPriceAsOf($orderDate, $parent->orderDate);
+        $asOf = $resolver->resolveLoanerPriceAsOf($orderDate);
 
         return $resolver->loanerChargePrice($parent->returnCode, $loanerId, $asOf);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function serializeLoanerUnitsForDetail(MasterPriceVersionResolver $resolver): array
+    {
+        $statusColumn = $this->resolveStatusColumn();
+
+        return LoanerMaster::query()
+            ->whereNotNull('loanerID')
+            ->where('loanerID', '!=', '')
+            ->orderBy('productName')
+            ->orderBy('loanerID')
+            ->orderByDesc('validDateMin')
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'loanerID',
+                'productName',
+                'item',
+                'SN',
+                'manageNum',
+                'groupName',
+                'certificatedDate',
+                'note1',
+                'note2',
+                'note3',
+                'price',
+                'validDateMin',
+                'validDateMax',
+                $statusColumn,
+            ])
+            ->map(fn (LoanerMaster $row) => $this->serializeLoanerMasterRow($row, $resolver, $statusColumn))
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeLoanerMasterRow(
+        LoanerMaster $row,
+        MasterPriceVersionResolver $resolver,
+        ?string $statusColumn = null,
+    ): array {
+        $payload = [
+            'id' => $row->id,
+            'loanerID' => $row->loanerID,
+            'productName' => $row->productName,
+            'item' => $row->item,
+            'SN' => $row->SN,
+            'manageNum' => $row->manageNum,
+            'groupName' => $row->groupName,
+            'certificatedDate' => $resolver->normalizeDate($row->certificatedDate),
+            'note1' => $row->note1,
+            'note2' => $row->note2,
+            'note3' => $row->note3,
+            'price' => $row->price === null || $row->price === '' ? null : (float) $row->price,
+            'validDateMin' => $resolver->normalizeDate($row->validDateMin),
+            'validDateMax' => $resolver->normalizeDate($row->validDateMax),
+        ];
+
+        $statusKey = $statusColumn ?: $this->resolveStatusColumn();
+        $payload[$statusKey] = $row->getAttribute($statusKey);
+
+        return $payload;
     }
 
     private function serializeLoanerNotes($notes)

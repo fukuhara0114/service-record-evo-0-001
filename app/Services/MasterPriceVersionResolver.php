@@ -259,7 +259,8 @@ class MasterPriceVersionResolver
     }
 
     /**
-     * 期間内、または期間未設定（NULL / 0000-00-00）。
+     * 期間内、または未設定の境界は無制限（NULL / 0000-00-00）。
+     * フロントの inDateRange と同じ: min のみ / max のみでも受注日で版が切り替わる。
      * DATE リテラル '0000-00-00' や DATE() は MySQL 8 (error 1525) で落ちるため、CHAR の先頭10桁で比較する。
      */
     private function applyAsOfRange(Builder $query, string $asOf): Builder
@@ -271,15 +272,13 @@ class MasterPriceVersionResolver
 
         return $query->where(function (Builder $builder) use ($asOf, $emptyMin, $emptyMax, $minYmd, $maxYmd) {
             $builder
-                ->where(function (Builder $range) use ($asOf, $emptyMin, $emptyMax, $minYmd, $maxYmd) {
-                    $range
-                        ->whereRaw("NOT {$emptyMin}")
-                        ->whereRaw("NOT {$emptyMax}")
-                        ->whereRaw("{$minYmd} <= ?", [$asOf])
-                        ->whereRaw("{$maxYmd} >= ?", [$asOf]);
+                ->where(function (Builder $minOk) use ($asOf, $emptyMin, $minYmd) {
+                    $minOk->whereRaw($emptyMin)
+                        ->orWhereRaw("{$minYmd} <= ?", [$asOf]);
                 })
-                ->orWhere(function (Builder $legacy) use ($emptyMin, $emptyMax) {
-                    $legacy->whereRaw($emptyMin)->whereRaw($emptyMax);
+                ->where(function (Builder $maxOk) use ($asOf, $emptyMax, $maxYmd) {
+                    $maxOk->whereRaw($emptyMax)
+                        ->orWhereRaw("{$maxYmd} >= ?", [$asOf]);
                 });
         });
     }

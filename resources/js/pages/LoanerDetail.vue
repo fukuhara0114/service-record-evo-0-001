@@ -1076,7 +1076,7 @@ import { loanerStatusLabel, loanerStatusOptionLabel } from '@/utils/loanerStatus
 import { apiFetch } from '@/utils/apiFetch'
 import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
-import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate, findLoanerMasterPrice } from '@/utils/resolveServiceWorkPrice'
 
 const SHIP_PREP_STATUS_ID = 300
 
@@ -1278,7 +1278,12 @@ const noteEditDeleteTitle = computed(() => {
 const stringValue = value => value == null ? '' : String(value)
 function toDateInputValue(value) {
     if (!value) return ''
-    const text = String(value)
+    const text = String(value).trim()
+    const match = text.match(/(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+        if (Number(match[1]) < 1) return ''
+        return `${match[1]}-${match[2]}-${match[3]}`
+    }
     return text.length >= 10 ? text.slice(0, 10) : text
 }
 const form = reactive({
@@ -1335,14 +1340,14 @@ const form = reactive({
 /** loaner 案件の価格版は常に当該案件の受注日が基点（親受注日は使わない） */
 const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
     orderType: props.record?.order_type,
-    orderDate: form.orderDate ?? props.record?.orderDate,
+    orderDate: form.orderDate || props.record?.orderDate,
 }))
 
 const selectedUnit = computed(() => {
-    const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
+    const units = (props.loanerUnits ?? []).filter(unit => String(unit.loanerID) === String(form.loanerID))
     if (!units.length) return null
     return pickMasterVersion(units, priceAsOfDate.value)
-        ?? props.loanerUnits.find(unit => String(unit.loanerID) === String(form.loanerID))
+        ?? units[0]
         ?? null
 })
 const displayItemLabel = computed(() => {
@@ -1384,11 +1389,9 @@ const sortedFiles = computed(() => {
     return list
 })
 const masterPrice = computed(() => {
-    const units = props.loanerUnits.filter(unit => String(unit.loanerID) === String(form.loanerID))
+    const units = (props.loanerUnits ?? []).filter(unit => String(unit.loanerID) === String(form.loanerID))
     if (units.length) {
-        const picked = pickMasterVersion(units, priceAsOfDate.value)
-        const fromVersion = Number(picked?.price)
-        if (Number.isFinite(fromVersion)) return fromVersion
+        return findLoanerMasterPrice(units, form.loanerID, priceAsOfDate.value)
     }
     const raw = selectedUnit.value?.price ?? props.loanerMaster?.price ?? 0
     const num = Number(raw)
