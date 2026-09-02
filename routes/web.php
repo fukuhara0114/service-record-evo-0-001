@@ -109,6 +109,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/servicerecord/maintenance-contracts', [MaintenanceContractController::class, 'index'])->name('servicerecord.maintenance-contracts');
     Route::get('/servicerecord/maintenance-contracts/search', [MaintenanceContractController::class, 'search'])->name('servicerecord.maintenance-contracts.search');
     Route::post('/servicerecord/maintenance-contracts/{id}/duplicate', [MaintenanceContractController::class, 'duplicate'])->name('servicerecord.maintenance-contracts.duplicate');
+    Route::post('/servicerecord/maintenance-contracts/{id}/certificate', [MaintenanceContractController::class, 'certificate'])->name('servicerecord.maintenance-contracts.certificate');
+    Route::post('/servicerecord/maintenance-contracts/{id}/certification-ticket', [MaintenanceContractController::class, 'certificationTicket'])->name('servicerecord.maintenance-contracts.certification-ticket');
     Route::get('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'edit'])->name('servicerecord.maintenance-contracts.edit');
     Route::put('/servicerecord/maintenance-contracts/{id}', [MaintenanceContractController::class, 'update'])->name('servicerecord.maintenance-contracts.update');
     Route::get('/servicerecord/shipping-calendar', [ServiceRecordController::class, 'shippingCalendar'])->name('servicerecord.shipping-calendar');

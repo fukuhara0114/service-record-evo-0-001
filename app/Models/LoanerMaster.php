@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 class LoanerMaster extends Model
 {
-    protected $table = 'loanermaster008';
+    protected $table = 'loanermaster002';
 
     // 版ごとのサロゲートキー（業務キーは loanerID）
     protected $primaryKey = 'id';

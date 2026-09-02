@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\MaintenanceContractMaster;
 use App\Models\MaintenanceContractType;
+use App\Services\MaintenanceContractCertificatePdfService;
+use App\Services\MaintenanceContractCertificationTicketPdfService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -153,8 +155,213 @@ class MaintenanceContractController extends Controller
         ], 201);
     }
 
+    /**
+     * 詳細画面の「保守サービス保証書」:
+     * テンプレート PDF に詳細内容を追記してプレビュー / ダウンロードする。
+     */
+    public function certificate(Request $request, int $id, MaintenanceContractCertificatePdfService $pdfService)
+    {
+        $contract = MaintenanceContractMaster::query()->findOrFail($id);
+
+        $payload = [
+            'RefNumber' => $contract->RefNumber,
+            'instrumentName' => $contract->instrumentName,
+            'SN' => $contract->SN,
+            'startDate' => optional($contract->startDate)->format('Y-m-d'),
+            'expireDate' => optional($contract->expireDate)->format('Y-m-d'),
+            'endUser' => $contract->endUser,
+            'endUser_depart' => $contract->endUser_depart,
+            'endUser_address' => $contract->endUser_address,
+            'endUser_phone' => $contract->endUser_phone,
+            'dealer' => $contract->dealer,
+            'branch' => $contract->branch,
+            'contact' => $contract->contact,
+            'phone' => $contract->phone,
+        ];
+
+        // 未保存の画面値があれば優先（プレビュー時点のフォーム内容を反映）
+        $overrides = $request->validate([
+            'RefNumber' => 'nullable|string|max:255',
+            'instrumentName' => 'nullable|string|max:255',
+            'SN' => 'nullable|string|max:255',
+            'startDate' => 'nullable|date',
+            'expireDate' => 'nullable|date',
+            'endUser' => 'nullable|string|max:255',
+            'endUser_depart' => 'nullable|string|max:255',
+            'endUser_address' => 'nullable|string|max:1000',
+            'endUser_phone' => 'nullable|string|max:255',
+            'dealer' => 'nullable|string|max:255',
+            'branch' => 'nullable|string|max:255',
+            'contact' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:255',
+        ]);
+        foreach ($overrides as $key => $value) {
+            if ($request->exists($key)) {
+                $payload[$key] = $value;
+            }
+        }
+
+        try {
+            $binary = $pdfService->generate($payload);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => '保守サービス保証書 PDF の生成に失敗しました。',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $ref = trim((string) ($payload['RefNumber'] ?? ''));
+        $filename = $ref !== ''
+            ? 'maintenance_contract-'.$ref.'.pdf'
+            : 'maintenance_contract-'.$contract->id.'.pdf';
+
+        $wantPng = $request->query('format') === 'png'
+            || str_contains((string) $request->header('Accept', ''), 'image/png');
+
+        if ($wantPng) {
+            try {
+                $png = $pdfService->pdfToPng($binary);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'message' => '保守サービス保証書プレビュー画像の生成に失敗しました。',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return response($png, 200, [
+                'Content-Type' => 'image/png',
+                'Content-Disposition' => 'inline; filename="'.preg_replace('/\.pdf$/i', '.png', $filename).'"',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            ]);
+        }
+
+        return response($binary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'X-Filename' => $filename,
+        ]);
+    }
+
+    /**
+     * 詳細画面の「再校正チケット」:
+     * テンプレート PDF に詳細内容を追記し、有効年数分のページを生成する。
+     */
+    public function certificationTicket(Request $request, int $id, MaintenanceContractCertificationTicketPdfService $pdfService)
+    {
+        $contract = MaintenanceContractMaster::query()
+            ->with('maintenanceContractType:id,contractType,description')
+            ->findOrFail($id);
+
+        $payload = [
+            'RefNumber' => $contract->RefNumber,
+            'instrumentName' => $contract->instrumentName,
+            'SN' => $contract->SN,
+            'startDate' => optional($contract->startDate)->format('Y-m-d'),
+            'expireDate' => optional($contract->expireDate)->format('Y-m-d'),
+            'dealer' => $contract->dealer,
+            'branch' => $contract->branch,
+            'phone' => $contract->phone,
+            'description' => $contract->description,
+            'additional_information' => $contract->additional_information,
+            'contractTypeDescription' => $contract->maintenanceContractType?->description,
+        ];
+
+        $overrides = $request->validate([
+            'RefNumber' => 'nullable|string|max:255',
+            'instrumentName' => 'nullable|string|max:255',
+            'SN' => 'nullable|string|max:255',
+            'startDate' => 'nullable|date',
+            'expireDate' => 'nullable|date',
+            'dealer' => 'nullable|string|max:255',
+            'branch' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:5000',
+            'additional_information' => 'nullable|string|max:5000',
+            'contractTypeDescription' => 'nullable|string|max:5000',
+        ]);
+        foreach ($overrides as $key => $value) {
+            if ($request->exists($key)) {
+                $payload[$key] = $value;
+            }
+        }
+
+        try {
+            $binary = $pdfService->generate($payload);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => '再校正チケット PDF の生成に失敗しました。',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $ref = trim((string) ($payload['RefNumber'] ?? ''));
+        $filename = $ref !== ''
+            ? 'maintenance_contract-'.$ref.'.pdf'
+            : 'certification_ticket-'.$contract->id.'.pdf';
+
+        $wantPreview = $request->query('format') === 'preview';
+
+        if ($wantPreview) {
+            try {
+                $pages = $pdfService->pdfToPngPages($binary);
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'message' => '再校正チケットプレビュー画像の生成に失敗しました。',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return response()->json([
+                'pages' => array_map(
+                    static fn (string $png, int $index): array => [
+                        'page' => $index + 1,
+                        'image' => base64_encode($png),
+                    ],
+                    $pages,
+                    array_keys($pages),
+                ),
+            ], 200, [
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            ]);
+        }
+
+        return response($binary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'X-Filename' => $filename,
+        ]);
+    }
+
     private function validateContractPayload(Request $request): array
     {
+        // DB型に合わせて空文字・不正日付・tinyintフラグを正規化してから検証する（テーブル変更なし）
+        $dateKeys = [
+            'shippingDate',
+            'orderedDate',
+            'startDate',
+            'expireDate',
+            'certificationExpireDate',
+            'renewalInformation',
+            'informedDate',
+            'renewedDate',
+        ];
+
+        $normalized = $request->all();
+        foreach ($dateKeys as $key) {
+            if (array_key_exists($key, $normalized)) {
+                $normalized[$key] = $this->normalizeNullableDate($normalized[$key]);
+            }
+        }
+        if (array_key_exists('certificationTicket', $normalized)) {
+            $normalized['certificationTicket'] = $this->normalizeNullableBoolean($normalized['certificationTicket']);
+        }
+        if (array_key_exists('informed', $normalized)) {
+            $normalized['informed'] = $this->normalizeNullableBoolean($normalized['informed']);
+        }
+        $request->merge($normalized);
+
         $validated = $request->validate([
             'dealer' => 'nullable|string|max:255',
             'branch' => 'nullable|string|max:255',
@@ -177,9 +384,11 @@ class MaintenanceContractController extends Controller
             'invoice_num' => 'nullable|string|max:255',
             'startDate' => 'nullable|date',
             'expireDate' => 'nullable|date',
-            'certificationTicket' => 'nullable|string|max:255',
+            // DB: tinyint(1)
+            'certificationTicket' => 'nullable|boolean',
             'certificationExpireDate' => 'nullable|date',
-            'renewalInformation' => 'nullable|string|max:2000',
+            // DB: date
+            'renewalInformation' => 'nullable|date',
             'informedDate' => 'nullable|date',
             'renewedDate' => 'nullable|date',
             'contractType' => 'nullable|integer',
@@ -197,7 +406,68 @@ class MaintenanceContractController extends Controller
             }
         }
 
+        if (array_key_exists('certificationTicket', $validated) && $validated['certificationTicket'] !== null) {
+            $validated['certificationTicket'] = $validated['certificationTicket'] ? 1 : 0;
+        }
+        if (array_key_exists('informed', $validated) && $validated['informed'] !== null) {
+            $validated['informed'] = $validated['informed'] ? 1 : 0;
+        }
+
         return $validated;
+    }
+
+    private function normalizeNullableDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        // MySQL のゼロ日付・プレースホルダ日付は未設定として扱う
+        if (preg_match('/^0{4}-0{2}-0{2}/', $raw) === 1) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::parse($raw);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ((int) $date->format('Y') < 1901) {
+            return null;
+        }
+
+        return $date->toDateString();
+    }
+
+    private function normalizeNullableBoolean(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return ((int) $value) === 1;
+        }
+
+        $raw = strtolower(trim((string) $value));
+        if (in_array($raw, ['1', 'true', 'on', 'yes'], true)) {
+            return true;
+        }
+        if (in_array($raw, ['0', 'false', 'off', 'no'], true)) {
+            return false;
+        }
+
+        return null;
     }
 
     /**
@@ -405,9 +675,9 @@ class MaintenanceContractController extends Controller
             'invoice_num' => $row->invoice_num,
             'startDate' => optional($row->startDate)->format('Y-m-d'),
             'expireDate' => optional($row->expireDate)->format('Y-m-d'),
-            'certificationTicket' => $row->certificationTicket,
+            'certificationTicket' => (bool) $row->certificationTicket,
             'certificationExpireDate' => optional($row->certificationExpireDate)->format('Y-m-d'),
-            'renewalInformation' => $row->renewalInformation,
+            'renewalInformation' => optional($row->renewalInformation)->format('Y-m-d'),
             'informedDate' => optional($row->informedDate)->format('Y-m-d'),
             'renewedDate' => optional($row->renewedDate)->format('Y-m-d'),
             'contractType' => $row->contractType,

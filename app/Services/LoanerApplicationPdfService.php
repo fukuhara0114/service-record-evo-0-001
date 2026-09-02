@@ -76,7 +76,7 @@ class LoanerApplicationPdfService
         $pdf->SetTitle('代替機申込書');
         $pdf->SetTextColor(0, 0, 0);
 
-        $fontName = $this->resolveJapaneseFont($pdf, true);
+        $fontName = app(JapanesePdfFontResolver::class)->resolve(true);
         $pdf->SetFont($fontName, 'B', 8, '', true);
 
         $pdf->setSourceFile($template);
@@ -216,49 +216,6 @@ class LoanerApplicationPdfService
 
             'repair_sn' => $repairSn,
         ];
-    }
-
-    private function resolveJapaneseFont(Fpdi $pdf, bool $bold = false): string
-    {
-        $tcpdfFonts = $bold
-            ? ['bizudgothicb', 'bizudgothicr', 'yugothr', 'ipag']
-            : ['bizudgothicr', 'bizudgothicb', 'yugothr', 'ipag'];
-        $fontDir = defined('K_PATH_FONTS') ? K_PATH_FONTS : (base_path('vendor/tecnickcom/tcpdf/fonts').DIRECTORY_SEPARATOR);
-        foreach ($tcpdfFonts as $name) {
-            if (is_file($fontDir.$name.'.php')) {
-                return $name;
-            }
-        }
-
-        $fontCandidates = $bold
-            ? [
-                storage_path('fonts/BIZ-UDGothicB.ttf'),
-                storage_path('fonts/BIZ-UDGothicR.ttf'),
-            ]
-            : [
-                storage_path('fonts/BIZ-UDGothicR.ttf'),
-                storage_path('fonts/BIZ-UDGothicB.ttf'),
-            ];
-        $fontCandidates = array_merge($fontCandidates, [
-            storage_path('fonts/YuGothR.ttf'),
-            storage_path('fonts/ipag.ttf'),
-        ]);
-
-        foreach ($fontCandidates as $path) {
-            if (! is_file($path)) {
-                continue;
-            }
-            try {
-                $name = \TCPDF_FONTS::addTTFfont($path, 'TrueTypeUnicode', '', 32);
-                if (is_string($name) && $name !== '') {
-                    return $name;
-                }
-            } catch (\Throwable) {
-                // try next
-            }
-        }
-
-        return 'cid0jp';
     }
 
     /**
