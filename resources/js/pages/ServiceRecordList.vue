@@ -1456,7 +1456,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -3482,6 +3482,11 @@ function clearSearch() {
 const isDetailOpen = ref(false)
 const activeRecord = ref(null)
 const draftRecord = ref(null)
+
+/** 詳細編集用。reactive にして子コンポーネントからの orderDate 変更を確実に追跡する。 */
+function cloneDraftRecord(record) {
+    return reactive({ ...(record ?? {}) })
+}
 const detailLayout = ref('A')
 const activeNotes = ref([])
 const activeFiles = ref([])
@@ -3675,7 +3680,7 @@ async function openSecondLayer(record) {
     detailOpenError.value = ''
     attachmentsError.value = ''
     activeRecord.value = record
-    draftRecord.value = { ...record }
+    draftRecord.value = cloneDraftRecord(record)
     if (props.mode === 'logistics') {
         detailLayout.value = 'logistics'
     } else if (props.mode === 'shippingPrep') {
@@ -3710,7 +3715,7 @@ async function openSecondLayer(record) {
             parentRecord: parentRecord ?? previous?.parentRecord,
             priceVersions,
         }
-        draftRecord.value = { ...activeRecord.value }
+        draftRecord.value = cloneDraftRecord(activeRecord.value)
     } catch (e) {
         if (!isDetailOpen.value || activeRecord.value?.orderID !== record.orderID) return
         detailOpenError.value = `${e.message || '詳細データの取得に失敗しました。'}（一覧の情報のみ表示しています）`

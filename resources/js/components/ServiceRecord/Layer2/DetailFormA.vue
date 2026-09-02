@@ -955,6 +955,11 @@ const priceAsOfDate = computed(() => resolveDisplayPriceAsOfDate({
     orderDate: props.draftRecord?.orderDate ?? props.record?.orderDate,
 }))
 
+/** attachedLoaners 用: 親案件の受注日（draft 優先）。明示的 computed で日付変更を追跡する。 */
+const parentOrderAsOfDate = computed(() =>
+    normalizePriceAsOfDate(props.draftRecord?.orderDate ?? props.record?.orderDate),
+)
+
 const leftPaneSize = ref(64)
 const rightPaneSize = ref(36)
 const leftTopPaneSize = ref(45)
@@ -2236,15 +2241,15 @@ function loanerLineAsOfDate(loaner) {
         )
     }
     // attachedLoaners: 親の受注日（未定なら null → 最新版）
-    return priceAsOfDate.value
+    return parentOrderAsOfDate.value
 }
 
 /**
  * attachedLoaners の表示価格。
  * 親案件の受注日版 loanermaster を毎回解決する（保存済み price / returnCode は見ない）。
  */
-function attachedLoanerDisplayPrice(loaner) {
-    const asOf = priceAsOfDate.value
+function attachedLoanerDisplayPrice(loaner, asOfOverride = undefined) {
+    const asOf = asOfOverride !== undefined ? asOfOverride : parentOrderAsOfDate.value
     if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
         return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
     }
@@ -2253,13 +2258,11 @@ function attachedLoanerDisplayPrice(loaner) {
     return 0
 }
 
-/** 受注日 (priceAsOfDate) に依存する表示行。日付変更で必ず再計算される。 */
+/** 受注日 (parentOrderAsOfDate) に依存する表示行。日付変更で必ず再計算される。 */
 const attachedLoanerRows = computed(() => {
-    const asOf = priceAsOfDate.value
+    const asOf = parentOrderAsOfDate.value
     return (props.attachedLoaners ?? []).map((loaner) => {
-        const displayPrice = Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length
-            ? findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
-            : attachedLoanerDisplayPrice(loaner)
+        const displayPrice = attachedLoanerDisplayPrice(loaner, asOf)
         return {
             ...loaner,
             displayPrice,
@@ -2304,15 +2307,14 @@ function applyLinePricesForAsOf() {
         loaner.masterPrice = amount
     }
     for (const loaner of props.attachedLoaners ?? []) {
-        const amount = attachedLoanerDisplayPrice(loaner)
+        const amount = attachedLoanerDisplayPrice(loaner, parentOrderAsOfDate.value)
         loaner.masterPrice = amount
-        // 初回ロード時の固定 price を上書きし、表示・集計とも as-of 版に揃える
         loaner.price = amount
     }
 }
 
 watch(
-    [priceAsOfDate, currentReturnCode, () => props.parts, () => props.loaners, () => props.attachedLoaners],
+    [priceAsOfDate, parentOrderAsOfDate, currentReturnCode, () => props.parts, () => props.loaners, () => props.attachedLoaners],
     applyLinePricesForAsOf,
     { immediate: true },
 )
