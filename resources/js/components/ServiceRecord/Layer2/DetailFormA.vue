@@ -348,7 +348,7 @@
                                             </tr>
                                         </tbody>
                                     </table>
-                                    <table v-if="attachedLoaners.length" class="data-table attached-loaner-table">
+                                    <table v-if="attachedLoanerRows.length" class="data-table attached-loaner-table">
                                         <thead>
                                             <tr>
                                                 <th>ID</th>
@@ -361,12 +361,12 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="loaner in attachedLoaners" :key="`attached-${loaner.id ?? loaner.loanerID}`">
+                                            <tr v-for="loaner in attachedLoanerRows" :key="loaner._key">
                                                 <td>{{ displayDash(loaner.loanerID ?? loaner.id) }}</td>
                                                 <td>{{ displayDash(loaner.productName) }}</td>
                                                 <td>{{ displayDash(loaner.SN) }}</td>
                                                 <td>{{ displayDash(loaner.manageNum) }}</td>
-                                                <td>{{ formatYenPrice(loanerDisplayPrice(loaner)) }}</td>
+                                                <td>{{ formatYenPrice(loaner.displayPrice) }}</td>
                                                 <td>{{ displayDash(loaner.associatedID) }}</td>
                                                 <td>{{ displayDash(loaner.sentDate) }}</td>
                                             </tr>
@@ -921,7 +921,7 @@ import EmailDraftTypeDialog from '@/components/ServiceRecord/Layer3/EmailDraftTy
 import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraftPreviewDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
-import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveLoanerLinePrice, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolvePriceCardTotals, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate, PAID_LOANER_RETURN_CODES } from '@/utils/resolveServiceWorkPrice'
+import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolvePriceCardTotals, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
 
 const page = usePage()
 
@@ -2218,7 +2218,8 @@ function caseParentOrderDate() {
 
 /**
  * 紐づく loaner 行の as-of。
- * loaner 案件の受注日を優先し、親 service の受注日はフォールバックのみ。
+ * - loaner / waiting_list 案件: 当該案件の受注日
+ * - attachedLoaners: 親案件（この画面）の受注日のみ
  */
 function loanerLineAsOfDate(loaner) {
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
@@ -2234,15 +2235,44 @@ function loanerLineAsOfDate(loaner) {
             caseParentOrderDate(),
         )
     }
+    // attachedLoaners: 親の受注日（未定なら null → 最新版）
     return priceAsOfDate.value
 }
 
 /**
- * 紐づく loaner は loaner 案件の受注日版 loanermaster を表示する（LoanerDetail の有償表示と同じ）。
- * 親 service の受注日や保存済み price（親日付で同期された値）は使わない。
+ * attachedLoaners の表示価格。
+ * 親案件の受注日版 loanermaster を毎回解決する（保存済み price / returnCode は見ない）。
+ */
+function attachedLoanerDisplayPrice(loaner) {
+    const asOf = priceAsOfDate.value
+    if (Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length) {
+        return findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
+    }
+    const master = Number(loaner?.masterPrice)
+    if (!asOf && Number.isFinite(master)) return master
+    return 0
+}
+
+/** 受注日 (priceAsOfDate) に依存する表示行。日付変更で必ず再計算される。 */
+const attachedLoanerRows = computed(() => {
+    const asOf = priceAsOfDate.value
+    return (props.attachedLoaners ?? []).map((loaner) => {
+        const displayPrice = Array.isArray(loaner?.priceVersions) && loaner.priceVersions.length
+            ? findLoanerMasterPrice(loaner.priceVersions, loaner.loanerID, asOf)
+            : attachedLoanerDisplayPrice(loaner)
+        return {
+            ...loaner,
+            displayPrice,
+            _key: `attached-${loaner.id ?? loaner.loanerID}-${asOf || 'latest'}`,
+        }
+    })
+})
+
+/**
+ * 紐づく loaner 案件: 当該案件の受注日版 loanermaster（無償 price=0 は 0）。
+ * attachedLoaners: attachedLoanerDisplayPrice を使うこと。
  */
 function loanerDisplayPrice(loaner) {
-    const returnCode = currentReturnCode.value
     const orderType = String(loaner?.order_type ?? '').trim().toLowerCase()
 
     if (orderType === 'loaner' || orderType === 'waiting_list') {
@@ -2260,7 +2290,7 @@ function loanerDisplayPrice(loaner) {
         return Number.isFinite(stored) ? stored : 0
     }
 
-    return resolveLoanerLinePrice(loaner, returnCode, loanerLineAsOfDate(loaner))
+    return attachedLoanerDisplayPrice(loaner)
 }
 
 function applyLinePricesForAsOf() {
@@ -2269,14 +2299,15 @@ function applyLinePricesForAsOf() {
     for (const part of props.parts ?? []) {
         applyPartMasterAsOf(part, partsMaster, caseAsOf)
     }
-    const returnCode = currentReturnCode.value
     for (const loaner of props.loaners ?? []) {
         const amount = loanerDisplayPrice(loaner)
         loaner.masterPrice = amount
     }
     for (const loaner of props.attachedLoaners ?? []) {
-        const amount = resolveLoanerLinePrice(loaner, returnCode, loanerLineAsOfDate(loaner))
+        const amount = attachedLoanerDisplayPrice(loaner)
         loaner.masterPrice = amount
+        // 初回ロード時の固定 price を上書きし、表示・集計とも as-of 版に揃える
+        loaner.price = amount
     }
 }
 
