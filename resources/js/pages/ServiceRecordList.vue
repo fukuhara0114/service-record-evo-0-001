@@ -1451,6 +1451,11 @@
             @close="closeLogisticsLoanerDialog"
             @returned="onLogisticsLoanerReturned"
         />
+        <XsrvAuthDialog
+            :open="xsrvAuthDialogOpen"
+            :message="xsrvAuthDialogMessage"
+            @close="closeXsrvAuthDialog"
+        />
         </div>
     </div>
 </template>
@@ -1463,6 +1468,7 @@ import 'splitpanes/dist/splitpanes.css'
 import ExcelJS from 'exceljs'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
+import { ensureXsrvAuth, isXsrvAuthDenied } from '@/utils/xsrvAuth'
 import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { loanerDetailUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
@@ -1485,6 +1491,7 @@ import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/U
 import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/DailyReportEmailPreviewDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import LogisticsLoanerLendingDialog from '@/components/ServiceRecord/Layer3/LogisticsLoanerLendingDialog.vue'
+import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
 
 const props = defineProps({
@@ -1792,6 +1799,18 @@ const abroadExcelPreviewRows = ref([])
 const abroadAttachedImages = ref([])
 const abroadExcelCreating = ref(false)
 const abroadSyncSmBusy = ref(false)
+const xsrvAuthDialogOpen = ref(false)
+const xsrvAuthDialogMessage = ref('')
+
+function openXsrvAuthDialog(message) {
+    xsrvAuthDialogMessage.value = message
+        || 'このシステムを利用する権限がありません、または有効期限が切れています。'
+    xsrvAuthDialogOpen.value = true
+}
+
+function closeXsrvAuthDialog() {
+    xsrvAuthDialogOpen.value = false
+}
 const shippingExcelCopyBusy = ref(false)
 const shippingExcelCopyMessage = ref('')
 const entityIdSavingOrderId = ref(null)
@@ -1991,7 +2010,22 @@ async function onEntityIdBlur(record, event) {
     }
 }
 
-function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
+async function launchSmsyncWithXsrvAuth(finalOutput) {
+    try {
+        await ensureXsrvAuth(`${window.location.origin}${getBasePath()}/smsync/authorize`)
+    } catch (e) {
+        if (isXsrvAuthDenied(e)) {
+            openXsrvAuthDialog(e.message)
+            throw new Error('XSRV_AUTH_DENIED')
+        }
+        throw e
+    }
+
+    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
+    window.location.href = `smsync://action?json=${encodedJson}`
+}
+
+async function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
     console.log('commonScript::exportIncidentParamJson was called')
 
     const rows = filteredRecords.value
@@ -2046,11 +2080,10 @@ function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
         param: jsonData,
     }
 
-    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
-    window.location.href = `smsync://action?json=${encodedJson}`
+    await launchSmsyncWithXsrvAuth(finalOutput)
 }
 
-function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
+async function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
     console.log('commonScript::exportUpdatePoParamJson was called')
 
     const rows = filteredRecords.value
@@ -2113,18 +2146,26 @@ function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
         param: jsonData,
     }
 
-    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
-    window.location.href = `smsync://action?json=${encodedJson}`
+    await launchSmsyncWithXsrvAuth(finalOutput)
 }
 
-function syncSmSelected() {
+async function syncSmSelected() {
     if (abroadSyncSmBusy.value) return
-    const userName = currentUserKanji.value
-    if (orderTypeFilter.value === 'update_sm') {
-        exportUpdatePoParamJson(userName)
-        return
+    abroadSyncSmBusy.value = true
+    try {
+        const userName = currentUserKanji.value
+        if (orderTypeFilter.value === 'update_sm') {
+            await exportUpdatePoParamJson(userName)
+            return
+        }
+        await exportIncidentParamJson(userName)
+    } catch (e) {
+        if (!isXsrvAuthDenied(e) && e?.message !== 'XSRV_AUTH_DENIED') {
+            alert(e.message || 'Sync SM に失敗しました。')
+        }
+    } finally {
+        abroadSyncSmBusy.value = false
     }
-    exportIncidentParamJson(userName)
 }
 
 function onCheckSmHeaderClick() {
@@ -2350,8 +2391,7 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
         param: jsonData,
     }
 
-    const encodedJson = encodeURIComponent(JSON.stringify(finalOutput, null, 2))
-    window.location.href = `smsync://action?json=${encodedJson}`
+    await launchSmsyncWithXsrvAuth(finalOutput)
 }
 
 async function syncQuoteCoSelected() {
@@ -2359,6 +2399,10 @@ async function syncQuoteCoSelected() {
     engineerQuoteCoBusy.value = true
     try {
         await exportQuoteCoParamJson(currentUserKanji.value, 'quote_co')
+    } catch (e) {
+        if (!isXsrvAuthDenied(e) && e?.message !== 'XSRV_AUTH_DENIED') {
+            alert(e.message || 'Sync SM に失敗しました。')
+        }
     } finally {
         engineerQuoteCoBusy.value = false
     }

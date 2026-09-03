@@ -830,6 +830,12 @@
             @selected="onMasterSelected"
         />
 
+        <XsrvAuthDialog
+            :open="xsrvAuthDialogOpen"
+            :message="xsrvAuthDialogMessage"
+            @close="closeXsrvAuthDialog"
+        />
+
         <IntakeFilePreviewDialog
             v-if="previewFile"
             :file="previewFile"
@@ -1131,6 +1137,7 @@ import { usePage } from '@inertiajs/vue3'
 import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { apiFetch } from '@/utils/apiFetch'
+import { ensureXsrvAuth, isXsrvAuthDenied } from '@/utils/xsrvAuth'
 import { statusMasterOptionLabel } from '@/utils/loanerStatusLabel'
 import { startFileImport } from '@/utils/startFileImport'
 import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
@@ -1139,6 +1146,7 @@ import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFil
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
+import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
 
 const props = defineProps({
@@ -1200,6 +1208,8 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 const ocrLoading = ref(false)
+const xsrvAuthDialogOpen = ref(false)
+const xsrvAuthDialogMessage = ref('')
 const activeTab = ref('basic')
 const activeSelectKind = ref(null)
 const previewFile = ref(null)
@@ -2223,6 +2233,30 @@ function applyOcrFields(fields) {
     return applied
 }
 
+function openXsrvAuthDialog(message) {
+    xsrvAuthDialogMessage.value = message
+        || 'このシステムを利用する権限がありません、または有効期限が切れています。'
+    xsrvAuthDialogOpen.value = true
+}
+
+function closeXsrvAuthDialog() {
+    xsrvAuthDialogOpen.value = false
+}
+
+async function ensureXsrvAuthOrDialog() {
+    const authorizeUrl = `${page.props.appBaseUrl}/servicerecord/smsync/authorize`
+    try {
+        await ensureXsrvAuth(authorizeUrl)
+        return true
+    } catch (e) {
+        if (isXsrvAuthDenied(e)) {
+            openXsrvAuthDialog(e.message)
+            return false
+        }
+        throw e
+    }
+}
+
 async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
     if (!hasSourceFile.value) {
         error.value = 'OCR 対象の申請フォームがありません。'
@@ -2236,6 +2270,10 @@ async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
     activeTab.value = 'basic'
 
     try {
+        if (! (await ensureXsrvAuthOrDialog())) {
+            return false
+        }
+
         const url = `${page.props.appBaseUrl}/servicerecord/intake/ocr`
         const result = await apiFetch(url, {
             method: 'POST',
@@ -2254,6 +2292,13 @@ async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
 
         const { response, data } = result
         if (!response.ok) {
+            if (response.status === 403) {
+                openXsrvAuthDialog(
+                    data?.message
+                    || 'このシステムを利用する権限がありません、または有効期限が切れています。',
+                )
+                return false
+            }
             throw new Error(data?.message || `OCR の実行に失敗しました。（HTTP ${response.status}）`)
         }
 
@@ -2277,7 +2322,9 @@ async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
 
         return true
     } catch (e) {
-        error.value = e.message || 'OCR の実行に失敗しました。'
+        if (!isXsrvAuthDenied(e)) {
+            error.value = e.message || 'OCR の実行に失敗しました。'
+        }
         return false
     } finally {
         ocrLoading.value = false

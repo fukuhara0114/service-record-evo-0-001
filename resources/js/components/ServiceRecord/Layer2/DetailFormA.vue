@@ -309,6 +309,7 @@
                                                 <th>status</th>
                                                 <th>productName</th>
                                                 <th>SN</th>
+                                                <th>受注日</th>
                                                 <th>price</th>
                                                 <th>期間</th>
                                                 <th></th>
@@ -324,6 +325,7 @@
                                                 </td>
                                                 <td>{{ loaner.productName || '—' }}</td>
                                                 <td>{{ loaner.SN || '—' }}</td>
+                                                <td>{{ toOrderDateYmd(loaner.orderDate) || '—' }}</td>
                                                 <td>{{ formatPrice(loanerDisplayPrice(loaner)) }}</td>
                                                 <td>
                                                     <template v-if="loaner.plannedSentDate || loaner.plannedReturnedDate">

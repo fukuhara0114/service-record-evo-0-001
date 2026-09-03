@@ -55,4 +55,13 @@ return [
         'site_id' => env('MSIP_SITE_ID'),
     ],
 
+    /*
+    | xsrv.jp 認証（Sync SM 起動前の簡易チェック用）
+    | 例: https://xs202381.xsrv.jp/servicerecord/auth.php?key=...
+    */
+    'xsrv' => [
+        'auth_url' => env('XSRV_AUTH_URL', 'https://xs202381.xsrv.jp/servicerecord/auth.php'),
+        'api_key' => env('XSRV_API_KEY'),
+    ],
+
 ];

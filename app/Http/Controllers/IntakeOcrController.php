@@ -4,14 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Models\AttachedFile;
 use App\Services\GeminiOcrService;
+use App\Services\XsrvAuthService;
 use Illuminate\Http\Request;
 use RuntimeException;
 use Throwable;
 
 class IntakeOcrController extends Controller
 {
-    public function __invoke(Request $request, GeminiOcrService $ocr)
+    public function __invoke(Request $request, GeminiOcrService $ocr, XsrvAuthService $xsrvAuth)
     {
+        $auth = $xsrvAuth->check();
+        if (! ($auth['ok'] ?? false)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $auth['message'] ?? '認証に失敗しました。',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'fileId' => 'required|integer',
         ]);

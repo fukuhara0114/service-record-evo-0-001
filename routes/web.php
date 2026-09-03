@@ -134,6 +134,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'destroyStockedPart'])->name('servicerecord.stocked-parts.destroy');
     Route::post('/servicerecord/{orderID}/email-draft-preview', [ServiceRecordController::class, 'emailDraftPreview'])->name('servicerecord.email-draft-preview');
     Route::get('/servicerecord/assign-notify/targets', [ServiceRecordController::class, 'assignNotifyTargets'])->name('servicerecord.assign-notify.targets');
+    Route::get('/servicerecord/smsync/authorize', [ServiceRecordController::class, 'authorizeSmsync'])->name('servicerecord.smsync.authorize');
     Route::put('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update');
     Route::post('/servicerecord/{orderID}', [ServiceRecordController::class, 'update'])->name('servicerecord.update.post');
     Route::get('/servicerecords/detail/{orderID}', [ServiceRecordController::class, 'detail'])->name('servicerecords.detail');

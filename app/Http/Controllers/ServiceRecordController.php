@@ -3934,6 +3934,25 @@ class ServiceRecordController extends Controller
         return $raw;
     }
 
+    /**
+     * Sync SM (smsync) 起動前の簡易認証チェック（テスト用）。
+     * auth.php?key=... が HTTP 成功かつ status=success の場合のみ許可する。
+     */
+    public function authorizeSmsync(\App\Services\XsrvAuthService $xsrvAuth)
+    {
+        $result = $xsrvAuth->check();
+        if (! ($result['ok'] ?? false)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $result['message'] ?? '認証に失敗しました。',
+            ], 403);
+        }
+
+        return response()->json([
+            'status' => 'success',
+        ]);
+    }
+
     // 6. 削除
     public function destroy($orderID)
     {
