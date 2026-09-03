@@ -2043,14 +2043,14 @@ async function openLoanerRecordSearch() {
 
 function switchToExistingTab() {
     activeTab.value = 'existing'
-    if (!existingHasSearched.value && !existingSearchLoading.value) {
+    if (!existingSearchLoading.value) {
         openExistingRecordSearch()
     }
 }
 
 function switchToLoanerTab() {
     activeTab.value = 'loaner'
-    if (!loanerHasSearched.value && !loanerSearchLoading.value) {
+    if (!loanerSearchLoading.value) {
         openLoanerRecordSearch()
     }
 }
