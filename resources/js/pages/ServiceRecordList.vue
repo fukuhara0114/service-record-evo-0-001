@@ -384,6 +384,7 @@
                             :class="{ 'active-row': selectedOrderId === r.orderID }"
                             @click="selectedOrderId = r.orderID"
                             @dblclick="openSecondLayer(r)"
+                            @contextmenu.prevent="openRecordPreviewCard(r)"
                         >
                             <template v-if="isLogisticsLoanerList">
                                 <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -538,6 +539,7 @@
                                     :class="{ 'active-row': selectedOrderId === r.orderID }"
                                     @click="selectedOrderId = r.orderID"
                                     @dblclick="openSecondLayer(r)"
+                                    @contextmenu.prevent="openRecordPreviewCard(r)"
                                 >
                                     <template v-if="isLogisticsLoanerList">
                                         <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -920,6 +922,7 @@
                         :title="promotionRowTitle(r)"
                         @click="selectedOrderId = r.orderID"
                         @dblclick="onListRowDblClick(r)"
+                        @contextmenu.prevent="openRecordPreviewCard(r)"
                     >
                         <template v-if="mode === 'engineer' && engineerDailyReportMode">
                             <td style="text-align: center; font-weight: bold;">{{ r.orderID }}</td>
@@ -1456,6 +1459,13 @@
             :message="xsrvAuthDialogMessage"
             @close="closeXsrvAuthDialog"
         />
+        <RecordPreviewCardDialog
+            :open="recordPreviewOpen"
+            :loading="recordPreviewLoading"
+            :error="recordPreviewError"
+            :record="recordPreviewRecord"
+            @close="closeRecordPreviewCard"
+        />
         </div>
     </div>
 </template>
@@ -1492,6 +1502,7 @@ import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/Dai
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import LogisticsLoanerLendingDialog from '@/components/ServiceRecord/Layer3/LogisticsLoanerLendingDialog.vue'
 import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
+import RecordPreviewCardDialog from '@/components/ServiceRecord/RecordPreviewCardDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
 
 const props = defineProps({
@@ -1801,6 +1812,11 @@ const abroadExcelCreating = ref(false)
 const abroadSyncSmBusy = ref(false)
 const xsrvAuthDialogOpen = ref(false)
 const xsrvAuthDialogMessage = ref('')
+const recordPreviewOpen = ref(false)
+const recordPreviewLoading = ref(false)
+const recordPreviewError = ref('')
+const recordPreviewRecord = ref(null)
+let recordPreviewRequestSeq = 0
 
 function openXsrvAuthDialog(message) {
     xsrvAuthDialogMessage.value = message
@@ -1810,6 +1826,40 @@ function openXsrvAuthDialog(message) {
 
 function closeXsrvAuthDialog() {
     xsrvAuthDialogOpen.value = false
+}
+
+function closeRecordPreviewCard() {
+    recordPreviewOpen.value = false
+    recordPreviewLoading.value = false
+    recordPreviewError.value = ''
+    recordPreviewRecord.value = null
+}
+
+async function openRecordPreviewCard(record) {
+    if (!record?.orderID) return
+
+    selectedOrderId.value = record.orderID
+    const requestSeq = ++recordPreviewRequestSeq
+    recordPreviewOpen.value = true
+    recordPreviewLoading.value = true
+    recordPreviewError.value = ''
+    recordPreviewRecord.value = { ...record }
+
+    try {
+        const fullRecord = await fetchRecord(record.orderID)
+        if (requestSeq !== recordPreviewRequestSeq) return
+        recordPreviewRecord.value = {
+            ...record,
+            ...fullRecord,
+        }
+    } catch (e) {
+        if (requestSeq !== recordPreviewRequestSeq) return
+        recordPreviewError.value = e.message || '案件情報の取得に失敗しました。'
+    } finally {
+        if (requestSeq === recordPreviewRequestSeq) {
+            recordPreviewLoading.value = false
+        }
+    }
 }
 const shippingExcelCopyBusy = ref(false)
 const shippingExcelCopyMessage = ref('')
@@ -5278,8 +5328,8 @@ async function saveRecord() {
 }
 
 .promotion-ready-row.active-row td {
-    color: rgb(255, 255, 255) !important;
-    background-color: #7e25eb !important;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .promotion-ready-badge {
@@ -5332,8 +5382,8 @@ async function saveRecord() {
 }
 
 .active-row td {
-    color: rgb(255, 255, 255) !important;
-    background-color: #7e25eb !important;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 #myLargeTable td.status-cell-underline-350 {

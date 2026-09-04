@@ -241,7 +241,7 @@ function openSecondLayer(record) {
 } */
 
 .active-row td {
-    color: rgb(255, 255, 255) !important;
-    background-color: #7e25eb !important;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 </style>

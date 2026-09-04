@@ -26,11 +26,41 @@
                 </button>
             </div>
 
+            <div class="results-toolbar">
+                <h4>検索結果（{{ records.length }}件）</h4>
+                <div class="results-toolbar-actions">
+                    <button
+                        v-if="purpose === 'parent'"
+                        type="button"
+                        class="btn-primary"
+                        :disabled="!selectedRecord"
+                        @click="confirmParentSelect"
+                    >
+                        この案件を親として選択
+                    </button>
+                    <button
+                        v-else-if="purpose === 'loaner'"
+                        type="button"
+                        class="btn-primary"
+                        :disabled="!selectedRecord || Boolean(selectedRecord.parentID)"
+                        @click="confirmLoanerSelect"
+                    >
+                        {{ selectedRecord?.parentID ? '既に紐づき済み' : '新規作成して紐づけ対象に追加' }}
+                    </button>
+                    <button
+                        v-else
+                        type="button"
+                        class="btn-primary"
+                        :disabled="!selectedRecord"
+                        @click="openLinkConfirm"
+                    >
+                        選択した案件にPDFをアタッチ
+                    </button>
+                </div>
+            </div>
+
             <div class="dialog-body">
                 <div class="result-pane">
-                    <div class="pane-header">
-                        <h4>検索結果（{{ records.length }}件）</h4>
-                    </div>
                     <div class="result-list">
                         <button
                             v-for="record in records"
@@ -106,35 +136,6 @@
                         </template>
                     </div>
                     <p v-else class="empty-message">左の一覧から案件を選択してください。</p>
-                    <div class="detail-actions">
-                        <button
-                            v-if="purpose === 'parent'"
-                            type="button"
-                            class="btn-primary"
-                            :disabled="!selectedRecord"
-                            @click="confirmParentSelect"
-                        >
-                            この案件を親として選択
-                        </button>
-                        <button
-                            v-else-if="purpose === 'loaner'"
-                            type="button"
-                            class="btn-primary"
-                            :disabled="!selectedRecord || Boolean(selectedRecord.parentID)"
-                            @click="confirmLoanerSelect"
-                        >
-                            {{ selectedRecord?.parentID ? '既に紐づき済み' : '新規作成して紐づけ対象に追加' }}
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="btn-primary"
-                            :disabled="!selectedRecord"
-                            @click="openLinkConfirm"
-                        >
-                            選択した案件にPDFをアタッチ
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -424,8 +425,13 @@ function confirmLink() {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
+.dialog-panel > .results-toolbar {
+    margin: 12px 12px 0;
+    flex-shrink: 0;
+}
+
 .dialog-panel > .dialog-body {
-    margin: 12px;
+    margin: 0 12px 12px;
     flex: 1;
 }
 
@@ -506,8 +512,41 @@ function confirmLink() {
     display: grid;
     grid-template-columns: minmax(200px, 38%) minmax(240px, 62%);
     border: 1px solid #e2e8f0;
-    border-radius: 6px;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
     overflow: hidden;
+}
+
+.results-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px 6px 0 0;
+    background: #fff;
+}
+
+.results-toolbar h4 {
+    margin: 0;
+    font-size: 14px;
+    color: #1e293b;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.results-toolbar-actions {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.results-toolbar-actions .btn-primary {
+    white-space: nowrap;
 }
 
 .result-pane,
@@ -643,7 +682,6 @@ function confirmLink() {
     color: #64748b;
 }
 
-.detail-actions,
 .confirm-actions {
     padding: 12px 16px;
     border-top: 1px solid #e2e8f0;

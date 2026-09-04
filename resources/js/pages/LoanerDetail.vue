@@ -97,7 +97,7 @@
                                 </label>
                                 <label><span>loanerID</span><input :value="form.loanerID" type="text" readonly></label>
                                 <label class="parent-id-field">
-                                    <span>parentID</span>
+                                    <span>親案件ID</span>
                                     <div class="parent-id-block">
                                         <div class="parent-id-controls">
                                             <input v-model="form.parentID" type="number">
@@ -3400,8 +3400,8 @@ a.btn {
 .notes-table tbody tr:hover { background: #f8fafc; }
 .notes-table tbody tr.active-row,
 .notes-table tbody tr.active-row td {
-    color: #fff;
-    background: #7e25eb !important;
+    color: #1e293b;
+    background: #cab7e1 !important;
 }
 .notes-table tbody tr.important-row:not(.active-row) td { background: #fef08a; }
 .empty-notes { margin: 12px 4px; color: #64748b; font-size: 12px; }

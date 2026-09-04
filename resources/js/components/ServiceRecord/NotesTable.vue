@@ -260,12 +260,12 @@ function normalizeCssWidth(value) {
 }
 
 .active-row td {
-    color: #fff !important;
-    background: #7e25eb !important;
+    color: #1e293b !important;
+    background: #cab7e1 !important;
 }
 
 .table-row.active-row:hover td {
-    background: #7e25eb !important;
+    background: #cab7e1 !important;
 }
 
 .text-cell {
@@ -280,7 +280,7 @@ function normalizeCssWidth(value) {
 }
 
 :deep(.active-row .note-autolink) {
-    color: #fff;
+    color: #1e3a8a;
 }
 
 .notes-table {
@@ -355,11 +355,11 @@ function normalizeCssWidth(value) {
 }
 
 .notes-table tbody tr.active-row .note-confirm-label.is-tbc {
-    color: #fca5a5 !important;
+    color: #dc2626 !important;
 }
 
 .notes-table tbody tr.active-row .note-confirm-label.is-done {
-    color: #00ff5e !important;
+    color: #15803d !important;
 }
 
 .notes-table .col-note-body {

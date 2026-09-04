@@ -1253,12 +1253,12 @@ watch(
 }
 
 .notes-card .active-row td {
-    color: #fff !important;
-    background: #7e25eb !important;
+    color: #1e293b !important;
+    background: #cab7e1 !important;
 }
 
 .notes-card .table-row.active-row:hover td {
-    background: #7e25eb !important;
+    background: #cab7e1 !important;
 }
 
 .notes-card .important-row td {
@@ -1277,7 +1277,7 @@ watch(
 }
 
 .notes-card :deep(.active-row .note-autolink) {
-    color: #fff;
+    color: #1e3a8a;
 }
 
 .notes-card .notes-table {
@@ -1447,12 +1447,12 @@ watch(
 }
 
 .active-row td {
-    color: #fff !important;
-    background: #7e25eb !important;
+    color: #1e293b !important;
+    background: #cab7e1 !important;
 }
 
 .table-row.active-row:hover td {
-    background: #7e25eb !important;
+    background: #cab7e1 !important;
 }
 
 .important-row td {
@@ -1466,7 +1466,7 @@ watch(
 }
 
 :deep(.active-row .note-autolink) {
-    color: #fff;
+    color: #1e3a8a;
 }
 
 .notes-table {

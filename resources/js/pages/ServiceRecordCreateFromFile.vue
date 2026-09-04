@@ -37,7 +37,7 @@
                                     type="button"
                                     class="btn btn-secondary"
                                     :disabled="ocrLoading"
-                                    @click="() => runOcrFromSourceFile()"
+                                    @click="onOcrButtonClick"
                                 >
                                     {{ ocrLoading ? 'OCR読取中...' : 'OCR読取' }}
                                 </button>
@@ -156,9 +156,11 @@
                                     <input
                                         v-model="form.SN"
                                         type="text"
-                                        placeholder="SN"
+                                        class="w-sn existing-search-field"
+                                        placeholder="SNを入力"
                                         lang="en"
                                         inputmode="latin"
+                                        tabindex="2"
                                         :readonly="Boolean(selectedLoanerUnit?.SN)"
                                     >
                                 </label>
@@ -247,9 +249,10 @@
                                         <input
                                             v-model="form.dealer"
                                             type="text"
-                                            class="w-dealer-name"
-                                            placeholder="dealer"
+                                            class="w-dealer-name existing-search-field"
+                                            placeholder="dealer名を2文字入力"
                                             lang="ja"
+                                            tabindex="3"
                                         >
                                     </div>
                                     <div class="form-row row-full">
@@ -449,16 +452,25 @@
                                 <input
                                     v-model="form.productName"
                                     type="text"
-                                    class="w-product-name"
-                                    placeholder="productName"
+                                    class="w-product-name existing-search-field"
+                                    placeholder="productNameを3文字入力"
                                     lang="en"
                                     inputmode="latin"
+                                    tabindex="1"
                                     @input="onProductNameTyped"
                                 >
                                 <input :value="form.entityID || ''" type="text" placeholder="entityID" readonly>
                             </div>
                             <div class="form-row row-product-sn">
-                                <input v-model="form.SN" type="text" placeholder="SN" lang="en" inputmode="latin">
+                                <input
+                                    v-model="form.SN"
+                                    type="text"
+                                    class="w-sn existing-search-field"
+                                    placeholder="SNを入力"
+                                    lang="en"
+                                    inputmode="latin"
+                                    tabindex="2"
+                                >
                             </div>
                             <div class="form-row row-product-meta">
                                 <DateInputWithToday v-model="form.receivedDate" class="w-received" />
@@ -499,9 +511,10 @@
                                     <input
                                         v-model="form.dealer"
                                         type="text"
-                                        class="w-dealer-name"
-                                        placeholder="dealer"
+                                        class="w-dealer-name existing-search-field"
+                                        placeholder="dealer名を2文字入力"
                                         lang="ja"
+                                        tabindex="3"
                                     >
                                 </div>
                                 <div class="form-row row-full">
@@ -792,6 +805,22 @@
                     </section>
                 </Pane>
             </Splitpanes>
+        </div>
+
+        <div v-if="showOcrSearchRequiredDialog" class="confirm-overlay" @click.self="closeOcrSearchRequiredDialog">
+            <div class="confirm-panel">
+                <div class="confirm-header">
+                    <h3>OCR読取</h3>
+                    <button type="button" class="close-btn" @click="closeOcrSearchRequiredDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p>OCRは既存案件検索後に有効になります</p>
+                    <p>既存案件検索はproductName, SN, dealerに入力された何れかの情報で検索されます</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-primary" @click="closeOcrSearchRequiredDialog">OK</button>
+                </div>
+            </div>
         </div>
 
         <div v-if="showLoanerRequirementDialog" class="confirm-overlay" @click.self="cancelLoanerRequirementDialog">
@@ -1210,6 +1239,7 @@ const success = ref('')
 const ocrLoading = ref(false)
 const xsrvAuthDialogOpen = ref(false)
 const xsrvAuthDialogMessage = ref('')
+const showOcrSearchRequiredDialog = ref(false)
 const activeTab = ref('basic')
 const activeSelectKind = ref(null)
 const previewFile = ref(null)
@@ -2085,8 +2115,8 @@ async function searchMaintenanceContracts() {
             } else {
                 const productInput = root.querySelector('input.w-product-name')
                 const dealerInput = root.querySelector('input.w-dealer-name')
-                const snInput = root.querySelector('.info-card-main input[placeholder="SN"]')
-                    || root.querySelector('input[placeholder="SN"]')
+                const snInput = root.querySelector('.info-card-main input.w-sn')
+                    || root.querySelector('input.w-sn')
                 if (productInput && String(productInput.value || '').trim()) {
                     form.productName = String(productInput.value).trim()
                 }
@@ -2257,9 +2287,25 @@ async function ensureXsrvAuthOrDialog() {
     }
 }
 
+function closeOcrSearchRequiredDialog() {
+    showOcrSearchRequiredDialog.value = false
+}
+
+function onOcrButtonClick() {
+    if (!existingHasSearched.value) {
+        showOcrSearchRequiredDialog.value = true
+        return
+    }
+    runOcrFromSourceFile()
+}
+
 async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
     if (!hasSourceFile.value) {
         error.value = 'OCR 対象の申請フォームがありません。'
+        return false
+    }
+    if (!existingHasSearched.value) {
+        showOcrSearchRequiredDialog.value = true
         return false
     }
     if (ocrLoading.value) return false
@@ -2332,6 +2378,10 @@ async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
 }
 
 async function chooseOcrForLoaner() {
+    if (!existingHasSearched.value) {
+        showOcrSearchRequiredDialog.value = true
+        return
+    }
     await runOcrFromSourceFile({ continueLoanerFlow: true })
 }
 
@@ -3809,6 +3859,12 @@ async function save() {
     font-size: 13px;
 }
 
+.info-card input.existing-search-field,
+.loaner-top-row input.existing-search-field {
+    border: 2px solid #2563eb;
+    background: #eff6ff;
+}
+
 .info-card .w-contact,
 .info-card .w-phone,
 .info-card .w-zip {
@@ -3826,6 +3882,11 @@ async function save() {
 .info-card input[readonly] {
     background: #f8fafc;
     color: #475569;
+}
+
+.info-card input.existing-search-field[readonly],
+.loaner-top-row input.existing-search-field[readonly] {
+    background: #eff6ff;
 }
 
 .field-button {

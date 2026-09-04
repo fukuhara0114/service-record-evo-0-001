@@ -343,6 +343,164 @@
         /* white-space: normal !important;      
         word-break: break-all !important; */
     }
+
+    .record-preview-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 12000;
+        background: rgba(15, 23, 42, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+
+    .record-preview-overlay.is-open {
+        display: flex;
+    }
+
+    .record-preview-card {
+        width: min(920px, 100%);
+        max-height: min(88vh, 900px);
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .record-preview-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        background: #1e293b;
+        color: #fff;
+    }
+
+    .record-preview-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .record-preview-subtitle {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: #cbd5e1;
+    }
+
+    .record-preview-close {
+        border: none;
+        background: #475569;
+        color: #fff;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .record-preview-body {
+        padding: 14px 16px 18px;
+        overflow: auto;
+        background: #f8fafc;
+    }
+
+    .record-preview-status {
+        margin: 12px 4px;
+        color: #475569;
+        font-size: 13px;
+    }
+
+    .record-preview-status.error {
+        color: #b91c1c;
+    }
+
+    .record-preview-section {
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+
+    .record-preview-section-priority {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: #eef2ff;
+        border-color: #c7d2fe;
+    }
+
+    .record-preview-block {
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 10px 12px;
+    }
+
+    .record-preview-section h4,
+    .record-preview-block h4 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    .record-preview-grid {
+        margin: 0;
+        display: grid;
+        gap: 8px 12px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .record-preview-grid.address {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: max-content max-content;
+        justify-content: start;
+        align-items: start;
+        gap: 8px 10px;
+        width: fit-content;
+        max-width: 100%;
+    }
+
+    .record-preview-grid.address > div:first-child,
+    .record-preview-grid.address > div:first-child dt,
+    .record-preview-grid.address > div:first-child dd {
+        text-align: right;
+    }
+
+    .record-preview-grid.address > div:last-child,
+    .record-preview-grid.address > div:last-child dt,
+    .record-preview-grid.address > div:last-child dd {
+        text-align: left;
+    }
+
+    .record-preview-grid > div.span2 {
+        grid-column: span 2;
+    }
+
+    .record-preview-grid dt {
+        font-size: 11px;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .record-preview-grid dd {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: #0f172a;
+        font-weight: 700;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
 </style>
 </head>
 <body>
@@ -455,6 +613,19 @@
                 <!-- ここにはBladeのループは一切書きません。JavaScriptがデータを展開します -->
             </tbody>
         </table>
+    </div>
+
+    <div id="recordPreviewOverlay" class="record-preview-overlay" onclick="if (event.target === this) closeRecordPreviewCard()">
+        <div class="record-preview-card" role="dialog" aria-modal="true">
+            <header class="record-preview-header">
+                <div>
+                    <h3 id="recordPreviewTitle">案件カード</h3>
+                    <p id="recordPreviewSubtitle" class="record-preview-subtitle"></p>
+                </div>
+                <button type="button" class="record-preview-close" aria-label="閉じる" onclick="closeRecordPreviewCard()">×</button>
+            </header>
+            <div id="recordPreviewBody" class="record-preview-body"></div>
+        </div>
     </div>
 
     <!-- 3. 高速検索と超軽量描画のJavaScript -->
@@ -577,6 +748,7 @@
             html += `<tr  class="table-row"
                         onclick="selectRow(this, '${r.orderID || ''}')"
                         ondblclick="goToDetailPage('${r.orderID || ''}', '${r.order_type || 'service'}')"
+                        oncontextmenu="openRecordPreviewCard(event, '${r.orderID || ''}'); return false;"
                         style="cursor: pointer;"
                     >
                 <td style="text-align: center;" >${r.orderID || ''}</td>
@@ -697,6 +869,161 @@
         });
         window.location.href = `${base}servicerecord/administrator?${params.toString()}`;
     }
+
+    let recordPreviewRequestSeq = 0;
+
+    const RECORD_PREVIEW_PRIORITY_BLOCKS = [
+        {
+            title: '製品',
+            keys: [
+                ['productName', 'productName'],
+                ['SN', 'SN'],
+            ],
+        },
+        {
+            title: 'Dealer',
+            keys: [
+                ['dealer', 'dealer'],
+                ['dealer_depart', 'dealer_depart'],
+                ['contactPerson', 'contactPerson'],
+            ],
+        },
+        {
+            title: 'E/U',
+            keys: [
+                ['endUser', 'endUser'],
+                ['endUser_depart', 'endUser_depart'],
+                ['endUser_contactPerson', 'endUser_contactPerson'],
+                ['endUser_phone', 'endUser_phone'],
+                ['endUser_email', 'endUser_email'],
+            ],
+            addressKeys: [
+                ['endUser_address1', 'endUser_address1'],
+                ['endUser_address2', 'endUser_address2'],
+            ],
+        },
+    ];
+
+    function previewDisplay(value) {
+        if (value == null || value === '') return '—';
+        if (typeof value === 'boolean') return value ? 'true' : 'false';
+        if (typeof value === 'object') {
+            try { return JSON.stringify(value); } catch (e) { return String(value); }
+        }
+        return String(value);
+    }
+
+    function renderPreviewItems(items) {
+        return items.map((item) => (
+            `<div${item.span2 ? ' class="span2"' : ''}><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.value)}</dd></div>`
+        )).join('');
+    }
+
+    function buildRecordPreviewHtml(record) {
+        let html = '<section class="record-preview-section record-preview-section-priority">';
+
+        RECORD_PREVIEW_PRIORITY_BLOCKS.forEach((block) => {
+            const items = block.keys.map((entry) => {
+                const key = entry[0];
+                const label = entry[1];
+                const span2 = !!entry[2];
+                return { key, label, span2, value: previewDisplay(record[key]) };
+            });
+            html += `<div class="record-preview-block"><h4>${block.title}</h4><dl class="record-preview-grid">`;
+            html += renderPreviewItems(items);
+            html += '</dl>';
+
+            if (Array.isArray(block.addressKeys) && block.addressKeys.length) {
+                const addressItems = block.addressKeys.map((entry) => {
+                    const key = entry[0];
+                    const label = entry[1];
+                    return { key, label, span2: false, value: previewDisplay(record[key]) };
+                });
+                html += '<dl class="record-preview-grid address">';
+                html += renderPreviewItems(addressItems);
+                html += '</dl>';
+            }
+
+            html += '</div>';
+        });
+
+        html += '</section>';
+        html += `<section class="record-preview-section"><h4>最終編集</h4><dl class="record-preview-grid"><div><dt>最終編集日</dt><dd>${escapeHtml(previewDisplay(record.lastEditDate))}</dd></div><div><dt>最終編集者</dt><dd>${escapeHtml(previewDisplay(record.lastEditPerson))}</dd></div></dl></section>`;
+        return html;
+    }
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function closeRecordPreviewCard() {
+        const overlay = document.getElementById('recordPreviewOverlay');
+        if (overlay) overlay.classList.remove('is-open');
+        recordPreviewRequestSeq += 1;
+    }
+
+    async function openRecordPreviewCard(event, orderId) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!orderId) return;
+
+        const overlay = document.getElementById('recordPreviewOverlay');
+        const titleEl = document.getElementById('recordPreviewTitle');
+        const subtitleEl = document.getElementById('recordPreviewSubtitle');
+        const bodyEl = document.getElementById('recordPreviewBody');
+        if (!overlay || !bodyEl) return;
+
+        const row = (Array.isArray(allRecords) ? allRecords : [])
+            .find((r) => String(r.orderID) === String(orderId));
+        const requestSeq = ++recordPreviewRequestSeq;
+
+        titleEl.textContent = `案件カード #${orderId}`;
+        subtitleEl.textContent = row
+            ? [row.productName, row.SN, statusLabel(row) || row.status].filter(Boolean).join(' / ')
+            : '';
+        bodyEl.innerHTML = '<p class="record-preview-status">読み込み中...</p>';
+        overlay.classList.add('is-open');
+
+        if (row) {
+            const target = Array.from(document.querySelectorAll('.table-row'))
+                .find((el) => el.querySelector('td')?.textContent?.trim() === String(orderId));
+            if (target) selectRow(target, orderId);
+        }
+
+        try {
+            const base = String(appBaseUrl || '/').replace(/\/?$/, '/');
+            const response = await fetch(`${base}servicerecord/record/${encodeURIComponent(orderId)}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const data = await response.json().catch(() => ({}));
+            if (requestSeq !== recordPreviewRequestSeq) return;
+            if (!response.ok) {
+                throw new Error(data.message || `案件情報の取得に失敗しました。（HTTP ${response.status}）`);
+            }
+            const merged = { ...(row || {}), ...data };
+            subtitleEl.textContent = [
+                merged.productName,
+                merged.SN,
+                statusLabel(merged) || merged.status,
+            ].filter(Boolean).join(' / ');
+            bodyEl.innerHTML = buildRecordPreviewHtml(merged);
+        } catch (e) {
+            if (requestSeq !== recordPreviewRequestSeq) return;
+            bodyEl.innerHTML = `<p class="record-preview-status error">${escapeHtml(e.message || '案件情報の取得に失敗しました。')}</p>`;
+        }
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeRecordPreviewCard();
+    });
     </script>
 
 </body>

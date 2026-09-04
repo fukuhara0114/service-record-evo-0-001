@@ -3545,12 +3545,12 @@ defineExpose({
 }
 
 .active-row td {
-    color: #fff !important;
-    background: #7e25eb !important;
+    color: #1e293b !important;
+    background: #cab7e1 !important;
 }
 
 .table-row.active-row:hover td {
-    background: #7e25eb !important;
+    background: #cab7e1 !important;
 }
 
 .text-cell {
@@ -3565,7 +3565,7 @@ defineExpose({
 }
 
 :deep(.active-row .note-autolink) {
-    color: #fff;
+    color: #1e3a8a;
 }
 
 .notes-table {
