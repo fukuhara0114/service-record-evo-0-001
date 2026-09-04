@@ -18,21 +18,27 @@
         <section
             v-if="isWaitingList"
             class="promote-banner"
-            :class="{ 'is-ready': isPromotionReady }"
+            :class="{ 'is-ready': canPromoteToLoaner }"
         >
             <div class="promote-banner-text">
-                <strong v-if="isPromotionReady">繰上可</strong>
+                <strong v-if="canPromoteToLoaner">繰上可</strong>
                 <strong v-else>予約案件リスト</strong>
                 <p>
-                    <template v-if="isPromotionReady">
+                    <template v-if="hasAvailableStock">
+                        同グループに在庫があります。貸出機を割り当てて loaner 案件へ繰り上げできます。
+                    </template>
+                    <template v-else-if="isPromotionReady">
                         在庫復帰により繰り上げ可能です。貸出機を割り当てて loaner 案件へ変更してください。
                     </template>
                     <template v-else>
-                        waiting_list 案件です。在庫がある場合は loaner へ繰り上げできます。
+                        waiting_list 案件です。同グループに在庫がある場合は loaner へ繰り上げできます。
                     </template>
                 </p>
                 <p v-if="record.promotion_source_orderID" class="promote-source">
                     きっかけ OrderID: {{ record.promotion_source_orderID }}
+                </p>
+                <p v-if="availableGroupName" class="promote-source">
+                    groupName: {{ availableGroupName }} / 在庫 {{ availableUnits.length }}台
                 </p>
             </div>
             <div class="promote-banner-actions">
@@ -63,7 +69,7 @@
                     class="btn btn-primary"
                     :disabled="promoting || !availableUnits.length"
                     :title="availableUnits.length ? '' : '同 groupName の在庫がありません'"
-                    @click="promoteToLoaner"
+                    @click="openPromoteConfirmDialog"
                 >
                     {{ promoting ? '繰上中...' : 'loaner に繰り上げ' }}
                 </button>
@@ -630,6 +636,52 @@
             </div>
         </div>
 
+        <div
+            v-if="showPromoteConfirmDialog"
+            class="confirm-overlay"
+            @click.self="closePromoteConfirmDialog"
+        >
+            <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="promote-confirm-title">
+                <h3 id="promote-confirm-title">loaner へ繰り上げ</h3>
+                <p>同グループに在庫があるため、waiting_list を loaner 案件へ繰り上げできます。</p>
+                <p v-if="availableGroupName" class="confirm-detail">groupName: {{ availableGroupName }}</p>
+                <p class="confirm-detail">在庫台数: {{ availableUnits.length }}台</p>
+                <label class="promote-confirm-select">
+                    <span>割当貸出機</span>
+                    <select v-model="promoteLoanerId" :disabled="promoting || !availableUnits.length">
+                        <option value="">自動（返却元 / 在庫から先頭）</option>
+                        <option
+                            v-for="unit in availableUnits"
+                            :key="`promote-dialog-${unit.loanerID}`"
+                            :value="String(unit.loanerID)"
+                        >
+                            {{ unit.loanerID }} / {{ unit.item || unit.productName || '—' }} / {{ unit.SN || 'SNなし' }}
+                            <template v-if="unit.isPromotionSource">（返却元）</template>
+                        </option>
+                    </select>
+                </label>
+                <p v-if="error" class="confirm-error">{{ error }}</p>
+                <div class="confirm-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        :disabled="promoting"
+                        @click="closePromoteConfirmDialog"
+                    >
+                        あとで
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="promoting || !availableUnits.length"
+                        @click="promoteToLoaner"
+                    >
+                        {{ promoting ? '繰上中...' : '繰り上げる' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="filePendingDelete" class="confirm-overlay" @click.self="filePendingDelete = null">
             <div class="confirm-panel">
                 <h3>ファイル削除</h3>
@@ -1128,6 +1180,7 @@ const promoting = ref(false)
 const cancellingReservation = ref(false)
 const cancelReservationError = ref('')
 const showCancelReservationDialog = ref(false)
+const showPromoteConfirmDialog = ref(false)
 const promoteLoanerId = ref('')
 const calendarError = ref('')
 const calendarRef = ref(null)
@@ -1218,6 +1271,12 @@ const isPromotionReady = computed(() => {
     return at != null && at !== ''
 })
 const availableUnits = computed(() => props.availableUnits ?? [])
+const hasAvailableStock = computed(() => availableUnits.value.length > 0)
+const canPromoteToLoaner = computed(() => hasAvailableStock.value || isPromotionReady.value)
+const availableGroupName = computed(() => {
+    const named = availableUnits.value.find(unit => String(unit?.groupName ?? '').trim() !== '')
+    return String(named?.groupName ?? '').trim()
+})
 
 watch(
     availableUnits,
@@ -1226,6 +1285,10 @@ watch(
         const source = units.find(unit => unit?.isPromotionSource)
         if (source?.loanerID != null) {
             promoteLoanerId.value = String(source.loanerID)
+            return
+        }
+        if (units[0]?.loanerID != null) {
+            promoteLoanerId.value = String(units[0].loanerID)
         }
     },
     { immediate: true },
@@ -2863,6 +2926,7 @@ async function promoteToLoaner() {
         const { response, data } = result
         if (!response.ok) throw new Error(validationError(data, `繰り上げに失敗しました。（HTTP ${response.status}）`))
         success.value = data.message || 'loaner へ繰り上げました。'
+        showPromoteConfirmDialog.value = false
         // order_type / status / 在庫割当を反映するため詳細を再読込
         window.location.reload()
     } catch (e) {
@@ -2870,6 +2934,20 @@ async function promoteToLoaner() {
     } finally {
         promoting.value = false
     }
+}
+
+function openPromoteConfirmDialog() {
+    if (!availableUnits.value.length) {
+        error.value = '同 groupName の在庫がありません。在庫復帰後に再度実行してください。'
+        return
+    }
+    error.value = ''
+    showPromoteConfirmDialog.value = true
+}
+
+function closePromoteConfirmDialog() {
+    if (promoting.value) return
+    showPromoteConfirmDialog.value = false
 }
 
 function closeReservationSwapDialog() {
@@ -3220,7 +3298,12 @@ function updateCalendarSize() {
     calendarRef.value?.getApi?.().updateSize()
 }
 
-onMounted(() => window.addEventListener('resize', updateCalendarSize))
+onMounted(() => {
+    window.addEventListener('resize', updateCalendarSize)
+    if (isWaitingList.value && hasAvailableStock.value) {
+        showPromoteConfirmDialog.value = true
+    }
+})
 onBeforeUnmount(() => {
     window.removeEventListener('resize', updateCalendarSize)
     revokeApplicationFormUrl()
@@ -4208,7 +4291,27 @@ a.btn {
     display: flex;
     align-items: flex-end;
     gap: 10px;
+    flex-wrap: wrap;
     flex-shrink: 0;
+}
+.promote-confirm-select {
+    display: grid;
+    gap: 6px;
+    margin: 12px 0 4px;
+    font-size: 13px;
+    color: #475569;
+}
+.promote-confirm-select select {
+    padding: 8px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+    color: #1e293b;
+}
+.confirm-detail {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: #475569;
 }
 .promote-unit-select {
     display: grid;

@@ -674,6 +674,11 @@ class LoanerRecordController extends Controller
         $groupName = $waitingRecord ? $this->resolveGroupNameForRecord($waitingRecord) : '';
         $productName = trim((string) $productName);
 
+        // waiting 側に loanerID が無くても productName から groupName を拾えた場合はグループ優先
+        if ($groupName === '' && $productName !== '') {
+            $groupName = $this->resolveGroupNameForProductName($productName);
+        }
+
         $latest = app(MasterPriceVersionResolver::class)->latestByKey(
             LoanerMaster::query()
                 ->whereNotNull('loanerID')
@@ -2728,7 +2733,32 @@ class LoanerRecordController extends Controller
 
     private function resolveGroupNameForRecord(ServiceRecord $record): string
     {
-        return $this->resolveGroupNameForLoanerId($this->resolveLoanerIdForRecord($record));
+        $groupName = $this->resolveGroupNameForLoanerId($this->resolveLoanerIdForRecord($record));
+        if ($groupName !== '') {
+            return $groupName;
+        }
+
+        return $this->resolveGroupNameForProductName($record->productName ?? null);
+    }
+
+    private function resolveGroupNameForProductName(?string $productName): string
+    {
+        $productName = trim((string) $productName);
+        if ($productName === '') {
+            return '';
+        }
+
+        $unit = app(MasterPriceVersionResolver::class)->latestByKey(
+            LoanerMaster::query()
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', ''),
+            'loanerID'
+        )->first(function (LoanerMaster $row) use ($productName) {
+            return strcasecmp(trim((string) ($row->productName ?? '')), $productName) === 0
+                && trim((string) ($row->groupName ?? '')) !== '';
+        });
+
+        return trim((string) ($unit?->groupName ?? ''));
     }
 
     private function resolveGroupNameForLoanerId(mixed $loanerId): string
