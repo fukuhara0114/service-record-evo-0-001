@@ -924,6 +924,7 @@ import EmailDraftPreviewDialog from '@/components/ServiceRecord/Layer3/EmailDraf
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import { findServiceMaster, findPartMaster, applyPartMasterAsOf, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, toOrderDateYmd, isLoanerOwnOrderDateUsable, resolvePriceCardTotals, resolveLinkedLoanerPriceAsOfDate, findLoanerMasterPrice, normalizePriceAsOfDate } from '@/utils/resolveServiceWorkPrice'
+import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
 
 const page = usePage()
 
@@ -1463,7 +1464,7 @@ const zipLookupTimers = {
 }
 
 async function fetchAddressByZipcode(zipcode) {
-    const digits = String(zipcode ?? '').replace(/\D/g, '')
+    const digits = zipcodeDigits(zipcode)
     if (digits.length !== 7) return null
 
     const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${digits}`)
@@ -1485,19 +1486,22 @@ function onZipcodeFieldInput(kind, value) {
     const fields = ZIPCODE_FIELD_MAP[kind]
     if (!fields) return
 
-    updateDraftValue(fields.zip, value)
+    // 入力中のハイフンを維持（完成時は xxx-xxxx に揃える）
+    updateDraftValue(fields.zip, formatZipcodeDisplay(value))
 
     if (zipLookupTimers[kind]) {
         clearTimeout(zipLookupTimers[kind])
     }
 
     zipLookupTimers[kind] = setTimeout(async () => {
-        const digits = String(props.draftRecord?.[fields.zip] ?? value ?? '').replace(/\D/g, '')
+        const current = props.draftRecord?.[fields.zip] ?? value ?? ''
+        const digits = zipcodeDigits(current)
         if (digits.length !== 7) return
 
         try {
             const address = await fetchAddressByZipcode(digits)
             if (!address) return
+            updateDraftValue(fields.zip, formatZipcodeDisplay(current))
             updateDraftValue(fields.address1, address.address1)
             updateDraftValue(fields.address2, address.address2)
         } catch {

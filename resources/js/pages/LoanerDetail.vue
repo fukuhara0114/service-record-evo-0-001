@@ -245,22 +245,22 @@
                         </div>
 
                         <div class="price-adjust-row">
-                            <div class="price-adjust-center-slot">
-                                <div class="price-adjust-group">
-                                    <button
-                                        v-if="record.order_type === 'loaner'"
-                                        type="button"
-                                        class="charge-type-toggle"
-                                        :class="{ active: chargeType === 'paid' }"
-                                        :aria-pressed="chargeType === 'paid'"
-                                        @click="toggleChargeType"
-                                    >
-                                        {{ chargeType === 'paid' ? '有償' : '無償' }}
-                                    </button>
-                                    <div class="price-adjust-main">
-                                        <span class="price-adjust-label">価格</span>
-                                        <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
-                                    </div>
+                            <div class="price-adjust-group">
+                                <button
+                                    v-if="record.order_type === 'loaner'"
+                                    type="button"
+                                    class="charge-type-toggle"
+                                    :class="{ active: chargeType === 'paid' }"
+                                    :aria-pressed="chargeType === 'paid'"
+                                    @click="toggleChargeType"
+                                >
+                                    {{ chargeType === 'paid' ? '有償' : '無償' }}
+                                </button>
+                                <div class="price-adjust-main">
+                                    <span class="price-adjust-label">価格</span>
+                                    <strong class="price-adjust-value">{{ formatPrice(displayPrice) }}</strong>
+                                </div>
+                                <div class="price-adjust-actions">
                                     <button
                                         type="button"
                                         class="btn btn-primary price-adjust-btn"
@@ -1129,6 +1129,7 @@ import { apiFetch } from '@/utils/apiFetch'
 import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { handleUnauthorizedResponse } from '@/utils/auth'
 import { pickMasterVersion, PAID_LOANER_RETURN_CODES, resolveDisplayPriceAsOfDate, findLoanerMasterPrice } from '@/utils/resolveServiceWorkPrice'
+import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
 
 const SHIP_PREP_STATUS_ID = 300
 
@@ -2124,17 +2125,13 @@ function onIncidentSelected(result) {
     showIncidentDialog.value = false
 }
 
-function normalizeZipcode(value) {
-    return String(value || '').replace(/\D/g, '')
-}
-
 async function lookupZip(target) {
     const raw = target === 'delivery'
         ? form.deliveryDestination_zipcode
         : target === 'endUser'
             ? form.endUser_zipcode
             : form.zipcode
-    const zip = normalizeZipcode(raw)
+    const zip = zipcodeDigits(raw)
     if (zip.length !== 7) return
 
     try {
@@ -2146,16 +2143,18 @@ async function lookupZip(target) {
 
         const pref = String(hit.address1 || '')
         const cityTown = `${String(hit.address2 || '')}${String(hit.address3 || '')}`
+        // 住所検索用に数字化した値で上書きせず、ハイフン付き表示を維持する
+        const displayZip = formatZipcodeDisplay(raw)
         if (target === 'delivery') {
-            form.deliveryDestination_zipcode = zip
+            form.deliveryDestination_zipcode = displayZip
             form.deliveryDestination_address1 = pref
             form.deliveryDestination_address2 = cityTown
         } else if (target === 'endUser') {
-            form.endUser_zipcode = zip
+            form.endUser_zipcode = displayZip
             form.endUser_address1 = pref
             form.endUser_address2 = cityTown
         } else {
-            form.zipcode = zip
+            form.zipcode = displayZip
             form.address1 = pref
             form.address2 = cityTown
         }
@@ -3893,28 +3892,29 @@ a.btn {
 
 .price-adjust-row {
     margin-top: 8px;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px 16px;
     padding: 6px 10px;
     border: 1px solid #94a3b8;
     background: #e2e8f0;
     overflow: visible;
-}
-.price-adjust-center-slot {
-    grid-column: 2;
-    position: relative;
-    display: flex;
-    align-items: center;
+    min-width: 0;
+    container-type: inline-size;
+    container-name: price-adjust-row;
 }
 .price-adjust-group {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    gap: 8px 0;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 .charge-type-toggle {
     box-sizing: border-box;
-    margin-right: 50px;
+    margin-right: 12px;
     min-height: 24px;
     padding: 2px 10px;
     border: 1px solid #94a3b8;
@@ -3926,6 +3926,7 @@ a.btn {
     line-height: 1.2;
     cursor: pointer;
     white-space: nowrap;
+    flex: 0 0 auto;
 }
 .charge-type-toggle.active {
     background: #2563eb;
@@ -3934,32 +3935,44 @@ a.btn {
 }
 .price-adjust-main {
     box-sizing: border-box;
-    flex: 0 0 400px;
-    width: 400px;
-    min-width: 400px;
-    max-width: 400px;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
 }
-.price-adjust-actions,
+.price-adjust-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 100px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
 .price-adjust-delta {
     display: flex;
     align-items: center;
     gap: 8px;
+    white-space: nowrap;
 }
 .price-adjust-label { color: #475569; font-size: 13px; font-weight: bold; white-space: nowrap; }
 .price-adjust-value {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 140px;
     font-size: 13px;
     color: #0f172a;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.price-adjust-btn { margin-left: 16px; min-height: 24px; padding: 2px 10px; font-size: 11px; }
-.price-adjust-delta { margin-left: 16px; }
+.price-adjust-btn {
+    min-height: 24px;
+    padding: 2px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
 .incidents-btn {
     min-height: 24px;
     padding: 2px 10px;
@@ -3987,12 +4000,12 @@ a.btn {
 }
 .price-adjust-delta strong { font-size: 12px; color: #0f172a; }
 .price-adjust-enduser-sn {
-    grid-column: 3;
-    justify-self: end;
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
+    flex: 0 0 auto;
 }
 .price-adjust-enduser-sn input {
     width: 140px;
@@ -4004,6 +4017,23 @@ a.btn {
     background: #fff;
     color: #1e293b;
     font-size: 11px;
+}
+
+/* 左ペイン（この行）が狭いとき: 余白縮小・enduser_SN を次行へ */
+@container price-adjust-row (max-width: 640px) {
+    .price-adjust-actions {
+        margin-left: 48px;
+    }
+}
+@container price-adjust-row (max-width: 520px) {
+    .price-adjust-actions {
+        margin-left: 24px;
+    }
+    .price-adjust-enduser-sn {
+        margin-left: 0;
+        flex: 1 0 100%;
+        justify-content: flex-start;
+    }
 }
 
 .files-panel { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }

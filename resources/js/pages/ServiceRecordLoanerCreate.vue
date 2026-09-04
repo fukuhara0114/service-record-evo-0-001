@@ -346,6 +346,7 @@ import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
+import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
 
 const props = defineProps({
     loanerProducts: {
@@ -748,7 +749,7 @@ async function checkAvailability() {
 }
 
 async function fetchAddressByZipcode(zipcode) {
-    const digits = String(zipcode ?? '').replace(/\D/g, '')
+    const digits = zipcodeDigits(zipcode)
     if (digits.length !== 7) return null
 
     const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${digits}`)
@@ -784,7 +785,8 @@ function onZipcodeInput(kind) {
         const fields = map[kind]
         if (!fields) return
 
-        const digits = String(form[fields.zip] ?? '').replace(/\D/g, '')
+        form[fields.zip] = formatZipcodeDisplay(form[fields.zip])
+        const digits = zipcodeDigits(form[fields.zip])
         if (digits.length !== 7) return
 
         try {

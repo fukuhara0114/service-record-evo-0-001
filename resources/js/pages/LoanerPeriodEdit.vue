@@ -479,6 +479,7 @@ import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMa
 import NotesTable from '@/components/ServiceRecord/NotesTable.vue'
 import { apiFetch } from '@/utils/apiFetch'
 import { loanerStatusOptionLabel } from '@/utils/loanerStatusLabel'
+import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
 
 const props = defineProps({
     attached: {
@@ -986,7 +987,7 @@ function applySuggestedPeriod() {
 }
 
 async function fetchAddressByZipcode(zipcode) {
-    const digits = String(zipcode ?? '').replace(/\D/g, '')
+    const digits = zipcodeDigits(zipcode)
     if (digits.length !== 7) return null
 
     const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${digits}`)
@@ -1016,7 +1017,12 @@ function onZipcodeInput(kind) {
                 : kind === 'endUser'
                     ? form.endUser_zipcode
                     : form.deliveryDestination_zipcode
-            const address = await fetchAddressByZipcode(zipcode)
+            const displayZip = formatZipcodeDisplay(zipcode)
+            if (kind === 'dealer') form.zipcode = displayZip
+            else if (kind === 'endUser') form.endUser_zipcode = displayZip
+            else form.deliveryDestination_zipcode = displayZip
+
+            const address = await fetchAddressByZipcode(displayZip)
             if (!address) return
             if (kind === 'dealer') {
                 form.address1 = address.address1

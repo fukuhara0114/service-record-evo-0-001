@@ -1177,6 +1177,7 @@ import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
+import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
 
 const props = defineProps({
     sourceFile: {
@@ -1933,7 +1934,7 @@ function getCsrfToken() {
 }
 
 async function fetchAddressByZipcode(zipcode) {
-    const digits = String(zipcode ?? '').replace(/\D/g, '')
+    const digits = zipcodeDigits(zipcode)
     if (digits.length !== 7) {
         return null
     }
@@ -1981,7 +1982,8 @@ function onZipcodeInput(kind) {
         const fields = map[kind]
         if (!fields) return
 
-        const digits = String(form[fields.zip] ?? '').replace(/\D/g, '')
+        form[fields.zip] = formatZipcodeDisplay(form[fields.zip])
+        const digits = zipcodeDigits(form[fields.zip])
         if (digits.length !== 7) return
 
         try {
