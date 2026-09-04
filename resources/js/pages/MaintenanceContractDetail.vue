@@ -285,12 +285,12 @@
                 </div>
                 <p v-if="certificateError" class="msg error certificate-error">{{ certificateError }}</p>
                 <div class="certificate-viewport">
-                    <img
-                        v-if="certificatePreviewUrl"
-                        class="certificate-image"
-                        :src="certificatePreviewUrl"
-                        alt="保守サービス保証書プレビュー"
-                    >
+                    <iframe
+                        v-if="certificatePdfUrl"
+                        class="certificate-frame"
+                        :src="certificatePdfUrl"
+                        title="保守サービス保証書プレビュー"
+                    />
                 </div>
             </div>
         </div>
@@ -318,20 +318,12 @@
                 </div>
                 <p v-if="ticketError" class="msg error certificate-error">{{ ticketError }}</p>
                 <div class="certificate-viewport ticket-preview-viewport">
-                    <div
-                        v-for="preview in ticketPreviewPages"
-                        :key="preview.page"
-                        class="ticket-preview-page"
-                    >
-                        <p v-if="ticketPreviewPages.length > 1" class="ticket-preview-label">
-                            {{ preview.page }}年目
-                        </p>
-                        <img
-                            class="certificate-image"
-                            :src="preview.url"
-                            :alt="`再校正チケットプレビュー ${preview.page}年目`"
-                        >
-                    </div>
+                    <iframe
+                        v-if="ticketPdfUrl"
+                        class="certificate-frame"
+                        :src="ticketPdfUrl"
+                        title="再校正チケットプレビュー"
+                    />
                 </div>
             </div>
         </div>
@@ -426,7 +418,6 @@ const certificateDialogOpen = ref(false)
 const certificateLoading = ref(false)
 const certificateDownloading = ref(false)
 const certificateError = ref('')
-const certificatePreviewUrl = ref('')
 const certificatePdfUrl = ref('')
 const certificatePdfBlob = ref(null)
 const certificateFilename = ref('maintenance_contract.pdf')
@@ -435,7 +426,6 @@ const ticketDialogOpen = ref(false)
 const ticketLoading = ref(false)
 const ticketDownloading = ref(false)
 const ticketError = ref('')
-const ticketPreviewPages = ref([])
 const ticketPdfUrl = ref('')
 const ticketPdfBlob = ref(null)
 const ticketFilename = ref('certification_ticket.pdf')
@@ -713,10 +703,6 @@ async function confirmDuplicate() {
 }
 
 function revokeCertificateUrls() {
-    if (certificatePreviewUrl.value) {
-        URL.revokeObjectURL(certificatePreviewUrl.value)
-        certificatePreviewUrl.value = ''
-    }
     if (certificatePdfUrl.value) {
         URL.revokeObjectURL(certificatePdfUrl.value)
         certificatePdfUrl.value = ''
@@ -759,43 +745,39 @@ async function generateCertificate() {
     revokeCertificateUrls()
 
     const endpoint = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${form.id}/certificate`
-    const common = {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': getCsrfToken(),
-        },
-        body: JSON.stringify(buildCertificatePayload()),
-    }
 
     try {
-        const [pngResponse, pdfResponse] = await Promise.all([
-            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'image/png' } }),
-            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'application/pdf' } }),
-        ])
+        // PDF のみ1回取得（PNG変換は Ghostscript 依存・失敗しやすいため使わない）
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/pdf',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify(buildCertificatePayload()),
+        })
 
-        if (!pngResponse.ok) {
-            let message = `保守サービス保証書の生成に失敗しました。（HTTP ${pngResponse.status}）`
-            const ct = pngResponse.headers.get('Content-Type') || ''
+        if (!response.ok) {
+            let message = `保守サービス保証書の生成に失敗しました。（HTTP ${response.status}）`
+            const ct = response.headers.get('Content-Type') || ''
             if (ct.includes('application/json')) {
-                const data = await pngResponse.json().catch(() => ({}))
-                message = data.message || data.error || message
+                const data = await response.json().catch(() => ({}))
+                message = data.error || data.message || message
             }
             throw new Error(message)
         }
-        if (!pdfResponse.ok) {
-            throw new Error(`保守サービス保証書 PDF の取得に失敗しました。（HTTP ${pdfResponse.status}）`)
+
+        const pdfBlob = await response.blob()
+        if (!pdfBlob || pdfBlob.size === 0) {
+            throw new Error('保守サービス保証書 PDF が空です。')
         }
-
-        const pngBlob = await pngResponse.blob()
-        const pdfBlob = await pdfResponse.blob()
-        certificatePreviewUrl.value = URL.createObjectURL(pngBlob)
-        certificatePdfUrl.value = URL.createObjectURL(pdfBlob)
         certificatePdfBlob.value = pdfBlob
+        certificatePdfUrl.value = URL.createObjectURL(pdfBlob)
 
-        const headerName = pdfResponse.headers.get('X-Filename')
+        const headerName = response.headers.get('X-Filename')
         const ref = String(form.RefNumber || '').trim()
         certificateFilename.value = headerName
             || (ref !== '' ? `maintenance_contract-${ref}.pdf` : `maintenance_contract-${form.id}.pdf`)
@@ -832,12 +814,6 @@ function downloadCertificate() {
 }
 
 function revokeTicketUrls() {
-    ticketPreviewPages.value.forEach((preview) => {
-        if (preview.url) {
-            URL.revokeObjectURL(preview.url)
-        }
-    })
-    ticketPreviewPages.value = []
     if (ticketPdfUrl.value) {
         URL.revokeObjectURL(ticketPdfUrl.value)
         ticketPdfUrl.value = ''
@@ -878,63 +854,39 @@ async function generateCertificationTicket() {
     revokeTicketUrls()
 
     const endpoint = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${form.id}/certification-ticket`
-    const common = {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': getCsrfToken(),
-        },
-        body: JSON.stringify(buildTicketPayload()),
-    }
 
     try {
-        const [previewResponse, pdfResponse] = await Promise.all([
-            fetch(`${endpoint}?format=preview`, {
-                ...common,
-                headers: { ...common.headers, Accept: 'application/json' },
-            }),
-            fetch(endpoint, {
-                ...common,
-                headers: { ...common.headers, Accept: 'application/pdf' },
-            }),
-        ])
+        // PDF のみ1回取得（ページPNG変換は Ghostscript 依存・失敗しやすいため使わない）
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/pdf',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify(buildTicketPayload()),
+        })
 
-        if (!previewResponse.ok) {
-            let message = `再校正チケットの生成に失敗しました。（HTTP ${previewResponse.status}）`
-            const ct = previewResponse.headers.get('Content-Type') || ''
+        if (!response.ok) {
+            let message = `再校正チケットの生成に失敗しました。（HTTP ${response.status}）`
+            const ct = response.headers.get('Content-Type') || ''
             if (ct.includes('application/json')) {
-                const data = await previewResponse.json().catch(() => ({}))
-                message = data.message || data.error || message
+                const data = await response.json().catch(() => ({}))
+                message = data.error || data.message || message
             }
             throw new Error(message)
         }
-        if (!pdfResponse.ok) {
-            throw new Error(`再校正チケット PDF の取得に失敗しました。（HTTP ${pdfResponse.status}）`)
+
+        const pdfBlob = await response.blob()
+        if (!pdfBlob || pdfBlob.size === 0) {
+            throw new Error('再校正チケット PDF が空です。')
         }
-
-        const previewData = await previewResponse.json()
-        const pages = Array.isArray(previewData.pages) ? previewData.pages : []
-        if (pages.length === 0) {
-            throw new Error('再校正チケットのプレビュー画像を取得できませんでした。')
-        }
-
-        ticketPreviewPages.value = pages.map((pageData) => {
-            const binary = atob(pageData.image)
-            const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-            const blob = new Blob([bytes], { type: 'image/png' })
-            return {
-                page: pageData.page,
-                url: URL.createObjectURL(blob),
-            }
-        })
-
-        const pdfBlob = await pdfResponse.blob()
-        ticketPdfUrl.value = URL.createObjectURL(pdfBlob)
         ticketPdfBlob.value = pdfBlob
+        ticketPdfUrl.value = URL.createObjectURL(pdfBlob)
 
-        const headerName = pdfResponse.headers.get('X-Filename')
+        const headerName = response.headers.get('X-Filename')
         const ref = String(form.RefNumber || '').trim()
         ticketFilename.value = headerName
             || (ref !== '' ? `maintenance_contract-${ref}.pdf` : `certification_ticket-${form.id}.pdf`)
@@ -1389,47 +1341,28 @@ async function save() {
     flex: 1 1 auto;
     min-height: 0;
     margin: 0 12px;
+    width: calc(100% - 24px);
     overflow: hidden;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
     background: #1e293b;
     border-radius: 4px;
 }
 
-.certificate-image {
+.certificate-frame {
     display: block;
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    min-height: 70vh;
+    border: 0;
+    background: #fff;
 }
 
 .ticket-preview-viewport {
-    flex-direction: column;
     align-items: stretch;
-    justify-content: flex-start;
-    overflow-y: auto;
-    padding: 12px 0;
-}
-
-.ticket-preview-page {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.ticket-preview-page + .ticket-preview-page {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #475569;
-}
-
-.ticket-preview-label {
-    margin: 0 0 8px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #e2e8f0;
+    justify-content: stretch;
+    overflow: hidden;
+    padding: 0;
 }
 </style>

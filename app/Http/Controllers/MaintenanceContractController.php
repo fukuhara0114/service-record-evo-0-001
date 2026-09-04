@@ -204,6 +204,8 @@ class MaintenanceContractController extends Controller
         try {
             $binary = $pdfService->generate($payload);
         } catch (\Throwable $e) {
+            report($e);
+
             return response()->json([
                 'message' => '保守サービス保証書 PDF の生成に失敗しました。',
                 'error' => $e->getMessage(),
@@ -222,6 +224,8 @@ class MaintenanceContractController extends Controller
             try {
                 $png = $pdfService->pdfToPng($binary);
             } catch (\Throwable $e) {
+                report($e);
+
                 return response()->json([
                     'message' => '保守サービス保証書プレビュー画像の生成に失敗しました。',
                     'error' => $e->getMessage(),
@@ -289,6 +293,8 @@ class MaintenanceContractController extends Controller
         try {
             $binary = $pdfService->generate($payload);
         } catch (\Throwable $e) {
+            report($e);
+
             return response()->json([
                 'message' => '再校正チケット PDF の生成に失敗しました。',
                 'error' => $e->getMessage(),
@@ -306,6 +312,8 @@ class MaintenanceContractController extends Controller
             try {
                 $pages = $pdfService->pdfToPngPages($binary);
             } catch (\Throwable $e) {
+                report($e);
+
                 return response()->json([
                     'message' => '再校正チケットプレビュー画像の生成に失敗しました。',
                     'error' => $e->getMessage(),
