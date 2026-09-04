@@ -7,7 +7,7 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 /**
  * 保守サービス 再校正チケット PDF
- * テンプレート: storage/app/template/certification_ticket.pdf
+ * テンプレート: certification_ticket.pdf（PdfTemplatePathResolver で配置差を吸収）
  */
 class MaintenanceContractCertificationTicketPdfService
 {
@@ -87,7 +87,7 @@ class MaintenanceContractCertificationTicketPdfService
 
     public function resolveTemplatePath(): string
     {
-        return storage_path('app/template/certification_ticket.pdf');
+        return app(PdfTemplatePathResolver::class)->resolve('certification_ticket');
     }
 
     /**

@@ -6,7 +6,7 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 /**
  * 保守サービス保証書 PDF
- * テンプレート: storage/app/template/maintenance_contract.pdf
+ * テンプレート: maintenance_contract.pdf（PdfTemplatePathResolver で配置差を吸収）
  */
 class MaintenanceContractCertificatePdfService
 {
@@ -93,11 +93,11 @@ class MaintenanceContractCertificatePdfService
     }
 
     /**
-     * ルートディレクトリが変わっても参照できるよう storage_path 基準で解決する。
+     * ルートディレクトリが変わっても参照できるよう複数候補から解決する。
      */
     public function resolveTemplatePath(): string
     {
-        return storage_path('app/template/maintenance_contract.pdf');
+        return app(PdfTemplatePathResolver::class)->resolve('maintenance_contract');
     }
 
     /**

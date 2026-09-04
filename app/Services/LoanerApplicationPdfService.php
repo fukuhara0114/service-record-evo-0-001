@@ -6,6 +6,7 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 /**
  * 代替機申込書 PDF
+ * テンプレート: template_loaner.pdf（PdfTemplatePathResolver で配置差を吸収）
  * 座標・印字は現行 edit_pdf2.php（mm + Text）に準拠。
  */
 class LoanerApplicationPdfService
@@ -58,10 +59,7 @@ class LoanerApplicationPdfService
      */
     public function generate(array $data): string
     {
-        $template = storage_path('app/template/template_loaner.pdf');
-        if (! is_file($template)) {
-            throw new \RuntimeException('申込書テンプレートが見つかりません: template_loaner.pdf');
-        }
+        $template = app(PdfTemplatePathResolver::class)->resolve('loaner_application');
 
         $fields = $this->buildFields($data);
 
