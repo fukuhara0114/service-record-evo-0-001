@@ -798,12 +798,12 @@
                 <div class="confirm-body application-form-body">
                     <p v-if="applicationFormError" class="confirm-error">{{ applicationFormError }}</p>
                     <div class="application-form-viewport">
-                        <img
-                            v-if="applicationFormPreviewUrl"
-                            class="application-form-image"
-                            :src="applicationFormPreviewUrl"
-                            alt="代替機申込書プレビュー"
-                        >
+                        <iframe
+                            v-if="applicationFormPdfUrl"
+                            class="application-form-frame"
+                            :src="applicationFormPdfUrl"
+                            title="代替機申込書プレビュー"
+                        />
                     </div>
                 </div>
             </div>
@@ -2422,14 +2422,11 @@ async function deleteFile() {
 }
 
 function revokeApplicationFormUrl() {
-    if (applicationFormPreviewUrl.value) {
-        URL.revokeObjectURL(applicationFormPreviewUrl.value)
-        applicationFormPreviewUrl.value = ''
-    }
     if (applicationFormPdfUrl.value) {
         URL.revokeObjectURL(applicationFormPdfUrl.value)
         applicationFormPdfUrl.value = ''
     }
+    applicationFormPreviewUrl.value = ''
     applicationFormPdfBlob.value = null
 }
 
@@ -2538,42 +2535,38 @@ async function generateApplicationForm({ chargeType, enduser_SN, equipmentNameSo
     }
 
     const endpoint = `${page.props.appBaseUrl}/servicerecord/loaner/detail/${props.attached.id}/application-form`
-    const common = {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': getCsrfToken(),
-        },
-        body: JSON.stringify(payload),
-    }
 
     try {
-        const [pngResponse, pdfResponse] = await Promise.all([
-            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'image/png' } }),
-            fetch(endpoint, { ...common, headers: { ...common.headers, Accept: 'application/pdf' } }),
-        ])
-        if (handleUnauthorizedResponse(pngResponse) || handleUnauthorizedResponse(pdfResponse)) return
+        // PDF のみ1回取得（PNG変換は Ghostscript 依存・遅延/失敗しやすいため使わない）
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/pdf',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+            },
+            body: JSON.stringify(payload),
+        })
+        if (handleUnauthorizedResponse(response)) return
 
-        if (!pngResponse.ok) {
-            let message = `申込書の生成に失敗しました。（HTTP ${pngResponse.status}）`
-            const ct = pngResponse.headers.get('Content-Type') || ''
+        if (!response.ok) {
+            let message = `申込書の生成に失敗しました。（HTTP ${response.status}）`
+            const ct = response.headers.get('Content-Type') || ''
             if (ct.includes('application/json')) {
-                const data = await pngResponse.json().catch(() => ({}))
-                message = data.message || data.error || message
+                const data = await response.json().catch(() => ({}))
+                message = data.error || data.message || message
             }
             throw new Error(message)
         }
-        if (!pdfResponse.ok) {
-            throw new Error(`申込書 PDF の取得に失敗しました。（HTTP ${pdfResponse.status}）`)
-        }
 
-        const pngBlob = await pngResponse.blob()
-        const pdfBlob = await pdfResponse.blob()
-        applicationFormPreviewUrl.value = URL.createObjectURL(pngBlob)
-        applicationFormPdfUrl.value = URL.createObjectURL(pdfBlob)
+        const pdfBlob = await response.blob()
+        if (!pdfBlob || pdfBlob.size === 0) {
+            throw new Error('申込書 PDF が空です。')
+        }
         applicationFormPdfBlob.value = pdfBlob
+        applicationFormPdfUrl.value = URL.createObjectURL(pdfBlob)
         applicationFormFilename.value = `loaner_application_${props.record.orderID || props.attached.id}.pdf`
         showApplicationFormSetupDialog.value = false
         showApplicationFormDialog.value = true
@@ -4114,10 +4107,18 @@ a.btn {
     width: 100%;
     overflow: hidden;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
     background: #1e293b;
     border-radius: 4px;
+}
+.application-form-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 70vh;
+    border: 0;
+    background: #fff;
 }
 .application-form-image {
     display: block;

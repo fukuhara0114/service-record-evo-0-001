@@ -817,7 +817,7 @@ class LoanerRecordController extends Controller
         $senderName = trim((string) ($payload['senderName'] ?? ''));
         if ($senderName === '') {
             $user = Auth::user();
-            $senderName = trim((string) ($user->kanji_name ?? $user->name ?? ''));
+            $senderName = trim((string) ($user?->kanji_name ?? $user?->name ?? ''));
             if ($senderName === '' && !empty($record->laborID)) {
                 $senderName = trim((string) (
                     Labor::query()->where('laborID', $record->laborID)->value('laborName') ?? ''
@@ -888,6 +888,8 @@ class LoanerRecordController extends Controller
         try {
             $binary = $pdfService->generate($payload);
         } catch (\Throwable $e) {
+            report($e);
+
             return response()->json([
                 'message' => '申込書 PDF の生成に失敗しました。',
                 'error' => $e->getMessage(),
@@ -902,6 +904,8 @@ class LoanerRecordController extends Controller
             try {
                 $png = $pdfService->pdfToPng($binary);
             } catch (\Throwable $e) {
+                report($e);
+
                 return response()->json([
                     'message' => '申込書プレビュー画像の生成に失敗しました。',
                     'error' => $e->getMessage(),
