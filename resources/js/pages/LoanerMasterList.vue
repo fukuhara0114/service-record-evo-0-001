@@ -669,7 +669,7 @@ async function saveEditDialog() {
 }
 
 const detailChoiceKindLabel = computed(() => {
-    if (detailChoiceRow.value?.associatedCaseKind === 'legacy') return '旧Loaner案件'
+    if (detailChoiceRow.value?.associatedCaseKind === 'legacy') return ''
     return ''
 })
 
