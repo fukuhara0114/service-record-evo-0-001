@@ -139,41 +139,6 @@
         </section>
 
         <div
-            v-if="detailChoiceOpen"
-            class="dialog-overlay"
-            @click.self="closeDetailChoice"
-        >
-            <div
-                class="dialog-panel detail-choice-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="detail-choice-title"
-            >
-                <header class="detail-choice-header">
-                    <h3 id="detail-choice-title">詳細を開く</h3>
-                    <button
-                        type="button"
-                        class="detail-choice-close"
-                        aria-label="閉じる"
-                        @click="closeDetailChoice"
-                    >
-                        X
-                    </button>
-                </header>
-                <p v-if="detailChoiceKindLabel" class="detail-choice-kind">{{ detailChoiceKindLabel }}</p>
-                <p v-if="detailChoiceError" class="detail-choice-error">{{ detailChoiceError }}</p>
-                <div class="detail-choice-actions">
-                    <button type="button" class="detail-choice-btn" @click="openParentDetail">
-                        親案件詳細
-                    </button>
-                    <button type="button" class="detail-choice-btn" @click="openLoanerDetail">
-                        loaner詳細
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div
             v-if="editDialogOpen"
             class="dialog-overlay"
             @click.self="closeEditDialog"
@@ -303,8 +268,6 @@ const props = defineProps({
 const LENDING_PARENT_STATUS_COLUMN = 'lending_parent_status'
 const ASSOCIATED_ID_COLUMN = 'associatedID'
 const PARENT_COMPLETE_STATUS = 400
-const PARENT_NOT_FOUND_MESSAGE = '親案件が見つかりません'
-const LOANER_NOT_FOUND_MESSAGE = 'Loaner案件がみつかりません'
 
 const page = usePage()
 const loading = ref(false)
@@ -312,9 +275,6 @@ const savingStatus = ref(false)
 const selectedId = ref(null)
 const searchInput = ref(props.q || '')
 const quickFilter = ref('')
-const detailChoiceOpen = ref(false)
-const detailChoiceRow = ref(null)
-const detailChoiceError = ref('')
 const editDialogOpen = ref(false)
 const editSaving = ref(false)
 const editError = ref('')
@@ -543,9 +503,7 @@ function selectRow(row) {
 function onRowDoubleClick(row) {
     selectRow(row)
     if (currentScope.value === 'lending') {
-        detailChoiceRow.value = row
-        detailChoiceError.value = ''
-        detailChoiceOpen.value = true
+        openAssociatedDetail(row)
         return
     }
     openEditDialog(row)
@@ -668,58 +626,23 @@ async function saveEditDialog() {
     }
 }
 
-const detailChoiceKindLabel = computed(() => {
-    if (detailChoiceRow.value?.associatedCaseKind === 'legacy') return ''
-    return ''
-})
-
-function closeDetailChoice() {
-    detailChoiceOpen.value = false
-    detailChoiceRow.value = null
-    detailChoiceError.value = ''
-}
-
 function associatedOrderId(row) {
     const associatedId = Number(row?.associatedID)
     return Number.isFinite(associatedId) && associatedId > 0 ? associatedId : null
 }
 
-function openAdministratorDetail(orderId) {
+function openAssociatedDetail(row) {
+    const orderId = associatedOrderId(row)
+    if (orderId == null) return
+
+    if (row?.associatedCaseKind === 'loaner') {
+        window.open(loanerDetailUrl(orderId), '_blank', 'noopener,noreferrer')
+        return
+    }
+
     const url = new URL(serviceRecordUrl('administrator'))
     url.searchParams.set('openOrderID', String(orderId))
     window.open(url.href, '_blank', 'noopener,noreferrer')
-    closeDetailChoice()
-}
-
-function openParentDetail() {
-    const orderId = associatedOrderId(detailChoiceRow.value)
-    if (orderId == null) {
-        detailChoiceError.value = PARENT_NOT_FOUND_MESSAGE
-        return
-    }
-    openAdministratorDetail(orderId)
-}
-
-function openLoanerDetail() {
-    const row = detailChoiceRow.value
-    // 旧Loaner案件: 常に associatedID の service 案件を開く
-    if (row?.associatedCaseKind === 'legacy') {
-        const orderId = associatedOrderId(row)
-        if (orderId == null) {
-            detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
-            return
-        }
-        openAdministratorDetail(orderId)
-        return
-    }
-
-    const loanerOrderId = Number(row?.loanerOrderID)
-    if (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0) {
-        detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
-        return
-    }
-    window.open(loanerDetailUrl(loanerOrderId), '_blank', 'noopener,noreferrer')
-    closeDetailChoice()
 }
 
 function toggleSort(column) {
@@ -1094,14 +1017,6 @@ td {
     font-weight: 700;
 }
 
-.detail-choice-kind {
-    margin: 12px 14px 0;
-    color: #0f172a;
-    font-size: 15px;
-    font-weight: 800;
-    text-align: center;
-}
-
 .detail-choice-close {
     min-width: 36px;
     min-height: 34px;
@@ -1118,30 +1033,6 @@ td {
     margin: 12px 14px 0;
     color: #b91c1c;
     font-size: 13px;
-}
-
-.detail-choice-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px 14px;
-}
-
-.detail-choice-btn {
-    min-height: 42px;
-    padding: 10px 14px;
-    border: none;
-    border-radius: 6px;
-    background: #4a4a4a;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    text-align: center;
-}
-
-.detail-choice-btn:hover {
-    background: #2563eb;
 }
 
 .edit-dialog {
