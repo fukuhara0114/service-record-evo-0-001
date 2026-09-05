@@ -342,6 +342,9 @@
                 <div class="confirm-body">
                     <p>完了してよろしいですか？</p>
                     <p class="confirm-detail">{{ completeConfirmDetail }}</p>
+                    <p v-if="isCompletingMapicsFinal" class="confirm-followup">
+                        完了後、詳細画面を開いて確認しますか？
+                    </p>
                 </div>
                 <div class="confirm-actions">
                     <button
@@ -352,11 +355,30 @@
                     >
                         キャンセル
                     </button>
+                    <template v-if="isCompletingMapicsFinal">
+                        <button
+                            type="button"
+                            class="action-btn"
+                            :disabled="statusActionSaving"
+                            @click="confirmComplete(false)"
+                        >
+                            いいえ
+                        </button>
+                        <button
+                            type="button"
+                            class="action-btn action-btn-primary"
+                            :disabled="statusActionSaving"
+                            @click="confirmComplete(true)"
+                        >
+                            {{ statusActionSaving ? '処理中...' : 'はい' }}
+                        </button>
+                    </template>
                     <button
+                        v-else
                         type="button"
                         class="action-btn action-btn-primary"
                         :disabled="statusActionSaving"
-                        @click="confirmComplete"
+                        @click="confirmComplete(false)"
                     >
                         {{ statusActionSaving ? '処理中...' : '確定' }}
                     </button>
@@ -388,6 +410,7 @@ import {
     resolvePriceCardTotals,
 } from '@/utils/resolveServiceWorkPrice'
 import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
+import { loanerDetailUrl, serviceRecordUrl } from '@/utils/serviceRecordPath'
 
 const props = defineProps({
     record: Object,
@@ -444,6 +467,7 @@ const actionMessage = ref('')
 const statusActionSaving = ref(false)
 const showCompleteConfirmDialog = ref(false)
 const pendingCompleteStatus = ref(null)
+const isCompletingMapicsFinal = ref(false)
 const fileSortSaving = ref(false)
 const fileDropInputEl = ref(null)
 const showFileDropzone = ref(false)
@@ -1072,6 +1096,7 @@ function onComplete() {
     const currentStatus = props.draftRecord?.status ?? props.record?.status
     const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
     const rma = props.draftRecord?.RMA ?? props.record?.RMA
+    isCompletingMapicsFinal.value = Number(currentStatus) === INVOICE_STATUS_MPPICS_FINAL
     pendingCompleteStatus.value = resolveInvoiceCompleteStatus(currentStatus, orderType, rma)
     actionMessage.value = ''
     showCompleteConfirmDialog.value = true
@@ -1081,12 +1106,32 @@ function cancelComplete() {
     if (statusActionSaving.value) return
     showCompleteConfirmDialog.value = false
     pendingCompleteStatus.value = null
+    isCompletingMapicsFinal.value = false
 }
 
-async function confirmComplete() {
+function openCompletedRecordDetail(orderId, orderType) {
+    if (orderId == null || orderId === '') return
+
+    const type = String(orderType ?? '').trim().toLowerCase()
+    if (type === 'loaner') {
+        window.open(loanerDetailUrl(orderId), '_blank', 'noopener,noreferrer')
+        return
+    }
+
+    const url = new URL(serviceRecordUrl('administrator'))
+    url.searchParams.set('openOrderID', String(orderId))
+    url.searchParams.set('orderType', 'service')
+    window.open(url.href, '_blank', 'noopener,noreferrer')
+}
+
+async function confirmComplete(openDetail = false) {
     if (statusActionSaving.value || !props.draftRecord) return
     const nextStatus = pendingCompleteStatus.value
     if (nextStatus == null) return
+
+    const shouldOpenDetail = openDetail === true && isCompletingMapicsFinal.value
+    const orderId = props.draftRecord?.orderID ?? props.record?.orderID
+    const orderType = props.draftRecord?.order_type ?? props.record?.order_type ?? 'service'
 
     statusActionSaving.value = true
     actionMessage.value = ''
@@ -1103,6 +1148,10 @@ async function confirmComplete() {
         })
         showCompleteConfirmDialog.value = false
         pendingCompleteStatus.value = null
+        isCompletingMapicsFinal.value = false
+        if (shouldOpenDetail) {
+            openCompletedRecordDetail(orderId, orderType)
+        }
         emit('workflow-done', {
             action: 'complete',
             status: nextStatus,
@@ -1732,6 +1781,10 @@ watch(
 .confirm-detail {
     font-weight: 600 !important;
     color: #334155 !important;
+}
+
+.confirm-followup {
+    margin-top: 12px !important;
 }
 
 .confirm-actions {

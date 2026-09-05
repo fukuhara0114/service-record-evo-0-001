@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LoanerMaster;
 use App\Models\ServiceRecord;
 use App\Models\StatusLoaner;
+use App\Support\LoanerStatusFlow;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -68,8 +69,11 @@ class LoanerMasterController extends Controller
             ->withQueryString();
 
         $collection = $masters->getCollection();
+        $associatedById = $scope === 'lending'
+            ? $this->loadAssociatedRecords($collection)
+            : collect();
         $parentById = $scope === 'lending'
-            ? $this->loadParentsByAssociatedId($collection)
+            ? $this->loadParentRecordsForLoanerCases($associatedById)
             : collect();
         $loanerOrderByKey = $scope === 'lending'
             ? $this->loadLoanerOrderIdsByParentAndLoaner($collection)
@@ -82,6 +86,7 @@ class LoanerMasterController extends Controller
                     $columns,
                     $statusColumn,
                     $statusLabels,
+                    $associatedById,
                     $parentById,
                     $scope === 'lending',
                     $loanerOrderByKey,
@@ -112,12 +117,8 @@ class LoanerMasterController extends Controller
             'currentStatus' => 'nullable',
         ]);
 
-        if (LoanerMaster::applyLinkedLoanerCaseCurrentStatus($row->loanerID)) {
-            $applied = LoanerMaster::canonicalCurrentStatus($row->loanerID);
-        } else {
-            $applied = $validated['currentStatus'] ?? null;
-            LoanerMaster::unifyCurrentStatus($row->loanerID, $applied);
-        }
+        $applied = $validated['currentStatus'] ?? null;
+        LoanerMaster::unifyCurrentStatus($row->loanerID, $applied);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -356,12 +357,12 @@ class LoanerMasterController extends Controller
     }
 
     /**
-     * associatedID（親 service の orderID）から親案件の status / shippingOut を一括取得。
+     * associatedID が指す servicerecord を一括取得。
      *
      * @param  Collection<int, LoanerMaster>  $rows
      * @return Collection<int, ServiceRecord>
      */
-    private function loadParentsByAssociatedId(Collection $rows): Collection
+    private function loadAssociatedRecords(Collection $rows): Collection
     {
         $ids = $rows
             ->pluck('associatedID')
@@ -377,7 +378,33 @@ class LoanerMasterController extends Controller
 
         return ServiceRecord::query()
             ->whereIn('orderID', $ids)
-            ->get(['orderID', 'status', 'shippingOut_requiredDate'])
+            ->get(['orderID', 'status', 'shippingOut_requiredDate', 'order_type', 'RMA', 'parentID'])
+            ->keyBy(fn (ServiceRecord $record) => (int) $record->orderID);
+    }
+
+    /**
+     * associatedID が loaner 案件のとき、その parentID の service 案件を取得。
+     *
+     * @param  Collection<int, ServiceRecord>  $associatedById
+     * @return Collection<int, ServiceRecord>
+     */
+    private function loadParentRecordsForLoanerCases(Collection $associatedById): Collection
+    {
+        $parentIds = $associatedById
+            ->filter(fn (ServiceRecord $record) => LoanerStatusFlow::associatedCaseKind($record->order_type, $record->RMA) === 'loaner')
+            ->map(fn (ServiceRecord $record) => (int) ($record->parentID ?? 0))
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($parentIds === []) {
+            return collect();
+        }
+
+        return ServiceRecord::query()
+            ->whereIn('orderID', $parentIds)
+            ->get(['orderID', 'status', 'shippingOut_requiredDate', 'order_type', 'RMA', 'parentID'])
             ->keyBy(fn (ServiceRecord $parent) => (int) $parent->orderID);
     }
 
@@ -439,6 +466,7 @@ class LoanerMasterController extends Controller
     /**
      * @param  array<int, string>  $columns
      * @param  array<string, string>  $statusLabels
+     * @param  Collection<int, ServiceRecord>|null  $associatedById
      * @param  Collection<int, ServiceRecord>|null  $parentById
      * @param  Collection<string, int>|null  $loanerOrderByKey
      * @return array<string, mixed>
@@ -448,11 +476,13 @@ class LoanerMasterController extends Controller
         array $columns,
         string $statusColumn,
         array $statusLabels,
+        ?Collection $associatedById = null,
         ?Collection $parentById = null,
         bool $includeParentInfo = false,
         ?Collection $loanerOrderByKey = null,
     ): array {
         $out = [];
+        $associated = $associatedById ?? collect();
         $parents = $parentById ?? collect();
         $loanerOrders = $loanerOrderByKey ?? collect();
 
@@ -476,26 +506,104 @@ class LoanerMasterController extends Controller
         }
 
         if ($includeParentInfo) {
-            $associatedId = (int) ($row->associatedID ?? 0);
-            $loanerId = (int) ($row->loanerID ?? 0);
-            $parent = $associatedId > 0 ? $parents->get($associatedId) : null;
-            $shippingOut = null;
-            $shippingRaw = $parent?->shippingOut_requiredDate;
-            if ($shippingRaw instanceof \DateTimeInterface) {
-                $shippingOut = $shippingRaw->format('Y-m-d');
-            } elseif ($shippingRaw !== null && $shippingRaw !== '') {
-                $raw = substr((string) $shippingRaw, 0, 10);
-                $shippingOut = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
-            }
-
-            $out['parentStatus'] = $parent?->status;
-            $out['parentShippingOut'] = $shippingOut;
-            $out['loanerOrderID'] = ($associatedId > 0 && $loanerId > 0)
-                ? ($loanerOrders->get($associatedId.':'.$loanerId) ?? null)
-                : null;
+            $meta = $this->resolveAssociatedCaseMeta(
+                $row,
+                $associated,
+                $parents,
+                $loanerOrders,
+            );
+            $out['associatedCaseKind'] = $meta['kind'];
+            $out['parentOrderID'] = $meta['parentOrderID'];
+            $out['loanerOrderID'] = $meta['loanerOrderID'];
+            $out['parentStatus'] = $meta['parent']?->status;
+            $out['parentShippingOut'] = $this->formatShippingOutDate($meta['parent']?->shippingOut_requiredDate);
         }
 
         return $out;
+    }
+
+    /**
+     * associatedID の servicerecord から Loaner案件 / 旧Loaner案件 を判定する。
+     *
+     * @param  Collection<int, ServiceRecord>  $associatedById
+     * @param  Collection<int, ServiceRecord>  $parentById
+     * @param  Collection<string, int>  $loanerOrders
+     * @return array{kind: 'loaner'|'legacy'|null, parentOrderID: int|null, loanerOrderID: int|null, parent: ServiceRecord|null}
+     */
+    private function resolveAssociatedCaseMeta(
+        LoanerMaster $row,
+        Collection $associatedById,
+        Collection $parentById,
+        Collection $loanerOrders,
+    ): array {
+        $associatedId = (int) ($row->associatedID ?? 0);
+        $loanerId = (int) ($row->loanerID ?? 0);
+        $record = $associatedId > 0 ? $associatedById->get($associatedId) : null;
+        $kind = $record
+            ? LoanerStatusFlow::associatedCaseKind($record->order_type, $record->RMA)
+            : null;
+
+        if ($kind === 'loaner') {
+            $parentOrderId = (int) ($record->parentID ?? 0);
+            // 親は servicerecord.parentID のみ。associatedID（自案件 orderID）は親に使わない
+            $hasParent = $parentOrderId > 0 && $parentOrderId !== (int) $record->orderID;
+
+            return [
+                'kind' => 'loaner',
+                'parentOrderID' => $hasParent ? $parentOrderId : null,
+                'loanerOrderID' => (int) $record->orderID,
+                'parent' => $hasParent ? $parentById->get($parentOrderId) : null,
+            ];
+        }
+
+        if ($kind === 'legacy') {
+            return [
+                'kind' => 'legacy',
+                'parentOrderID' => (int) $record->orderID,
+                'loanerOrderID' => null,
+                'parent' => $record,
+            ];
+        }
+
+        $childLoanerOrderId = ($associatedId > 0 && $loanerId > 0)
+            ? ($loanerOrders->get($associatedId.':'.$loanerId) ?? null)
+            : null;
+        $childLoanerOrderId = $childLoanerOrderId !== null ? (int) $childLoanerOrderId : null;
+
+        // associatedID が通常の service 親で、子 loaner があるときだけ親として扱う
+        $associatedIsServiceParent = $record
+            && LoanerStatusFlow::isServiceLikeOrderType($record->order_type)
+            && ! LoanerStatusFlow::isLoanerRma($record->RMA);
+
+        if ($childLoanerOrderId && $associatedIsServiceParent) {
+            return [
+                'kind' => 'loaner',
+                'parentOrderID' => $associatedId,
+                'loanerOrderID' => $childLoanerOrderId,
+                'parent' => $record,
+            ];
+        }
+
+        return [
+            'kind' => $childLoanerOrderId ? 'loaner' : null,
+            'parentOrderID' => null,
+            'loanerOrderID' => $childLoanerOrderId,
+            'parent' => null,
+        ];
+    }
+
+    private function formatShippingOutDate(mixed $shippingRaw): ?string
+    {
+        if ($shippingRaw instanceof \DateTimeInterface) {
+            return $shippingRaw->format('Y-m-d');
+        }
+        if ($shippingRaw === null || $shippingRaw === '') {
+            return null;
+        }
+
+        $raw = substr((string) $shippingRaw, 0, 10);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) ? $raw : null;
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Support\LoanerStatusFlow;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class LoanerMaster extends Model
@@ -207,11 +208,9 @@ class LoanerMaster extends Model
                 }
             }
 
-            // 紐づく Loaner 案件があれば currentStatus は案件 status が正（完了以上は 0）
-            $linkedApplied = static::applyLinkedLoanerCaseCurrentStatus($master->loanerID);
-            if ($linkedApplied) {
-                unset($changed['currentStatus']);
-            } elseif ($master->wasChanged('currentStatus')) {
+            // currentStatus の手動変更は同一 loanerID の全版へ反映する。
+            // 案件 status との同期は ServiceRecord 保存時に行う（ここでは上書きしない）。
+            if ($master->wasChanged('currentStatus')) {
                 static::unifyCurrentStatus($master->loanerID, $master->getAttribute('currentStatus'));
                 unset($changed['currentStatus']);
             } elseif (
@@ -258,6 +257,112 @@ class LoanerMaster extends Model
             $id,
             LoanerStatusFlow::masterCurrentStatusFromCaseStatus($record->status),
         );
+    }
+
+    /**
+     * 紐づく loanermaster.associatedID に当該案件の orderID を書く。
+     * loaner 案件 → その loaner 案件の orderID。
+     * service && RMA=loaner → その service 案件の orderID。
+     */
+    public static function assignAssociatedOrderId(ServiceRecord $record, mixed $loanerId = null): void
+    {
+        if (! LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave($record->order_type, $record->RMA)) {
+            return;
+        }
+
+        $orderId = $record->orderID;
+        if ($orderId === null || $orderId === '' || (int) $orderId === 0) {
+            return;
+        }
+
+        try {
+            if (! Schema::hasColumn((new static)->getTable(), 'associatedID')) {
+                return;
+            }
+
+            $ids = $loanerId !== null && $loanerId !== '' && (int) $loanerId !== 0
+                ? [$loanerId]
+                : static::linkedLoanerIdsForRecord($record);
+
+            foreach ($ids as $id) {
+                if ($id === null || $id === '' || (int) $id === 0) {
+                    continue;
+                }
+
+                static::query()
+                    ->where('loanerID', $id)
+                    ->update(['associatedID' => (int) $orderId]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('loanermaster associatedID の書き込みに失敗しました', [
+                'orderID' => $orderId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 案件に紐づく loanerID 一覧。
+     * loaner 案件は自身の個体のみ。旧貸出（service && RMA=loaner）は子 loaner / attached も含む。
+     *
+     * @return list<int|string>
+     */
+    public static function linkedLoanerIdsForRecord(ServiceRecord $record): array
+    {
+        $ids = collect();
+
+        $ownId = $record->loanerID;
+        if ($ownId !== null && $ownId !== '' && (int) $ownId !== 0) {
+            $ids->push($ownId);
+        }
+
+        $orderId = $record->orderID;
+        if ($orderId === null || $orderId === '' || (int) $orderId === 0) {
+            return $ids
+                ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id !== 0)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $ids = $ids->concat(
+            AttachedLoaner::query()
+                ->where('associatedID', $record->orderID)
+                ->whereNotNull('loanerID')
+                ->where('loanerID', '!=', '')
+                ->pluck('loanerID'),
+        );
+
+        $isLoanerCase = ServiceRecord::normalizeOrderType($record->order_type) === 'loaner';
+        $isLegacyServiceLoaner = LoanerStatusFlow::isServiceLikeOrderType($record->order_type)
+            && LoanerStatusFlow::isLoanerRma($record->RMA);
+
+        if ($isLegacyServiceLoaner && ! $isLoanerCase) {
+            $ids = $ids->concat(
+                ServiceRecord::query()
+                    ->where('parentID', $record->orderID)
+                    ->where('order_type', 'loaner')
+                    ->whereNotNull('loanerID')
+                    ->where('loanerID', '!=', '')
+                    ->pluck('loanerID'),
+            );
+
+            if (Schema::hasColumn((new static)->getTable(), 'associatedID')) {
+                $ids = $ids->concat(
+                    static::query()
+                        ->where('associatedID', $record->orderID)
+                        ->whereNotNull('loanerID')
+                        ->where('loanerID', '!=', '')
+                        ->pluck('loanerID'),
+                );
+            }
+        }
+
+        return $ids
+            ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id !== 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

@@ -36,4 +36,84 @@ class LoanerStatusFlowTest extends TestCase
         $this->assertTrue(LoanerStatusFlow::isCompleteOrBeyond(400));
         $this->assertTrue(LoanerStatusFlow::isCompleteOrBeyond(650));
     }
+
+    public function test_invoice_complete_marks_master_lending_out_for_service_loaner_rma(): void
+    {
+        $this->assertTrue(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            3,
+            'service',
+            'loaner',
+        ));
+        $this->assertTrue(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            '385',
+            '3',
+            null,
+            'Loaner',
+        ));
+        $this->assertTrue(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            3,
+            '',
+            'LOANER',
+        ));
+    }
+
+    public function test_invoice_complete_does_not_mark_master_lending_out_otherwise(): void
+    {
+        $this->assertFalse(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            3,
+            'loaner',
+            'loaner',
+        ));
+        $this->assertFalse(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            400,
+            'service',
+            'loaner',
+        ));
+        $this->assertFalse(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            350,
+            'service',
+            'loaner',
+        ));
+        $this->assertFalse(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            385,
+            3,
+            'service',
+            '12345',
+        ));
+        $this->assertFalse(LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            300,
+            3,
+            'service',
+            'loaner',
+        ));
+    }
+
+    public function test_associated_id_is_bound_on_save_for_loaner_and_legacy_service_loaner_cases(): void
+    {
+        $this->assertTrue(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('loaner', null));
+        $this->assertTrue(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('loaner', '123'));
+        $this->assertTrue(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('service', 'loaner'));
+        $this->assertTrue(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave(null, 'Loaner'));
+        $this->assertTrue(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('', 'LOANER'));
+        $this->assertFalse(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('service', '12345'));
+        $this->assertFalse(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave('waiting_list', 'loaner'));
+        $this->assertFalse(LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave(null, null));
+    }
+
+    public function test_associated_case_kind_distinguishes_loaner_and_legacy(): void
+    {
+        $this->assertSame('loaner', LoanerStatusFlow::associatedCaseKind('loaner', null));
+        $this->assertSame('loaner', LoanerStatusFlow::associatedCaseKind('loaner', '123'));
+        $this->assertSame('legacy', LoanerStatusFlow::associatedCaseKind('service', 'loaner'));
+        $this->assertSame('legacy', LoanerStatusFlow::associatedCaseKind(null, 'Loaner'));
+        $this->assertSame('legacy', LoanerStatusFlow::associatedCaseKind('', 'LOANER'));
+        $this->assertNull(LoanerStatusFlow::associatedCaseKind('service', '12345'));
+        $this->assertNull(LoanerStatusFlow::associatedCaseKind('waiting_list', 'loaner'));
+        $this->assertNull(LoanerStatusFlow::associatedCaseKind(null, null));
+    }
 }

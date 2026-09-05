@@ -2648,7 +2648,8 @@ async function save(options = {}) {
     }
 
     const payload = { ...form }
-    payload.parentID = numericNullable(form.parentID)
+    const parentIdValue = numericNullable(form.parentID)
+    payload.parentID = parentIdValue && parentIdValue !== 0 ? parentIdValue : null
     payload.loanerID = numericNullable(form.loanerID)
     payload.status = Number.isFinite(savingStatus) ? savingStatus : numericNullable(form.status)
     payload.notify_loaner_check = notifyLoanerCheck

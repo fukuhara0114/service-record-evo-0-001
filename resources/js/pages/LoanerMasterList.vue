@@ -160,6 +160,7 @@
                         X
                     </button>
                 </header>
+                <p v-if="detailChoiceKindLabel" class="detail-choice-kind">{{ detailChoiceKindLabel }}</p>
                 <p v-if="detailChoiceError" class="detail-choice-error">{{ detailChoiceError }}</p>
                 <div class="detail-choice-actions">
                     <button type="button" class="detail-choice-btn" @click="openParentDetail">
@@ -302,6 +303,8 @@ const props = defineProps({
 const LENDING_PARENT_STATUS_COLUMN = 'lending_parent_status'
 const ASSOCIATED_ID_COLUMN = 'associatedID'
 const PARENT_COMPLETE_STATUS = 400
+const PARENT_NOT_FOUND_MESSAGE = '親案件が見つかりません'
+const LOANER_NOT_FOUND_MESSAGE = 'Loaner案件がみつかりません'
 
 const page = usePage()
 const loading = ref(false)
@@ -665,28 +668,66 @@ async function saveEditDialog() {
     }
 }
 
+const detailChoiceKindLabel = computed(() => {
+    const kind = detailChoiceRow.value?.associatedCaseKind
+    if (kind === 'legacy') return '旧Loaner案件'
+    if (kind === 'loaner') return 'Loaner案件'
+    return ''
+})
+
 function closeDetailChoice() {
     detailChoiceOpen.value = false
     detailChoiceRow.value = null
     detailChoiceError.value = ''
 }
 
-function openParentDetail() {
-    const associatedId = Number(detailChoiceRow.value?.associatedID)
-    if (!Number.isFinite(associatedId) || associatedId <= 0) {
-        detailChoiceError.value = '親案件ID（associatedID）がありません。'
-        return
-    }
+function openAdministratorDetail(orderId) {
     const url = new URL(serviceRecordUrl('administrator'))
-    url.searchParams.set('openOrderID', String(associatedId))
+    url.searchParams.set('openOrderID', String(orderId))
     window.open(url.href, '_blank', 'noopener,noreferrer')
     closeDetailChoice()
 }
 
+function openParentDetail() {
+    const row = detailChoiceRow.value
+    const kind = row?.associatedCaseKind
+
+    // 旧Loaner案件: associatedID の service 案件を開く
+    if (kind === 'legacy') {
+        const associatedId = Number(row?.parentOrderID ?? row?.associatedID)
+        if (!Number.isFinite(associatedId) || associatedId <= 0) {
+            detailChoiceError.value = PARENT_NOT_FOUND_MESSAGE
+            return
+        }
+        openAdministratorDetail(associatedId)
+        return
+    }
+
+    // Loaner案件: servicerecord.parentID があるときだけ。associatedID では開かない
+    const parentId = Number(row?.parentOrderID)
+    const associatedId = Number(row?.associatedID)
+    const loanerOrderId = Number(row?.loanerOrderID)
+    const parentIsSelf = Number.isFinite(associatedId)
+        && associatedId > 0
+        && parentId === associatedId
+        && (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0 || parentId === loanerOrderId)
+
+    if (!Number.isFinite(parentId) || parentId <= 0 || parentIsSelf) {
+        detailChoiceError.value = PARENT_NOT_FOUND_MESSAGE
+        return
+    }
+    openAdministratorDetail(parentId)
+}
+
 function openLoanerDetail() {
-    const loanerOrderId = Number(detailChoiceRow.value?.loanerOrderID)
+    const row = detailChoiceRow.value
+    if (row?.associatedCaseKind === 'legacy') {
+        detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
+        return
+    }
+    const loanerOrderId = Number(row?.loanerOrderID)
     if (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0) {
-        detailChoiceError.value = '対応する loaner 案件が見つかりません。'
+        detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
         return
     }
     window.open(loanerDetailUrl(loanerOrderId), '_blank', 'noopener,noreferrer')
@@ -1063,6 +1104,14 @@ td {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
+}
+
+.detail-choice-kind {
+    margin: 12px 14px 0;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 800;
+    text-align: center;
 }
 
 .detail-choice-close {

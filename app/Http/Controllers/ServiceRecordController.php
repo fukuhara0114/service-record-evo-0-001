@@ -2687,6 +2687,10 @@ class ServiceRecordController extends Controller
                 $manageNum = trim((string) ($master?->manageNum ?? ''));
                 $price = $master?->price;
                 $priceValue = is_numeric($price) ? (float) $price : null;
+                $currentStatus = $master?->currentStatus;
+                if (($currentStatus === null || $currentStatus === '') && $attached->loanerID) {
+                    $currentStatus = LoanerMaster::canonicalCurrentStatus($attached->loanerID);
+                }
 
                 return [
                     'id' => $attached->id,
@@ -2700,6 +2704,7 @@ class ServiceRecordController extends Controller
                     'priceVersions' => $resolver->loanerPriceVersions($attached->loanerID),
                     'associatedID' => $attached->associatedID,
                     'sentDate' => optional($master?->sentDate)->format('Y-m-d'),
+                    'currentStatus' => $currentStatus,
                 ];
             })
             ->values()
@@ -3628,6 +3633,22 @@ class ServiceRecordController extends Controller
             );
         }
 
+        if (LoanerStatusFlow::shouldMarkMasterLendingOutOnInvoiceComplete(
+            $previousStatusId,
+            $record->status,
+            $record->order_type,
+            $record->RMA,
+        )) {
+            try {
+                $this->markLinkedLoanerMastersLendingOut($record);
+            } catch (\Throwable $e) {
+                Log::error('Invoice 完了時の loanermaster 貸出中同期に失敗しました', [
+                    'orderID' => $record->orderID,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         if ($request->expectsJson()) {
             $freshRelations = ['returnCodeMaster', 'laborMaster'];
             if ($record->order_type === 'loaner') {
@@ -3739,6 +3760,31 @@ class ServiceRecordController extends Controller
         }
 
         return $updated;
+    }
+
+    /**
+     * Invoice 385→完了（未着荷―貸出機先行）時、紐づく loanermaster を貸出中(388)にする。
+     * 返却(393)以降の Loaner 案件が既にある個体は触らない。
+     */
+    private function markLinkedLoanerMastersLendingOut(ServiceRecord $record): void
+    {
+        foreach ($this->linkedLoanerIdsForRecord($record) as $loanerId) {
+            $alreadyReturned = ServiceRecord::query()
+                ->where('order_type', 'loaner')
+                ->where('loanerID', $loanerId)
+                ->where('status', '>=', LoanerStatusFlow::RETURNED)
+                ->exists();
+            if ($alreadyReturned) {
+                continue;
+            }
+
+            LoanerMaster::unifyCurrentStatus($loanerId, LoanerStatusFlow::LENDING_OUT);
+        }
+    }
+
+    private function linkedLoanerIdsForRecord(ServiceRecord $record): array
+    {
+        return LoanerMaster::linkedLoanerIdsForRecord($record);
     }
 
     private function statusValueExistsForRecord(ServiceRecord $record, int $status): bool

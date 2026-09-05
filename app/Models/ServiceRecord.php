@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\ServiceMaster;
 use App\Models\ReturnCode;
 use App\Models\Dealer;
@@ -13,6 +15,7 @@ use App\Models\User;
 use App\Models\AttachedFile;
 use App\Models\AttachedNote;
 use App\Models\AttachedPart;
+use App\Support\LoanerStatusFlow;
 
 
 class ServiceRecord extends Model
@@ -72,16 +75,60 @@ class ServiceRecord extends Model
                     && (string) ($previousLoanerId ?? '') !== (string) ($record->loanerID ?? '');
 
                 if ($leavingLoaner || $changingUnit) {
-                    LoanerMaster::releaseCurrentStatusIfUnlinked(
-                        $previousLoanerId,
-                        $record->getKey(),
-                    );
+                    try {
+                        LoanerMaster::releaseCurrentStatusIfUnlinked(
+                            $previousLoanerId,
+                            $record->getKey(),
+                        );
+                    } catch (\Throwable $e) {
+                        Log::error('loanermaster 在庫戻しに失敗しました', [
+                            'orderID' => $record->getKey(),
+                            'loanerID' => $previousLoanerId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
         });
 
         static::saved(function (ServiceRecord $record) {
-            LoanerMaster::syncCurrentStatusFromLoanerRecord($record);
+            $shouldBind = LoanerStatusFlow::shouldBindMasterAssociatedIdOnSave($record->order_type, $record->RMA);
+            $shouldSyncStatus = $record->wasRecentlyCreated
+                || $record->wasChanged('status')
+                || $record->wasChanged('loanerID')
+                || $record->wasChanged('order_type');
+
+            if (! $shouldBind && ! $shouldSyncStatus) {
+                return;
+            }
+
+            $orderId = $record->orderID;
+            $run = static function () use ($orderId, $shouldBind, $shouldSyncStatus): void {
+                try {
+                    $fresh = ServiceRecord::query()->where('orderID', $orderId)->first();
+                    if (! $fresh) {
+                        return;
+                    }
+                    if ($shouldBind) {
+                        LoanerMaster::assignAssociatedOrderId($fresh);
+                    }
+                    if ($shouldSyncStatus) {
+                        LoanerMaster::syncCurrentStatusFromLoanerRecord($fresh);
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('loanermaster 同期に失敗しました', [
+                        'orderID' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            };
+
+            // 案件の status 保存をロールバックさせない（トランザクション確定後に同期）
+            if (DB::transactionLevel() > 0) {
+                DB::afterCommit($run);
+            } else {
+                $run();
+            }
         });
     }
 

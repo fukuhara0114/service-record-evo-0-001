@@ -44,6 +44,12 @@ class LoanerStatusFlow
     /** @deprecated 旧フロー。次へでは使わない */
     public const SHIP_REQUEST = 350;
 
+    /** Invoice の MAPICS 最終（完了ボタン起点） */
+    public const INVOICE_MAPICS_FINAL = 385;
+
+    /** Invoice 完了後: service + RMA=loaner の「未着荷―貸出機先行」 */
+    public const SERVICE_UNRECEIVED_LOANER_FIRST = 3;
+
     /** 貸出中 */
     public const LENDING_OUT = 388;
 
@@ -141,6 +147,68 @@ class LoanerStatusFlow
         $status = (int) $caseStatus;
 
         return self::isCompleteOrBeyond($status) ? self::STOCK : $status;
+    }
+
+    public static function isLoanerRma(mixed $rma): bool
+    {
+        return strtolower(trim((string) $rma)) === 'loaner';
+    }
+
+    /** order_type が service / null / 空（service 扱い）か。 */
+    public static function isServiceLikeOrderType(mixed $orderType): bool
+    {
+        if ($orderType === null) {
+            return true;
+        }
+
+        $normalized = strtolower(trim((string) $orderType));
+
+        return $normalized === '' || $normalized === 'service';
+    }
+
+    /**
+     * Invoice で status=385 の service 案件（RMA=loaner）を完了したとき、
+     * 紐づく loanermaster.currentStatus を貸出中(388)にするか。
+     */
+    public static function shouldMarkMasterLendingOutOnInvoiceComplete(
+        mixed $previousStatus,
+        mixed $nextStatus,
+        mixed $orderType,
+        mixed $rma,
+    ): bool {
+        return (int) $previousStatus === self::INVOICE_MAPICS_FINAL
+            && (int) $nextStatus === self::SERVICE_UNRECEIVED_LOANER_FIRST
+            && self::isServiceLikeOrderType($orderType)
+            && self::isLoanerRma($rma);
+    }
+
+    /**
+     * 保存時に loanermaster.associatedID へ当該案件 orderID を書く対象か。
+     * loaner 案件、および旧貸出（service / null かつ RMA=loaner）。
+     */
+    public static function shouldBindMasterAssociatedIdOnSave(mixed $orderType, mixed $rma): bool
+    {
+        return self::associatedCaseKind($orderType, $rma) !== null;
+    }
+
+    /**
+     * associatedID が指す servicerecord の種別。
+     * loaner → Loaner案件 / service(null含む) && RMA=loaner → 旧Loaner案件。
+     *
+     * @return 'loaner'|'legacy'|null
+     */
+    public static function associatedCaseKind(mixed $orderType, mixed $rma): ?string
+    {
+        $normalized = $orderType === null ? '' : strtolower(trim((string) $orderType));
+        if ($normalized === 'loaner') {
+            return 'loaner';
+        }
+
+        if (self::isServiceLikeOrderType($orderType) && self::isLoanerRma($rma)) {
+            return 'legacy';
+        }
+
+        return null;
     }
 
     /**

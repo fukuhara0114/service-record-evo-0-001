@@ -356,6 +356,7 @@
                                                 <th>ID</th>
                                                 <th>Name</th>
                                                 <th>SN</th>
+                                                <th>currentStatus</th>
                                                 <th>J num</th>
                                                 <th>Prc</th>
                                                 <th>Asc ID</th>
@@ -367,6 +368,7 @@
                                                 <td>{{ displayDash(loaner.loanerID ?? loaner.id) }}</td>
                                                 <td>{{ displayDash(loaner.productName) }}</td>
                                                 <td>{{ displayDash(loaner.SN) }}</td>
+                                                <td>{{ attachedLoanerCurrentStatusLabel(loaner) }}</td>
                                                 <td>{{ displayDash(loaner.manageNum) }}</td>
                                                 <td>{{ formatYenPrice(loaner.displayPrice) }}</td>
                                                 <td>{{ displayDash(loaner.associatedID) }}</td>
@@ -2276,6 +2278,15 @@ const attachedLoanerRows = computed(() => {
         }
     })
 })
+
+function attachedLoanerCurrentStatusLabel(loaner) {
+    const id = loaner?.currentStatus
+    if (id == null || id === '') return '—'
+    const row = (page.props.statusesLoaner ?? []).find(
+        (status) => Number(status.processID_new) === Number(id),
+    )
+    return row ? loanerStatusOptionLabel(row) : String(id)
+}
 
 /**
  * 紐づく loaner 案件: 当該案件の受注日版 loanermaster（無償 price=0 は 0）。
