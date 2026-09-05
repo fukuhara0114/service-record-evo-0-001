@@ -112,13 +112,18 @@ class LoanerMasterController extends Controller
             'currentStatus' => 'nullable',
         ]);
 
-        LoanerMaster::unifyCurrentStatus($row->loanerID, $validated['currentStatus'] ?? null);
+        if (LoanerMaster::applyLinkedLoanerCaseCurrentStatus($row->loanerID)) {
+            $applied = LoanerMaster::canonicalCurrentStatus($row->loanerID);
+        } else {
+            $applied = $validated['currentStatus'] ?? null;
+            LoanerMaster::unifyCurrentStatus($row->loanerID, $applied);
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => '同じ loanerID の currentStatus を更新しました。',
                 'loanerID' => $row->loanerID,
-                'currentStatus' => $validated['currentStatus'] ?? null,
+                'currentStatus' => $applied,
             ]);
         }
 

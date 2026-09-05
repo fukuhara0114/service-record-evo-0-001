@@ -18,6 +18,10 @@ namespace App\Support;
  * labor は status=返却(393) のときのみ編集可。
  * status=300 遷移時は出荷予定日ダイアログで shippingOut_requiredDate を設定する。
  * アクティブな loaner リストは status >= 0 かつ status < 400。
+ *
+ * 紐づく loanermaster.currentStatus:
+ *   案件 status が完了(400)未満 → 案件 status と同じ
+ *   案件 status が完了(400)以上 → 在庫(0)
  */
 class LoanerStatusFlow
 {
@@ -120,6 +124,23 @@ class LoanerStatusFlow
         $status = (int) $statusId;
 
         return $status >= self::STOCK && $status < self::ACTIVE_LIST_STATUS_MAX;
+    }
+
+    /** 完了(400)以上か。 */
+    public static function isCompleteOrBeyond(mixed $statusId): bool
+    {
+        return (int) $statusId >= self::COMPLETE;
+    }
+
+    /**
+     * loaner 案件 status から、紐づく loanermaster.currentStatus を決める。
+     * 完了(400)以上は在庫(0)。それ以外は案件 status をそのまま使う。
+     */
+    public static function masterCurrentStatusFromCaseStatus(mixed $caseStatus): int
+    {
+        $status = (int) $caseStatus;
+
+        return self::isCompleteOrBeyond($status) ? self::STOCK : $status;
     }
 
     /**

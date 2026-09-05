@@ -51,19 +51,37 @@ class ServiceRecord extends Model
                 $record->original_order_type = $record->getOriginal('original_order_type');
             }
 
-            if (! $record->isDirty('order_type')) {
-                return;
-            }
-
             $original = self::normalizeOrderType($record->getOriginal('order_type'));
             $next = self::normalizeOrderType($record->order_type);
 
-            // 既存が loaner / waiting_list のとき、許可遷移は同グループ内のみ
-            if (in_array($original, self::PROTECTED_ORDER_TYPES, true)
-                && ! in_array($next, self::PROTECTED_ORDER_TYPES, true)
-            ) {
-                $record->order_type = $record->getOriginal('order_type');
+            if ($record->isDirty('order_type')) {
+                // 既存が loaner / waiting_list のとき、許可遷移は同グループ内のみ
+                if (in_array($original, self::PROTECTED_ORDER_TYPES, true)
+                    && ! in_array($next, self::PROTECTED_ORDER_TYPES, true)
+                ) {
+                    $record->order_type = $record->getOriginal('order_type');
+                    $next = $original;
+                }
             }
+
+            // loaner 案件から外れる／個体を差し替えるときは旧個体を在庫へ戻す
+            if ($original === 'loaner') {
+                $previousLoanerId = $record->getOriginal('loanerID');
+                $leavingLoaner = $next !== 'loaner';
+                $changingUnit = $record->isDirty('loanerID')
+                    && (string) ($previousLoanerId ?? '') !== (string) ($record->loanerID ?? '');
+
+                if ($leavingLoaner || $changingUnit) {
+                    LoanerMaster::releaseCurrentStatusIfUnlinked(
+                        $previousLoanerId,
+                        $record->getKey(),
+                    );
+                }
+            }
+        });
+
+        static::saved(function (ServiceRecord $record) {
+            LoanerMaster::syncCurrentStatusFromLoanerRecord($record);
         });
     }
 

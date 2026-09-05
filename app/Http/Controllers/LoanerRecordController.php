@@ -1203,8 +1203,8 @@ class LoanerRecordController extends Controller
                     $this->setLoanerInventoryStatus($previousLoanerId, 0);
                 }
 
-                if ($newStatus === LoanerStatusFlow::COMPLETE) {
-                    // 完了: associatedID=-1 / currentStatus=0
+                if (LoanerStatusFlow::isCompleteOrBeyond($newStatus)) {
+                    // 完了(400)以上: associatedID=-1 / currentStatus=0
                     $this->releaseLoanerMasterOnComplete($newLoanerId);
                 } else {
                     // 親 service の orderID を loanermaster.associatedID へ反映（未設定ならクリア）
@@ -1866,7 +1866,7 @@ class LoanerRecordController extends Controller
                     $record->save();
                     if ($isLoaner && array_key_exists('status', $validated)) {
                         $loanerId = $record->loanerID ?? $attached->loanerID;
-                        if ((int) $record->status === LoanerStatusFlow::COMPLETE) {
+                        if (LoanerStatusFlow::isCompleteOrBeyond($record->status)) {
                             $this->releaseLoanerMasterOnComplete($loanerId);
                         } else {
                             $this->syncLoanerMasterAssociatedIdFromParent($loanerId, $record->parentID);
@@ -2284,29 +2284,11 @@ class LoanerRecordController extends Controller
     /**
      * 貸出詳細の status（servicerecord.status = processID_new）を
      * loanermaster.currentStatus へ同期する。
-     * 案件が完了(400)のときは個体を在庫(0)へ戻す。
+     * 案件が完了(400)以上のときは個体を在庫(0)へ戻す。
      */
     private function syncLoanerMasterCurrentStatus(ServiceRecord $record, mixed $loanerId = null): void
     {
-        if ($record->order_type !== 'loaner') {
-            return;
-        }
-
-        $id = $loanerId ?? $record->loanerID;
-        if ($id === null || $id === '' || (int) $id === 0) {
-            return;
-        }
-
-        if ($record->status === null || $record->status === '') {
-            return;
-        }
-
-        $recordStatus = (int) $record->status;
-        $masterStatus = LoanerStatusFlow::isActiveListStatus($recordStatus)
-            ? $recordStatus
-            : LoanerStatusFlow::STOCK;
-
-        $this->setLoanerInventoryStatus($id, $masterStatus);
+        LoanerMaster::syncCurrentStatusFromLoanerRecord($record, $loanerId);
     }
 
     /**
@@ -2344,7 +2326,7 @@ class LoanerRecordController extends Controller
     }
 
     /**
-     * loaner 案件が完了(400)のとき: associatedID=-1 / currentStatus=0（同一 loanerID の全版）。
+     * loaner 案件が完了(400)以上のとき: associatedID=-1 / currentStatus=0（同一 loanerID の全版）。
      */
     private function releaseLoanerMasterOnComplete(mixed $loanerId): void
     {
@@ -2372,6 +2354,8 @@ class LoanerRecordController extends Controller
         if ($loanerId === null || $loanerId === '') {
             return;
         }
+
+        $status = LoanerStatusFlow::masterCurrentStatusFromCaseStatus($status);
 
         $statusColumn = $this->resolveStatusColumn();
         if (!Schema::hasColumn((new LoanerMaster)->getTable(), $statusColumn)) {

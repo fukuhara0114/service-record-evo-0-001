@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\LoanerStatusFlow;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
@@ -206,7 +207,11 @@ class LoanerMaster extends Model
                 }
             }
 
-            if ($master->wasChanged('currentStatus')) {
+            // 紐づく Loaner 案件があれば currentStatus は案件 status が正（完了以上は 0）
+            $linkedApplied = static::applyLinkedLoanerCaseCurrentStatus($master->loanerID);
+            if ($linkedApplied) {
+                unset($changed['currentStatus']);
+            } elseif ($master->wasChanged('currentStatus')) {
                 static::unifyCurrentStatus($master->loanerID, $master->getAttribute('currentStatus'));
                 unset($changed['currentStatus']);
             } elseif (
@@ -228,6 +233,110 @@ class LoanerMaster extends Model
                 $master->getKey(),
             );
         });
+    }
+
+    /**
+     * Loaner 案件の status を、紐づく loanermaster.currentStatus へ同期する。
+     * 完了(400)以上のときは在庫(0)。
+     */
+    public static function syncCurrentStatusFromLoanerRecord(ServiceRecord $record, mixed $loanerId = null): void
+    {
+        if (ServiceRecord::normalizeOrderType($record->order_type) !== 'loaner') {
+            return;
+        }
+
+        $id = $loanerId ?? $record->loanerID;
+        if ($id === null || $id === '' || (int) $id === 0) {
+            return;
+        }
+
+        if ($record->status === null || $record->status === '') {
+            return;
+        }
+
+        static::unifyCurrentStatus(
+            $id,
+            LoanerStatusFlow::masterCurrentStatusFromCaseStatus($record->status),
+        );
+    }
+
+    /**
+     * この個体を使う他のアクティブ loaner 案件が無ければ currentStatus を在庫(0)へ戻す。
+     */
+    public static function releaseCurrentStatusIfUnlinked(mixed $loanerId, mixed $exceptOrderId = null): void
+    {
+        if ($loanerId === null || $loanerId === '' || (int) $loanerId === 0) {
+            return;
+        }
+
+        $query = ServiceRecord::query()
+            ->where('order_type', 'loaner')
+            ->where('loanerID', $loanerId)
+            ->where('status', '>=', LoanerStatusFlow::STOCK)
+            ->where('status', '<', LoanerStatusFlow::COMPLETE);
+
+        if ($exceptOrderId !== null && $exceptOrderId !== '') {
+            $query->where('orderID', '!=', $exceptOrderId);
+        }
+
+        if ($query->exists()) {
+            return;
+        }
+
+        static::unifyCurrentStatus($loanerId, LoanerStatusFlow::STOCK);
+    }
+
+    /**
+     * 紐づく Loaner 案件があるとき、その status に合わせて currentStatus を上書きする。
+     * アクティブ案件（0以上400未満）を優先し、完了(400)以上だけなら在庫(0)。
+     */
+    public static function applyLinkedLoanerCaseCurrentStatus(mixed $loanerId): bool
+    {
+        $required = static::currentStatusRequiredByLinkedLoanerCase($loanerId);
+        if ($required === null) {
+            return false;
+        }
+
+        static::unifyCurrentStatus($loanerId, $required);
+
+        return true;
+    }
+
+    /**
+     * 紐づく Loaner 案件が要求する currentStatus。案件が無ければ null（手動値を維持）。
+     */
+    public static function currentStatusRequiredByLinkedLoanerCase(mixed $loanerId): ?int
+    {
+        if ($loanerId === null || $loanerId === '' || (int) $loanerId === 0) {
+            return null;
+        }
+
+        $cases = ServiceRecord::query()
+            ->where('order_type', 'loaner')
+            ->where('loanerID', $loanerId)
+            ->orderByDesc('lastEditDate')
+            ->orderByDesc('orderID')
+            ->get(['status']);
+
+        if ($cases->isEmpty()) {
+            return null;
+        }
+
+        $active = $cases->first(function (ServiceRecord $row) {
+            $status = (int) $row->status;
+
+            return $status >= LoanerStatusFlow::STOCK && $status < LoanerStatusFlow::COMPLETE;
+        });
+
+        if ($active && $active->status !== null && $active->status !== '') {
+            return LoanerStatusFlow::masterCurrentStatusFromCaseStatus($active->status);
+        }
+
+        $completed = $cases->contains(
+            fn (ServiceRecord $row) => LoanerStatusFlow::isCompleteOrBeyond($row->status),
+        );
+
+        return $completed ? LoanerStatusFlow::STOCK : null;
     }
 
     /**
