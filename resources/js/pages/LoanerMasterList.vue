@@ -669,9 +669,7 @@ async function saveEditDialog() {
 }
 
 const detailChoiceKindLabel = computed(() => {
-    const kind = detailChoiceRow.value?.associatedCaseKind
-    if (kind === 'legacy') return '旧Loaner案件'
-    if (kind === 'loaner') return 'Loaner案件'
+    if (detailChoiceRow.value?.associatedCaseKind === 'legacy') return '旧Loaner案件'
     return ''
 })
 
@@ -679,6 +677,11 @@ function closeDetailChoice() {
     detailChoiceOpen.value = false
     detailChoiceRow.value = null
     detailChoiceError.value = ''
+}
+
+function associatedOrderId(row) {
+    const associatedId = Number(row?.associatedID)
+    return Number.isFinite(associatedId) && associatedId > 0 ? associatedId : null
 }
 
 function openAdministratorDetail(orderId) {
@@ -689,42 +692,27 @@ function openAdministratorDetail(orderId) {
 }
 
 function openParentDetail() {
-    const row = detailChoiceRow.value
-    const kind = row?.associatedCaseKind
-
-    // 旧Loaner案件: associatedID の service 案件を開く
-    if (kind === 'legacy') {
-        const associatedId = Number(row?.parentOrderID ?? row?.associatedID)
-        if (!Number.isFinite(associatedId) || associatedId <= 0) {
-            detailChoiceError.value = PARENT_NOT_FOUND_MESSAGE
-            return
-        }
-        openAdministratorDetail(associatedId)
-        return
-    }
-
-    // Loaner案件: servicerecord.parentID があるときだけ。associatedID では開かない
-    const parentId = Number(row?.parentOrderID)
-    const associatedId = Number(row?.associatedID)
-    const loanerOrderId = Number(row?.loanerOrderID)
-    const parentIsSelf = Number.isFinite(associatedId)
-        && associatedId > 0
-        && parentId === associatedId
-        && (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0 || parentId === loanerOrderId)
-
-    if (!Number.isFinite(parentId) || parentId <= 0 || parentIsSelf) {
+    const orderId = associatedOrderId(detailChoiceRow.value)
+    if (orderId == null) {
         detailChoiceError.value = PARENT_NOT_FOUND_MESSAGE
         return
     }
-    openAdministratorDetail(parentId)
+    openAdministratorDetail(orderId)
 }
 
 function openLoanerDetail() {
     const row = detailChoiceRow.value
+    // 旧Loaner案件: 常に associatedID の service 案件を開く
     if (row?.associatedCaseKind === 'legacy') {
-        detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
+        const orderId = associatedOrderId(row)
+        if (orderId == null) {
+            detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE
+            return
+        }
+        openAdministratorDetail(orderId)
         return
     }
+
     const loanerOrderId = Number(row?.loanerOrderID)
     if (!Number.isFinite(loanerOrderId) || loanerOrderId <= 0) {
         detailChoiceError.value = LOANER_NOT_FOUND_MESSAGE

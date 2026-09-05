@@ -545,14 +545,13 @@ class LoanerMasterController extends Controller
 
         if ($kind === 'loaner') {
             $parentOrderId = (int) ($record->parentID ?? 0);
-            // 親は servicerecord.parentID のみ。associatedID（自案件 orderID）は親に使わない
             $hasParent = $parentOrderId > 0 && $parentOrderId !== (int) $record->orderID;
 
             return [
                 'kind' => 'loaner',
-                'parentOrderID' => $hasParent ? $parentOrderId : null,
+                'parentOrderID' => $associatedId,
                 'loanerOrderID' => (int) $record->orderID,
-                'parent' => $hasParent ? $parentById->get($parentOrderId) : null,
+                'parent' => $hasParent ? $parentById->get($parentOrderId) : $record,
             ];
         }
 
