@@ -540,7 +540,7 @@ class LoanerMasterController extends Controller
         $loanerId = (int) ($row->loanerID ?? 0);
         $record = $associatedId > 0 ? $associatedById->get($associatedId) : null;
         $kind = $record
-            ? LoanerStatusFlow::associatedCaseKind($record->order_type, $record->RMA)
+            ? LoanerStatusFlow::masterListAssociatedCaseKind($record->order_type, $record->RMA, $record->parentID)
             : null;
 
         if ($kind === 'loaner') {

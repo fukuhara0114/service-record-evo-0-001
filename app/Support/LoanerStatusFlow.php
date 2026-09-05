@@ -212,6 +212,32 @@ class LoanerStatusFlow
     }
 
     /**
+     * LoanerMaster「貸出中」ダブルクリック用の種別。
+     * associatedCaseKind に加え、service 案件かつ parentID なしも旧Loaner案件。
+     *
+     * @return 'loaner'|'legacy'|null
+     */
+    public static function masterListAssociatedCaseKind(mixed $orderType, mixed $rma, mixed $parentId): ?string
+    {
+        $kind = self::associatedCaseKind($orderType, $rma);
+        if ($kind !== null) {
+            return $kind;
+        }
+
+        if (self::isServiceLikeOrderType($orderType) && ! self::hasLinkedParentId($parentId)) {
+            return 'legacy';
+        }
+
+        return null;
+    }
+
+    /** servicerecord.parentID が有効な親 orderID か。0 / 空 / null は未紐づけ。 */
+    public static function hasLinkedParentId(mixed $parentId): bool
+    {
+        return $parentId !== null && $parentId !== '' && (int) $parentId > 0;
+    }
+
+    /**
      * 「次へ」ボタンを disable する status か。
      * 300以上393未満、または 396。
      */
