@@ -213,28 +213,23 @@ class LoanerStatusFlow
 
     /**
      * LoanerMaster「貸出中」ダブルクリック用の種別。
-     * associatedCaseKind に加え、service 案件かつ parentID なしも旧Loaner案件。
+     * associatedID が loaner 案件 → Loaner案件。
+     * associatedID が service 案件（null/空含む）→ すべて旧Loaner案件。
      *
      * @return 'loaner'|'legacy'|null
      */
-    public static function masterListAssociatedCaseKind(mixed $orderType, mixed $rma, mixed $parentId): ?string
+    public static function masterListAssociatedCaseKind(mixed $orderType, mixed $rma = null, mixed $parentId = null): ?string
     {
-        $kind = self::associatedCaseKind($orderType, $rma);
-        if ($kind !== null) {
-            return $kind;
+        $normalized = $orderType === null ? '' : strtolower(trim((string) $orderType));
+        if ($normalized === 'loaner') {
+            return 'loaner';
         }
 
-        if (self::isServiceLikeOrderType($orderType) && ! self::hasLinkedParentId($parentId)) {
+        if (self::isServiceLikeOrderType($orderType)) {
             return 'legacy';
         }
 
         return null;
-    }
-
-    /** servicerecord.parentID が有効な親 orderID か。0 / 空 / null は未紐づけ。 */
-    public static function hasLinkedParentId(mixed $parentId): bool
-    {
-        return $parentId !== null && $parentId !== '' && (int) $parentId > 0;
     }
 
     /**

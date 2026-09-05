@@ -117,7 +117,7 @@ class LoanerStatusFlowTest extends TestCase
         $this->assertNull(LoanerStatusFlow::associatedCaseKind(null, null));
     }
 
-    public function test_master_list_treats_service_without_parent_as_legacy(): void
+    public function test_master_list_treats_all_service_cases_as_legacy(): void
     {
         $this->assertSame(
             'legacy',
@@ -125,11 +125,15 @@ class LoanerStatusFlowTest extends TestCase
         );
         $this->assertSame(
             'legacy',
-            LoanerStatusFlow::masterListAssociatedCaseKind('service', '12345', 0),
+            LoanerStatusFlow::masterListAssociatedCaseKind('service', '12345', 11666),
         );
         $this->assertSame(
             'legacy',
             LoanerStatusFlow::masterListAssociatedCaseKind('', null, ''),
+        );
+        $this->assertSame(
+            'legacy',
+            LoanerStatusFlow::masterListAssociatedCaseKind(null, 'abc', 0),
         );
         $this->assertSame(
             'loaner',
@@ -138,9 +142,6 @@ class LoanerStatusFlowTest extends TestCase
         $this->assertSame(
             'legacy',
             LoanerStatusFlow::masterListAssociatedCaseKind('service', 'loaner', 999),
-        );
-        $this->assertNull(
-            LoanerStatusFlow::masterListAssociatedCaseKind('service', '12345', 11666),
         );
         $this->assertNull(
             LoanerStatusFlow::masterListAssociatedCaseKind('waiting_list', null, null),
