@@ -13,25 +13,6 @@
             <div class="header-actions">
                 <span v-if="success" class="msg success">{{ success }}</span>
                 <span v-if="error" class="msg error">{{ error }}</span>
-                <div class="header-extra-actions">
-                    <button type="button" class="btn btn-dark" @click="openDuplicateDialog">複製を保存</button>
-                    <button
-                        type="button"
-                        class="btn btn-dark"
-                        :disabled="certificateLoading"
-                        @click="generateCertificate"
-                    >
-                        {{ certificateLoading ? '生成中...' : '保守サービス保証書' }}
-                    </button>
-                    <button
-                        type="button"
-                        class="btn btn-dark"
-                        :disabled="ticketLoading"
-                        @click="generateCertificationTicket"
-                    >
-                        {{ ticketLoading ? '生成中...' : '再校正チケット' }}
-                    </button>
-                </div>
                 <div class="header-main-actions">
                     <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
                         {{ saving ? '保存中...' : '保存' }}
@@ -194,6 +175,25 @@
 
             <Pane class="detail-pane detail-pane-right" :size="rightPaneSize" :min-size="28">
             <div class="right-column">
+                <div class="right-extra-actions">
+                    <button type="button" class="btn btn-dark" @click="openDuplicateDialog">複製を保存</button>
+                    <button
+                        type="button"
+                        class="btn btn-dark"
+                        :disabled="certificateLoading"
+                        @click="generateCertificate"
+                    >
+                        {{ certificateLoading ? '生成中...' : '保守サービス保証書' }}
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-dark"
+                        :disabled="ticketLoading"
+                        @click="generateCertificationTicket"
+                    >
+                        {{ ticketLoading ? '生成中...' : '再校正チケット' }}
+                    </button>
+                </div>
                 <div class="stakeholder-row">
                 <section class="panel stakeholder-panel">
                     <h2>dealer</h2>
@@ -1038,13 +1038,6 @@ async function save() {
     margin-right: 8px;
 }
 
-.header-extra-actions {
-    display: flex;
-    align-items: center;
-    gap: 50px;
-    margin-right: 100px;
-}
-
 .header-main-actions {
     display: flex;
     align-items: center;
@@ -1115,7 +1108,17 @@ async function save() {
 }
 
 .right-column {
-    padding-top: 150px;
+    gap: 0;
+}
+
+.right-extra-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-evenly;
+    min-height: 150px;
+    flex: 0 0 auto;
+    width: 100%;
 }
 
 :deep(.splitpanes__splitter) {
