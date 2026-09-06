@@ -4237,6 +4237,7 @@ async function saveRecord() {
                 rmaNumOverSea: draftRecord.value.rmaNumOverSea,
                 shippingOut_requiredDate: draftRecord.value.shippingOut_requiredDate,
                 incident: draftRecord.value.incident,
+                customerNum: draftRecord.value.customerNum,
                 symptoms: draftRecord.value.symptoms,
                 mapics_inv: draftRecord.value.mapics_inv,
                 mapics47: draftRecord.value.mapics47,

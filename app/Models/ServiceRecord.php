@@ -199,6 +199,7 @@ class ServiceRecord extends Model
         'shipTo',
         'sentOut',
         'incident',
+        'customerNum',
         'symptoms',
         'sm_workorder',
         'sm_quote',

@@ -249,8 +249,8 @@
                                             <input
                                                 type="text"
                                                 class="field-input incidents-input"
-                                                :value="selectedIncidentCustomerNum"
-                                                readonly
+                                                :value="draftRecord?.customerNum ?? record?.customerNum ?? ''"
+                                                @input="updateNumericDraftValue('customerNum', $event.target.value)"
                                             >
                                         </label>
                                     </div>
@@ -1400,17 +1400,6 @@ function openIncidentSelect() {
         incident: props.draftRecord?.incident ?? props.record?.incident,
     })
 }
-
-const selectedIncidentCustomerNum = computed(() => {
-    const incident = props.draftRecord?.incident ?? props.record?.incident
-    const match = (page.props.incidentsMaster ?? []).find(item =>
-        String(item?.incidentNum ?? '') === String(incident ?? ''),
-    )
-    if (match?.customerNum != null && match.customerNum !== '') {
-        return match.customerNum
-    }
-    return props.draftRecord?.customerNum ?? ''
-})
 
 function updateDraftValue(field, value) {
     if (!props.draftRecord) return
