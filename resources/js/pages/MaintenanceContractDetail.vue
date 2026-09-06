@@ -1114,6 +1114,10 @@ async function save() {
     height: 100%;
 }
 
+.right-column {
+    padding-top: 150px;
+}
+
 :deep(.splitpanes__splitter) {
     background: #94a3b8;
     min-width: 6px;

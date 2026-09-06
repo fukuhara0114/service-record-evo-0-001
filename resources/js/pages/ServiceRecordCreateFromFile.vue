@@ -120,7 +120,7 @@
                             <span v-if="selectedLoaners.length">（{{ selectedLoaners.length }}）</span>
                         </button>
                     </div>
-                    <div v-if="!isLoanerCase" class="tab-bar-center">
+                    <div v-if="!isLoanerCase" class="tab-bar-end">
                         <button
                             type="button"
                             class="tab-btn tab-btn-action"
@@ -317,6 +317,14 @@
                                             {{ maintenanceSearchLoading ? '検索中...' : '契約番号で再検索' }}
                                         </button>
                                     </div>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary maintenance-detail-btn"
+                                        :disabled="!selectedMaintenanceContractId"
+                                        @click="openSelectedMaintenanceDetail"
+                                    >
+                                        詳細表示
+                                    </button>
                                     <button
                                         type="button"
                                         class="btn btn-primary maintenance-copy-btn"
@@ -630,6 +638,14 @@
                                         {{ maintenanceSearchLoading ? '検索中...' : '契約番号で再検索' }}
                                     </button>
                                 </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-primary maintenance-detail-btn"
+                                    :disabled="!selectedMaintenanceContractId"
+                                    @click="openSelectedMaintenanceDetail"
+                                >
+                                    詳細表示
+                                </button>
                                 <button
                                     type="button"
                                     class="btn btn-primary maintenance-copy-btn"
@@ -2713,6 +2729,15 @@ function clearMaintenanceSelection() {
     selectedMaintenanceContractId.value = null
 }
 
+function openSelectedMaintenanceDetail() {
+    const id = selectedMaintenanceContractId.value
+    if (!id) {
+        return
+    }
+    const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/${id}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 function contractText(value) {
     return value == null ? '' : String(value).trim()
 }
@@ -3536,17 +3561,12 @@ async function save() {
     overflow-x: auto;
 }
 
-.tab-bar-center {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 2;
-    pointer-events: none;
-}
-
-.tab-bar-center .tab-btn-action {
-    pointer-events: auto;
+.tab-bar-end {
+    flex: 0 0 auto;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    padding-right: 2px;
 }
 
 .tab-btn {
@@ -3654,8 +3674,25 @@ async function save() {
     white-space: nowrap;
 }
 
+.maintenance-detail-btn {
+    margin-left: 100px;
+    margin-right: 100px;
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    background: #2563eb;
+    color: #fff;
+}
+
+.maintenance-detail-btn:disabled {
+    background: #94a3b8;
+    color: #fff;
+    opacity: 1;
+    cursor: not-allowed;
+}
+
 .maintenance-copy-btn {
-    margin-left: 150px;
+    margin-left: 0;
     padding: 4px 10px;
     font-size: 12px;
     white-space: nowrap;

@@ -201,6 +201,7 @@ const configs = {
         searchFields: item => [item?.id, item?.incidentNum, item?.companyName, item?.depart, item?.customerNum],
         buildResult: item => ({
             incident: item?.incidentNum != null && item?.incidentNum !== '' ? Number(item.incidentNum) : null,
+            customerNum: item?.customerNum ?? '',
         }),
     },
 }

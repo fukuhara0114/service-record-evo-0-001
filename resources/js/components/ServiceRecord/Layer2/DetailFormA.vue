@@ -235,12 +235,24 @@
                                         >
                                             Incidents
                                         </button>
-                                        <input
-                                            type="text"
-                                            class="field-input incidents-input"
-                                            :value="draftRecord?.incident ?? record?.incident ?? ''"
-                                            @input="updateNumericDraftValue('incident', $event.target.value)"
-                                        >
+                                        <label class="misc-field incidents-field">
+                                            <span>incident Num</span>
+                                            <input
+                                                type="text"
+                                                class="field-input incidents-input"
+                                                :value="draftRecord?.incident ?? record?.incident ?? ''"
+                                                @input="updateNumericDraftValue('incident', $event.target.value)"
+                                            >
+                                        </label>
+                                        <label class="misc-field incidents-field">
+                                            <span>customer Num</span>
+                                            <input
+                                                type="text"
+                                                class="field-input incidents-input"
+                                                :value="selectedIncidentCustomerNum"
+                                                readonly
+                                            >
+                                        </label>
                                     </div>
                                 </section>
 
@@ -1388,6 +1400,17 @@ function openIncidentSelect() {
         incident: props.draftRecord?.incident ?? props.record?.incident,
     })
 }
+
+const selectedIncidentCustomerNum = computed(() => {
+    const incident = props.draftRecord?.incident ?? props.record?.incident
+    const match = (page.props.incidentsMaster ?? []).find(item =>
+        String(item?.incidentNum ?? '') === String(incident ?? ''),
+    )
+    if (match?.customerNum != null && match.customerNum !== '') {
+        return match.customerNum
+    }
+    return props.draftRecord?.customerNum ?? ''
+})
 
 function updateDraftValue(field, value) {
     if (!props.draftRecord) return
@@ -3315,7 +3338,7 @@ defineExpose({
 }
 
 .misc-block-incidents {
-    gap: 0;
+    gap: 4px;
 }
 
 .incidents-header {
@@ -3339,9 +3362,17 @@ defineExpose({
     background: #374151;
 }
 
+.incidents-field {
+    margin-top: 2px;
+}
+
+.incidents-field > span {
+    min-width: 7.5em;
+}
+
 .incidents-input {
-    width: 100%;
-    margin-top: 6px;
+    width: auto;
+    margin-top: 0;
     padding: 6px 8px;
     border: 1px solid #111827;
     border-radius: 4px;
