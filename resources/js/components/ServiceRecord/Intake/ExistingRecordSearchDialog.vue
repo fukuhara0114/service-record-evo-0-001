@@ -38,14 +38,56 @@
                     >
                         この案件を親として選択
                     </button>
-                    <button
+                    <div
+                        v-else-if="purpose === 'loaner' && loanerCreate"
+                        class="loaner-link-actions"
+                    >
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            :disabled="!selectedRecord"
+                            @click="confirmLoanerSelect"
+                        >
+                            この案件を選択
+                        </button>
+                        <button
+                            v-if="selectedRecord?.parentID"
+                            type="button"
+                            class="btn-secondary parent-case-ref-btn"
+                            @click="openParentServiceDetail"
+                        >
+                            親案件(orderID:{{ selectedRecord.parentID }})を参照
+                        </button>
+                    </div>
+                    <div
                         v-else-if="purpose === 'loaner'"
+                        class="loaner-link-actions"
+                    >
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            :disabled="!selectedRecord || Boolean(selectedRecord.parentID)"
+                            @click="confirmLoanerSelect"
+                        >
+                            {{ selectedRecord?.parentID ? '既に紐づき済み' : '新規作成して紐づけ対象に追加' }}
+                        </button>
+                        <button
+                            v-if="selectedRecord?.parentID"
+                            type="button"
+                            class="btn-secondary parent-case-ref-btn"
+                            @click="openParentServiceDetail"
+                        >
+                            親案件(orderID:{{ selectedRecord.parentID }})を参照
+                        </button>
+                    </div>
+                    <button
+                        v-else-if="loanerCreate"
                         type="button"
                         class="btn-primary"
-                        :disabled="!selectedRecord || Boolean(selectedRecord.parentID)"
-                        @click="confirmLoanerSelect"
+                        :disabled="!selectedRecord"
+                        @click="confirmParentSelect"
                     >
-                        {{ selectedRecord?.parentID ? '既に紐づき済み' : '新規作成して紐づけ対象に追加' }}
+                        この案件を親として選択
                     </button>
                     <button
                         v-else
@@ -78,6 +120,7 @@
                             </span>
                             <span v-if="purpose === 'loaner'">type: {{ record.order_type || '—' }}</span>
                             <span v-if="purpose === 'loaner'">item: {{ record.item || '—' }}</span>
+                            <span v-if="purpose === 'loaner'">enduser_SN: {{ record.enduser_SN || '—' }}</span>
                             <span>S/N: {{ record.SN || '—' }}</span>
                             <span>Dealer: {{ record.dealer || '—' }}</span>
                             <span>Contact: {{ record.contactPerson || '—' }}</span>
@@ -230,6 +273,11 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    /** 新規 loaner 作成画面からの検索か */
+    loanerCreate: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'loaner-selected', 'search'])
@@ -260,10 +308,14 @@ const dialogTitle = computed(() => {
 const dialogHint = computed(() => {
     if (props.hint) return props.hint
     if (props.purpose === 'loaner') {
-        return '検索: productName→item / dealer→dealer（部分一致）。選択した loaner に新規 service を作成して parentID を設定します'
+        return props.loanerCreate
+            ? '選択した loaner 案件に、申請フォームのファイルをアタッチできます'
+            : '検索: productName→item / dealer→dealer（部分一致）。選択した loaner に新規 service を作成して parentID を設定します'
     }
     if (props.purpose === 'file') {
-        return '検索: productName / SN / dealer / contactPerson の各項目が対応カラムに含まれる案件（部分一致・AND）'
+        return props.loanerCreate
+            ? '選択した service 案件を親案件（parentID）にします'
+            : '検索: productName / SN / dealer / contactPerson の各項目が対応カラムに含まれる案件（部分一致・AND）'
     }
     if (props.purpose === 'parent') {
         return 'order_type=service を productName / SN / dealer / contactPerson で検索'
@@ -379,15 +431,36 @@ function confirmParentSelect() {
 }
 
 function confirmLoanerSelect() {
-    if (!selectedRecord.value || selectedRecord.value.parentID) return
+    if (!selectedRecord.value) return
+    if (!props.loanerCreate && selectedRecord.value.parentID) return
     emit('loaner-selected', {
         record: selectedRecord.value,
     })
 }
 
+function openParentServiceDetail() {
+    const parentId = String(selectedRecord.value?.parentID ?? '').trim()
+    if (!parentId) return
+
+    try {
+        const url = new URL(`${page.props.appBaseUrl}/servicerecord/administrator`, window.location.origin)
+        url.searchParams.set('orderType', 'service')
+        url.searchParams.set('arrival', 'all')
+        url.searchParams.set('openOrderID', parentId)
+        window.open(url.href, '_blank', 'noopener,noreferrer')
+    } catch {
+        const base = String(page.props.appBaseUrl || '').replace(/\/?$/, '')
+        window.open(
+            `${base}/servicerecord/administrator?orderType=service&arrival=all&openOrderID=${encodeURIComponent(parentId)}`,
+            '_blank',
+            'noopener,noreferrer',
+        )
+    }
+}
+
 function onResultDblClick(record) {
     selectedOrderId.value = record.orderID
-    if (props.purpose === 'parent') {
+    if (props.purpose === 'parent' || (props.purpose === 'file' && props.loanerCreate)) {
         confirmParentSelect()
         return
     }
@@ -566,6 +639,16 @@ function confirmLink() {
 }
 
 .results-toolbar-actions .btn-primary {
+    white-space: nowrap;
+}
+
+.loaner-link-actions {
+    display: flex;
+    align-items: center;
+    gap: 50px;
+}
+
+.parent-case-ref-btn {
     white-space: nowrap;
 }
 

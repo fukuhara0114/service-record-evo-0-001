@@ -1,7 +1,7 @@
 <template>
     <div class="contract-page">
         <header class="page-header">
-            <div>
+            <div class="header-title-row">
                 <h1>Maintenance Contract 一覧</h1>
                 <p class="subtitle">
                     <template v-if="isActiveScope">
@@ -20,22 +20,18 @@
         <section class="list-card">
             <form class="search-bar" @submit.prevent="search">
                 <div class="search-grid">
-                    <label class="search-field">
-                        <span>dealer</span>
-                        <input v-model="searchForm.dealer" type="text" placeholder="dealer">
-                    </label>
-                    <label class="search-field">
-                        <span>instrumentName</span>
-                        <input v-model="searchForm.instrumentName" type="text" placeholder="instrumentName">
-                    </label>
-                    <label class="search-field">
-                        <span>SN</span>
-                        <input v-model="searchForm.SN" type="text" placeholder="SN">
-                    </label>
-                    <label class="search-field">
-                        <span>endUser</span>
-                        <input v-model="searchForm.endUser" type="text" placeholder="endUser">
-                    </label>
+                    <div class="search-field">
+                        <input v-model="searchForm.dealer" type="text" placeholder="dealer" aria-label="dealer">
+                    </div>
+                    <div class="search-field">
+                        <input v-model="searchForm.instrumentName" type="text" placeholder="instrumentName" aria-label="instrumentName">
+                    </div>
+                    <div class="search-field">
+                        <input v-model="searchForm.SN" type="text" placeholder="SN" aria-label="SN">
+                    </div>
+                    <div class="search-field">
+                        <input v-model="searchForm.endUser" type="text" placeholder="endUser" aria-label="endUser">
+                    </div>
                     <div class="search-range">
                         <span class="range-label">有効期限（expireDate）</span>
                         <div class="range-inputs">
@@ -65,31 +61,21 @@
                         <button type="submit" class="btn btn-primary" :disabled="searching">
                             {{ searching ? '検索中...' : '検索' }}
                         </button>
+                        <button
+                            type="button"
+                            class="btn notice-toggle"
+                            :class="{ active: isNoticeFilter }"
+                            :disabled="searching"
+                            @click="toggleNoticeFilter"
+                        >
+                            要案内
+                        </button>
                         <button type="button" class="btn btn-secondary" :disabled="searching" @click="clearSearch">
                             クリア
                         </button>
                     </div>
                 </div>
             </form>
-
-            <div v-if="contracts?.links?.length" class="pager">
-                <template v-for="link in contracts.links" :key="`${link.label}-${link.url}`">
-                    <button
-                        v-if="link.url"
-                        type="button"
-                        class="page-link"
-                        :class="{ active: link.active }"
-                        :disabled="searching"
-                        @click="goToPage(link.url)"
-                        v-html="link.label"
-                    />
-                    <span
-                        v-else
-                        class="page-link disabled"
-                        v-html="link.label"
-                    />
-                </template>
-            </div>
 
             <div class="table-wrap">
                 <table>
@@ -122,12 +108,7 @@
                             @dblclick="openDetail(row)"
                         >
                             <td>{{ row.id }}</td>
-                            <td>
-                                <div class="type-name">{{ row.contractTypeName || '—' }}</div>
-                                <div v-if="row.contractTypeDescription" class="type-desc">
-                                    {{ row.contractTypeDescription }}
-                                </div>
-                            </td>
+                            <td>{{ row.contractTypeName || '—' }}</td>
                             <td>{{ row.dealer || '—' }}</td>
                             <td>{{ row.endUser || '—' }}</td>
                             <td>{{ row.instrumentName || '—' }}</td>
@@ -154,8 +135,8 @@ import DateInputWithToday from '@/components/DateInputWithToday.vue'
 
 const props = defineProps({
     contracts: {
-        type: Object,
-        required: true,
+        type: Array,
+        default: () => [],
     },
     filterDate: {
         type: String,
@@ -173,6 +154,7 @@ const props = defineProps({
             certificationExpireDateFrom: '',
             certificationExpireDateTo: '',
             scope: 'active',
+            notice: false,
         }),
     },
 })
@@ -181,8 +163,6 @@ const page = usePage()
 const searching = ref(false)
 const selectedId = ref(null)
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
-const rows = computed(() => props.contracts?.data ?? [])
-const totalCount = computed(() => props.contracts?.total ?? rows.value.length)
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/maintenance-contracts`)
 
 const searchForm = reactive({
@@ -195,9 +175,17 @@ const searchForm = reactive({
     certificationExpireDateFrom: props.filters?.certificationExpireDateFrom ?? '',
     certificationExpireDateTo: props.filters?.certificationExpireDateTo ?? '',
     scope: props.filters?.scope === 'all' ? 'all' : 'active',
+    notice: Boolean(props.filters?.notice),
 })
 
 const isActiveScope = computed(() => searchForm.scope !== 'all')
+const isNoticeFilter = computed(() => Boolean(searchForm.notice))
+const rows = computed(() => {
+    const all = props.contracts ?? []
+    if (!isNoticeFilter.value) return all
+    return all.filter(isNoticeTarget)
+})
+const totalCount = computed(() => rows.value.length)
 
 watch(
     () => props.filters,
@@ -211,6 +199,7 @@ watch(
         searchForm.certificationExpireDateFrom = next?.certificationExpireDateFrom ?? ''
         searchForm.certificationExpireDateTo = next?.certificationExpireDateTo ?? ''
         searchForm.scope = next?.scope === 'all' ? 'all' : 'active'
+        searchForm.notice = Boolean(next?.notice)
     },
     { deep: true },
 )
@@ -230,6 +219,7 @@ function buildQuery(extra = {}) {
         query.certificationExpireDateTo = searchForm.certificationExpireDateTo
     }
     query.scope = searchForm.scope === 'all' ? 'all' : 'active'
+    if (searchForm.notice) query.notice = '1'
     return query
 }
 
@@ -239,6 +229,7 @@ function runQuery(url, query = {}) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
+        only: ['contracts', 'filters', 'filterDate'],
         onFinish: () => {
             searching.value = false
         },
@@ -263,20 +254,39 @@ function clearSearch() {
     searchForm.expireDateTo = ''
     searchForm.certificationExpireDateFrom = ''
     searchForm.certificationExpireDateTo = ''
+    searchForm.notice = false
     // scope（有効/全件）は維持
     runQuery(listUrl.value, buildQuery())
 }
 
-function goToPage(url) {
-    if (!url || searching.value) return
-    searching.value = true
-    router.get(url, {}, {
-        preserveState: true,
-        preserveScroll: true,
-        onFinish: () => {
-            searching.value = false
-        },
-    })
+function toggleNoticeFilter() {
+    searchForm.notice = !searchForm.notice
+    runQuery(listUrl.value, buildQuery())
+}
+
+function todayYmd() {
+    if (props.filterDate) return String(props.filterDate).slice(0, 10)
+    const d = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function ymdOrNull(value) {
+    if (value == null || value === '') return null
+    const raw = String(value).trim().slice(0, 10)
+    if (!raw || raw.startsWith('0000-00-00')) return null
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+    const year = Number(raw.slice(0, 4))
+    if (!Number.isFinite(year) || year < 1901) return null
+    return raw
+}
+
+function isNoticeTarget(row) {
+    const planned = ymdOrNull(row?.renewalInformation)
+    if (!planned || planned > todayYmd()) return false
+    if (ymdOrNull(row?.renewedDate)) return false
+    if (row?.informed != null && row.informed !== '' && Number(row.informed) < 0) return false
+    return true
 }
 
 function selectRow(row) {
@@ -314,18 +324,25 @@ function formatAmount(value) {
 .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
     margin-bottom: 12px;
 }
 
+.header-title-row {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
 .page-header h1 {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 22px;
+    flex: 0 0 auto;
 }
 
 .subtitle {
-    margin: 0;
+    margin: 0 0 0 200px;
     color: #64748b;
     font-size: 13px;
 }
@@ -460,9 +477,22 @@ function formatAmount(value) {
     color: #334155;
 }
 
+.notice-toggle {
+    min-width: 72px;
+    border: 1px solid #b45309;
+    background: #ffedd5;
+    color: #9a3412;
+}
+
+.notice-toggle.active {
+    background: #f97316;
+    border-color: #ea580c;
+    color: #fff;
+}
+
 .table-wrap {
     overflow: auto;
-    max-height: calc((100vh / 1.1) - 260px);
+    max-height: calc((100vh / 1.1) - 150px);
 }
 
 table {
@@ -518,51 +548,5 @@ th {
 .num {
     text-align: right;
     white-space: nowrap;
-}
-
-.type-name {
-    color: #0f172a;
-}
-
-.type-desc {
-    margin-top: 2px;
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.pager {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-    justify-content: flex-end;
-}
-
-.page-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 28px;
-    padding: 2px 10px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    background: #fff;
-    color: #334155;
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.page-link.active {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: #fff;
-}
-
-.page-link.disabled,
-.page-link:disabled {
-    opacity: 0.5;
-    cursor: default;
 }
 </style>

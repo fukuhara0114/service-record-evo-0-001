@@ -63,9 +63,10 @@
                     </div>
                 </section>
 
+                <div class="contract-order-row">
                 <section class="panel">
                     <h2>契約情報</h2>
-                    <div class="row row-3">
+                    <div class="stacked-fields">
                         <label class="field">
                             <span>RefNumber</span>
                             <input v-model="form.RefNumber" type="text">
@@ -95,24 +96,24 @@
                                 @blur="onAmountBlur"
                             >
                         </label>
-                    </div>
-                    <div class="row row-3">
                         <label class="field">
-                            <span>startDate</span>
+                            <span>開始日</span>
                             <DateInputWithToday v-model="form.startDate" />
                         </label>
                         <label class="field">
-                            <span>expireDate</span>
+                            <span>有効期限</span>
                             <DateInputWithToday v-model="form.expireDate" />
                         </label>
-                        <label class="field checkbox-field">
-                            <span>certificationTicket</span>
-                            <input v-model="form.certificationTicket" type="checkbox">
-                        </label>
-                    </div>
-                    <div class="row row-3">
                         <label class="field">
-                            <span>certificationExpireDate</span>
+                            <span>再校正チケット</span>
+                            <input
+                                v-model="form.certificationTicket"
+                                type="text"
+                                inputmode="numeric"
+                            >
+                        </label>
+                        <label class="field">
+                            <span>校正期限</span>
                             <DateInputWithToday v-model="form.certificationExpireDate" />
                         </label>
                     </div>
@@ -120,51 +121,61 @@
 
                 <section class="panel panel-plain">
                     <h2>受注</h2>
-                    <div class="row row-3">
+                    <div class="stacked-fields">
                         <label class="field">
-                            <span>informedDate</span>
-                            <DateInputWithToday v-model="form.informedDate" />
-                        </label>
-                        <label class="field checkbox-field">
-                            <span>informed</span>
-                            <input v-model="form.informed" type="checkbox">
-                        </label>
-                    </div>
-                    <div class="row row-3">
-                        <label class="field">
-                            <span>renewalInformation</span>
-                            <DateInputWithToday v-model="form.renewalInformation" />
-                        </label>
-                    </div>
-                    <div class="row row-3">
-                        <label class="field">
-                            <span>renewedDate</span>
-                            <DateInputWithToday v-model="form.renewedDate" />
-                        </label>
-                    </div>
-                    <div class="row row-3">
-                        <label class="field">
-                            <span>shippingDate</span>
+                            <span>起伝日</span>
                             <DateInputWithToday v-model="form.shippingDate" />
                         </label>
                         <label class="field">
-                            <span>orderedDate</span>
+                            <span>受注日</span>
                             <DateInputWithToday v-model="form.orderedDate" />
                         </label>
-                    </div>
-                    <div class="row row-3">
                         <label class="field">
-                            <span>yayoi_PO</span>
+                            <span>弥生</span>
                             <input v-model="form.yayoi_PO" type="text">
                         </label>
                         <label class="field">
-                            <span>mapics_PO</span>
+                            <span>Mapics</span>
                             <input v-model="form.mapics_PO" type="text">
                         </label>
                         <label class="field">
-                            <span>invoice_num</span>
+                            <span>Invoice</span>
                             <input v-model="form.invoice_num" type="text">
                         </label>
+                    </div>
+                </section>
+                </div>
+
+                <section class="panel panel-plain renewal-notice-card">
+                    <h2>更新案内</h2>
+                    <div class="renewal-notice-body">
+                        <div class="stacked-fields">
+                            <label class="field">
+                                <span>案内予定日</span>
+                                <DateInputWithToday v-model="form.renewalInformation" />
+                            </label>
+                            <label class="field">
+                                <span>案内日</span>
+                                <DateInputWithToday v-model="form.informedDate" />
+                            </label>
+                            <label class="field">
+                                <span>informed</span>
+                                <input
+                                    v-model="form.informed"
+                                    type="text"
+                                    inputmode="numeric"
+                                >
+                            </label>
+                            <label class="field">
+                                <span>更新受注日</span>
+                                <DateInputWithToday v-model="form.renewedDate" />
+                            </label>
+                        </div>
+                        <div class="renewal-notice-action">
+                            <button type="button" class="btn btn-primary renewal-email-btn">
+                                案内E-メール
+                            </button>
+                        </div>
                     </div>
                 </section>
 
@@ -183,9 +194,10 @@
 
             <Pane class="detail-pane detail-pane-right" :size="rightPaneSize" :min-size="28">
             <div class="right-column">
+                <div class="stakeholder-row">
                 <section class="panel stakeholder-panel">
                     <h2>dealer</h2>
-                    <div class="row row-2">
+                    <div class="vertical-fields">
                         <label class="field">
                             <span>dealer</span>
                             <input v-model="form.dealer" type="text">
@@ -194,8 +206,6 @@
                             <span>branch</span>
                             <input v-model="form.branch" type="text">
                         </label>
-                    </div>
-                    <div class="row row-2">
                         <label class="field">
                             <span>contact</span>
                             <input v-model="form.contact" type="text">
@@ -204,14 +214,10 @@
                             <span>phone</span>
                             <input v-model="form.phone" type="text">
                         </label>
-                    </div>
-                    <div class="row row-1">
                         <label class="field">
                             <span>email</span>
                             <input v-model="form.email" type="text">
                         </label>
-                    </div>
-                    <div class="row row-1">
                         <label class="field">
                             <span>address</span>
                             <textarea v-model="form.address" rows="3"></textarea>
@@ -221,7 +227,7 @@
 
                 <section class="panel stakeholder-panel">
                     <h2>endUser</h2>
-                    <div class="row row-2">
+                    <div class="vertical-fields">
                         <label class="field">
                             <span>endUser</span>
                             <input v-model="form.endUser" type="text">
@@ -230,8 +236,6 @@
                             <span>endUser_depart</span>
                             <input v-model="form.endUser_depart" type="text">
                         </label>
-                    </div>
-                    <div class="row row-2">
                         <label class="field">
                             <span>endUser_contact</span>
                             <input v-model="form.endUser_contact" type="text">
@@ -240,20 +244,17 @@
                             <span>endUser_phone</span>
                             <input v-model="form.endUser_phone" type="text">
                         </label>
-                    </div>
-                    <div class="row row-1">
                         <label class="field">
                             <span>endUser_email</span>
                             <input v-model="form.endUser_email" type="text">
                         </label>
-                    </div>
-                    <div class="row row-1">
                         <label class="field">
                             <span>endUser_address</span>
                             <textarea v-model="form.endUser_address" rows="3"></textarea>
                         </label>
                     </div>
                 </section>
+                </div>
             </div>
             </Pane>
         </Splitpanes>
@@ -434,6 +435,7 @@ const duplicateSectionItems = [
     { key: 'product', label: '製品' },
     { key: 'contract', label: '契約情報' },
     { key: 'order', label: '受注' },
+    { key: 'renewal', label: '更新案内' },
     { key: 'dealer', label: 'dealer' },
     { key: 'endUser', label: 'endUser' },
     { key: 'description', label: 'description' },
@@ -445,6 +447,7 @@ const duplicateSections = reactive({
     product: true,
     contract: true,
     order: true,
+    renewal: true,
     dealer: true,
     endUser: true,
     description: true,
@@ -532,14 +535,18 @@ const form = reactive({
     invoice_num: props.contract.invoice_num ?? '',
     startDate: normalizeDateFormValue(props.contract.startDate),
     expireDate: normalizeDateFormValue(props.contract.expireDate),
-    certificationTicket: !!props.contract.certificationTicket,
+    certificationTicket: props.contract.certificationTicket == null || props.contract.certificationTicket === ''
+        ? ''
+        : String(props.contract.certificationTicket),
     certificationExpireDate: normalizeDateFormValue(props.contract.certificationExpireDate),
     renewalInformation: normalizeDateFormValue(props.contract.renewalInformation),
     informedDate: normalizeDateFormValue(props.contract.informedDate),
     renewedDate: normalizeDateFormValue(props.contract.renewedDate),
     contractType: props.contract.contractType != null ? String(props.contract.contractType) : '',
     contractTypeName: props.contract.contractTypeName ?? '',
-    informed: !!props.contract.informed,
+    informed: props.contract.informed == null || props.contract.informed === ''
+        ? ''
+        : String(props.contract.informed),
     amount: props.contract.amount ?? '',
     status: props.contract.status ?? '',
     RefNumber: props.contract.RefNumber ?? '',
@@ -556,6 +563,13 @@ function getCsrfToken() {
 function nullable(value) {
     if (value === '' || value === undefined) return null
     return value
+}
+
+function nullableInteger(value) {
+    const text = String(value ?? '').trim()
+    if (text === '') return null
+    const parsed = Number(text)
+    return Number.isFinite(parsed) ? parsed : text
 }
 
 function normalizeDateFormValue(value) {
@@ -596,13 +610,13 @@ function buildContractPayload() {
         invoice_num: nullable(form.invoice_num),
         startDate: nullableDate(form.startDate),
         expireDate: nullableDate(form.expireDate),
-        certificationTicket: !!form.certificationTicket,
+        certificationTicket: nullableInteger(form.certificationTicket),
         certificationExpireDate: nullableDate(form.certificationExpireDate),
         renewalInformation: nullableDate(form.renewalInformation),
         informedDate: nullableDate(form.informedDate),
         renewedDate: nullableDate(form.renewedDate),
         contractType: form.contractType === '' ? null : Number(form.contractType),
-        informed: !!form.informed,
+        informed: nullableInteger(form.informed),
         amount: form.amount === '' ? null : Number(form.amount),
         status: nullable(form.status),
         RefNumber: nullable(form.RefNumber),
@@ -648,6 +662,7 @@ async function confirmDuplicate() {
         product: !!duplicateSections.product,
         contract: !!duplicateSections.contract,
         order: !!duplicateSections.order,
+        renewal: !!duplicateSections.renewal,
         dealer: !!duplicateSections.dealer,
         endUser: !!duplicateSections.endUser,
         description: !!duplicateSections.description,
@@ -960,13 +975,17 @@ async function save() {
                 orderedDate: normalizeDateFormValue(data.contract.orderedDate),
                 startDate: normalizeDateFormValue(data.contract.startDate),
                 expireDate: normalizeDateFormValue(data.contract.expireDate),
-                certificationTicket: !!data.contract.certificationTicket,
+                certificationTicket: data.contract.certificationTicket == null || data.contract.certificationTicket === ''
+                    ? ''
+                    : String(data.contract.certificationTicket),
                 certificationExpireDate: normalizeDateFormValue(data.contract.certificationExpireDate),
                 renewalInformation: normalizeDateFormValue(data.contract.renewalInformation),
                 informedDate: normalizeDateFormValue(data.contract.informedDate),
                 renewedDate: normalizeDateFormValue(data.contract.renewedDate),
                 contractType: data.contract.contractType != null ? String(data.contract.contractType) : '',
-                informed: !!data.contract.informed,
+                informed: data.contract.informed == null || data.contract.informed === ''
+                    ? ''
+                    : String(data.contract.informed),
                 amount: data.contract.amount ?? '',
             })
         }
@@ -1126,6 +1145,93 @@ async function save() {
     margin-bottom: 12px;
 }
 
+.contract-order-row,
+.stakeholder-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    align-items: stretch;
+}
+
+.contract-order-row > .panel,
+.stakeholder-row > .panel {
+    min-width: 0;
+}
+
+.vertical-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stacked-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stacked-fields .field {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.stacked-fields .field > span {
+    flex: 0 0 80px;
+    width: 80px;
+    line-height: 1.2;
+}
+
+.stacked-fields .field > input,
+.stacked-fields .field > select,
+.stacked-fields .field > :deep(.date-input-with-today) {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
+
+.stacked-fields .field.checkbox-field {
+    align-items: center;
+    padding-bottom: 0;
+    color: #000;
+}
+
+.stacked-fields .field.checkbox-field input {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.renewal-notice-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0;
+}
+
+.renewal-notice-card .stacked-fields .field > input,
+.renewal-notice-card .stacked-fields .field > :deep(.date-input-with-today) {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+.renewal-notice-action {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 0;
+}
+
+.renewal-email-btn {
+    width: calc(100% * 2 / 3);
+    height: 30px;
+    min-height: 30px;
+    padding: 0 16px;
+    box-sizing: border-box;
+    justify-content: center;
+    white-space: nowrap;
+}
+
 .row {
     display: grid;
     gap: 8px 12px;
@@ -1213,6 +1319,16 @@ async function save() {
     .row-2,
     .row-3 {
         grid-template-columns: 1fr;
+    }
+
+    .contract-order-row,
+    .stakeholder-row {
+        grid-template-columns: 1fr;
+    }
+
+    .stacked-fields .field > span {
+        flex-basis: 80px;
+        width: 80px;
     }
 
     .field.checkbox-field {

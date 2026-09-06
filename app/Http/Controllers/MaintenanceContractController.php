@@ -27,6 +27,7 @@ class MaintenanceContractController extends Controller
             'certificationExpireDateFrom' => $this->normalizeDateInput($request->input('certificationExpireDateFrom')),
             'certificationExpireDateTo' => $this->normalizeDateInput($request->input('certificationExpireDateTo')),
             'scope' => $scope,
+            'notice' => $this->isTruthyFlag($request->input('notice')),
         ];
 
         $query = MaintenanceContractMaster::query()
@@ -63,16 +64,38 @@ class MaintenanceContractController extends Controller
             $filters['certificationExpireDateTo'],
         );
 
-        $contracts = $query
+        if ($filters['notice']) {
+            $query->where('renewalInformation', '>=', '1901-01-01')
+                ->where('renewalInformation', '<=', $today)
+                ->where(function ($empty) {
+                    $empty->whereNull('renewedDate')
+                        ->orWhere('renewedDate', '<', '1901-01-01')
+                        ->orWhere('renewedDate', '0000-00-00');
+                })
+                ->where(function ($informed) {
+                    $informed->whereNull('informed')
+                        ->orWhere('informed', '>=', 0);
+                });
+        }
+
+        $records = $query
             ->orderByRaw('CASE WHEN expireDate IS NULL THEN 1 ELSE 0 END')
             ->orderBy('expireDate')
             ->orderBy('id')
-            ->paginate(100)
-            ->withQueryString()
-            ->through(fn (MaintenanceContractMaster $row) => $this->serializeListRow($row));
+            ->get();
+
+        if ($filters['notice']) {
+            $records = $records
+                ->filter(fn (MaintenanceContractMaster $row) => $this->isNoticeTarget($row, $today))
+                ->values();
+        }
+
+        $rows = $records
+            ->map(fn (MaintenanceContractMaster $row) => $this->serializeListRow($row))
+            ->values();
 
         return Inertia::render('MaintenanceContractList', [
-            'contracts' => $contracts,
+            'contracts' => $rows,
             'filterDate' => $today,
             'filters' => $filters,
         ]);
@@ -124,6 +147,7 @@ class MaintenanceContractController extends Controller
             'sections.product' => 'required|boolean',
             'sections.contract' => 'required|boolean',
             'sections.order' => 'required|boolean',
+            'sections.renewal' => 'required|boolean',
             'sections.dealer' => 'required|boolean',
             'sections.endUser' => 'required|boolean',
             'sections.description' => 'required|boolean',
@@ -362,12 +386,6 @@ class MaintenanceContractController extends Controller
                 $normalized[$key] = $this->normalizeNullableDate($normalized[$key]);
             }
         }
-        if (array_key_exists('certificationTicket', $normalized)) {
-            $normalized['certificationTicket'] = $this->normalizeNullableBoolean($normalized['certificationTicket']);
-        }
-        if (array_key_exists('informed', $normalized)) {
-            $normalized['informed'] = $this->normalizeNullableBoolean($normalized['informed']);
-        }
         $request->merge($normalized);
 
         $validated = $request->validate([
@@ -392,15 +410,15 @@ class MaintenanceContractController extends Controller
             'invoice_num' => 'nullable|string|max:255',
             'startDate' => 'nullable|date',
             'expireDate' => 'nullable|date',
-            // DB: tinyint(1)
-            'certificationTicket' => 'nullable|boolean',
+            // DB: tinyint
+            'certificationTicket' => 'nullable|integer',
             'certificationExpireDate' => 'nullable|date',
             // DB: date
             'renewalInformation' => 'nullable|date',
             'informedDate' => 'nullable|date',
             'renewedDate' => 'nullable|date',
             'contractType' => 'nullable|integer',
-            'informed' => 'nullable|boolean',
+            'informed' => 'nullable|integer',
             'amount' => 'nullable|numeric',
             'status' => 'nullable|string|max:255',
             'RefNumber' => 'nullable|string|max:255',
@@ -412,13 +430,6 @@ class MaintenanceContractController extends Controller
             if ($value === '') {
                 $validated[$key] = null;
             }
-        }
-
-        if (array_key_exists('certificationTicket', $validated) && $validated['certificationTicket'] !== null) {
-            $validated['certificationTicket'] = $validated['certificationTicket'] ? 1 : 0;
-        }
-        if (array_key_exists('informed', $validated) && $validated['informed'] !== null) {
-            $validated['informed'] = $validated['informed'] ? 1 : 0;
         }
 
         return $validated;
@@ -497,15 +508,17 @@ class MaintenanceContractController extends Controller
                 'certificationExpireDate',
             ],
             'order' => [
-                'informedDate',
-                'informed',
-                'renewalInformation',
-                'renewedDate',
                 'shippingDate',
                 'orderedDate',
                 'yayoi_PO',
                 'mapics_PO',
                 'invoice_num',
+            ],
+            'renewal' => [
+                'informedDate',
+                'informed',
+                'renewalInformation',
+                'renewedDate',
             ],
             'dealer' => ['dealer', 'branch', 'contact', 'phone', 'email', 'address'],
             'endUser' => [
@@ -607,6 +620,67 @@ class MaintenanceContractController extends Controller
         ]);
     }
 
+    private function isNoticeTarget(MaintenanceContractMaster $row, string $today): bool
+    {
+        $planned = $this->validDateString($row->getRawOriginal('renewalInformation') ?? $row->renewalInformation);
+        if ($planned === null || $planned > $today) {
+            return false;
+        }
+
+        if ($this->validDateString($row->getRawOriginal('renewedDate') ?? $row->renewedDate) !== null) {
+            return false;
+        }
+
+        if ($row->informed !== null && $row->informed !== '' && (int) $row->informed < 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function validDateString(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            if ((int) $value->format('Y') < 1901) {
+                return null;
+            }
+
+            return $value->format('Y-m-d');
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '' || str_starts_with($raw, '0000-00-00')) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::parse($raw);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ((int) $date->format('Y') < 1901) {
+            return null;
+        }
+
+        return $date->toDateString();
+    }
+
+    private function isTruthyFlag(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $raw = strtolower(trim((string) $value));
+
+        return in_array($raw, ['1', 'true', 'on', 'yes'], true);
+    }
+
     private function normalizeDateInput(mixed $value): string
     {
         $raw = trim((string) $value);
@@ -650,7 +724,17 @@ class MaintenanceContractController extends Controller
         return [
             'id' => $row->id,
             'dealer' => $row->dealer,
+            'branch' => $row->branch,
+            'contact' => $row->contact,
+            'phone' => $row->phone,
+            'email' => $row->email,
+            'address' => $row->address,
             'endUser' => $row->endUser,
+            'endUser_depart' => $row->endUser_depart,
+            'endUser_contact' => $row->endUser_contact,
+            'endUser_phone' => $row->endUser_phone,
+            'endUser_email' => $row->endUser_email,
+            'endUser_address' => $row->endUser_address,
             'instrumentName' => $row->instrumentName,
             'SN' => $row->SN,
             'contractType' => $row->contractType,
@@ -659,6 +743,10 @@ class MaintenanceContractController extends Controller
             'startDate' => optional($row->startDate)->format('Y-m-d'),
             'expireDate' => optional($row->expireDate)->format('Y-m-d'),
             'certificationExpireDate' => optional($row->certificationExpireDate)->format('Y-m-d'),
+            'renewalInformation' => $this->validDateString($row->getRawOriginal('renewalInformation') ?? $row->renewalInformation),
+            'informedDate' => $this->validDateString($row->getRawOriginal('informedDate') ?? $row->informedDate),
+            'renewedDate' => $this->validDateString($row->getRawOriginal('renewedDate') ?? $row->renewedDate),
+            'informed' => $row->informed,
             'status' => $row->status,
             'amount' => $row->amount,
             'RefNumber' => $row->RefNumber,
@@ -690,7 +778,7 @@ class MaintenanceContractController extends Controller
             'invoice_num' => $row->invoice_num,
             'startDate' => optional($row->startDate)->format('Y-m-d'),
             'expireDate' => optional($row->expireDate)->format('Y-m-d'),
-            'certificationTicket' => (bool) $row->certificationTicket,
+            'certificationTicket' => $row->certificationTicket,
             'certificationExpireDate' => optional($row->certificationExpireDate)->format('Y-m-d'),
             'renewalInformation' => optional($row->renewalInformation)->format('Y-m-d'),
             'informedDate' => optional($row->informedDate)->format('Y-m-d'),
@@ -698,7 +786,7 @@ class MaintenanceContractController extends Controller
             'contractType' => $row->contractType,
             'contractTypeName' => $row->maintenanceContractType?->contractType,
             'contractTypeDescription' => $row->maintenanceContractType?->description,
-            'informed' => (bool) $row->informed,
+            'informed' => $row->informed,
             'amount' => $row->amount,
             'status' => $row->status,
             'RefNumber' => $row->RefNumber,

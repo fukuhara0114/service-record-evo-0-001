@@ -1073,9 +1073,14 @@ class ServiceRecordController extends Controller
         $forLoanerParent = $request->input('for') === 'loaner_parent';
         $orderTypeFilter = $request->input('order_type'); // service | loaner
 
+        $forServiceLoanerLink = $request->input('for') === 'service_loaner_link';
+
         if ($orderTypeFilter === 'loaner') {
-            // loaner検索: productName / SN(enduser_SN) / dealer の入力がある項目で AND
-            if ($productName === '' && $sn === '' && $dealer === '') {
+            // loaner検索: 入力がある項目で AND（部分一致）
+            $loanerSearchEmpty = $forServiceLoanerLink
+                ? ($productName === '' && $sn === '' && $dealer === '' && $contactPerson === '')
+                : ($productName === '' && $sn === '' && $dealer === '');
+            if ($loanerSearchEmpty) {
                 return response()->json(['records' => []]);
             }
         } elseif ($forLoanerParent) {
@@ -1108,8 +1113,7 @@ class ServiceRecordController extends Controller
                     ->where('status', '>', -1);
             }
         } elseif ($orderTypeFilter === 'loaner') {
-            $query->where('order_type', 'loaner')
-                ->where('status', '>=', 0)
+            $query->whereIn('order_type', ['loaner', 'waiting_list'])
                 ->where('status', '<', 400);
         } elseif ($orderTypeFilter === 'waiting_list') {
             $query->where('order_type', 'waiting_list');
@@ -1135,42 +1139,78 @@ class ServiceRecordController extends Controller
         }
 
         if ($orderTypeFilter === 'loaner') {
-            // productName → loanermaster.item / servicerecord.productName
-            // SN → attachedloaners.repairInstrument-SN / servicerecord.SN
-            // dealer → servicerecord.dealer
-            if ($productName !== '') {
-                $itemLike = $this->likeContains(mb_strtolower($productName, 'UTF-8'));
-                $loanerTable = (new LoanerMaster)->getTable();
-                $query->where(function ($outer) use ($itemLike, $loanerTable) {
-                    $outer
-                        ->whereRaw('LOWER(productName) LIKE ?', [$itemLike])
-                        ->orWhereExists(function ($sub) use ($itemLike, $loanerTable) {
+            $loanerTable = (new LoanerMaster)->getTable();
+            $attachedTable = (new AttachedLoaner)->getTable();
+
+            if ($forServiceLoanerLink) {
+                // 新規 service 作成からの loaner 検索:
+                // item :: productName / enduser_SN :: SN / dealer / contactPerson（含む・AND）
+                if ($productName !== '') {
+                    $itemLike = $this->likeContains(mb_strtolower($productName, 'UTF-8'));
+                    $query->where(function ($nameQuery) use ($itemLike, $loanerTable) {
+                        $nameQuery->whereExists(function ($sub) use ($itemLike, $loanerTable) {
                             $sub->select(DB::raw(1))
                                 ->from($loanerTable)
                                 ->whereColumn("{$loanerTable}.loanerID", 'servicerecord.loanerID')
                                 ->whereRaw("LOWER({$loanerTable}.item) LIKE ?", [$itemLike]);
-                        });
-                });
-            }
-            if ($sn !== '') {
-                $snLike = $this->likeContains(mb_strtolower($sn, 'UTF-8'));
-                $attachedTable = (new AttachedLoaner)->getTable();
-                $query->where(function ($outer) use ($snLike, $attachedTable) {
-                    $outer
-                        ->whereRaw('LOWER(SN) LIKE ?', [$snLike])
-                        ->orWhereExists(function ($sub) use ($snLike, $attachedTable) {
+                        })->orWhereRaw('LOWER(productName) LIKE ?', [$itemLike]);
+                    });
+                }
+                if ($sn !== '') {
+                    $snLike = $this->likeContains(mb_strtolower($sn, 'UTF-8'));
+                    $query->where(function ($snQuery) use ($snLike, $attachedTable) {
+                        $snQuery->whereExists(function ($sub) use ($snLike, $attachedTable) {
                             $sub->select(DB::raw(1))
                                 ->from($attachedTable)
                                 ->whereColumn("{$attachedTable}.associatedID", 'servicerecord.orderID')
                                 ->whereRaw('LOWER(`repairInstrument-SN`) LIKE ?', [$snLike]);
-                        });
-                });
-            }
-            if ($dealer !== '') {
-                $query->whereRaw(
-                    'LOWER(dealer) LIKE ?',
-                    [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
-                );
+                        })->orWhereRaw('LOWER(SN) LIKE ?', [$snLike]);
+                    });
+                }
+                if ($dealer !== '') {
+                    $query->whereRaw(
+                        'LOWER(dealer) LIKE ?',
+                        [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
+                    );
+                }
+                if ($contactPerson !== '') {
+                    $query->whereRaw(
+                        'LOWER(contactPerson) LIKE ?',
+                        [$this->likeContains(mb_strtolower($contactPerson, 'UTF-8'))]
+                    );
+                }
+            } else {
+                // 新規 loaner 作成: productName 先頭3文字 → loanermaster.item /
+                // enduser_SN → attachedloaners.repairInstrument-SN / dealer（含む・AND）
+                $productPrefix = $this->productNameSearchPrefix($productName);
+                if ($productPrefix !== '') {
+                    $itemLike = $this->likeContains(mb_strtolower($productPrefix, 'UTF-8'));
+                    $query->where(function ($nameQuery) use ($itemLike, $loanerTable) {
+                        $nameQuery->whereExists(function ($sub) use ($itemLike, $loanerTable) {
+                            $sub->select(DB::raw(1))
+                                ->from($loanerTable)
+                                ->whereColumn("{$loanerTable}.loanerID", 'servicerecord.loanerID')
+                                ->whereRaw("LOWER({$loanerTable}.item) LIKE ?", [$itemLike]);
+                        })->orWhereRaw('LOWER(productName) LIKE ?', [$itemLike]);
+                    });
+                }
+                if ($sn !== '') {
+                    $snLike = $this->likeContains(mb_strtolower($sn, 'UTF-8'));
+                    $query->where(function ($snQuery) use ($snLike, $attachedTable) {
+                        $snQuery->whereExists(function ($sub) use ($snLike, $attachedTable) {
+                            $sub->select(DB::raw(1))
+                                ->from($attachedTable)
+                                ->whereColumn("{$attachedTable}.associatedID", 'servicerecord.orderID')
+                                ->whereRaw('LOWER(`repairInstrument-SN`) LIKE ?', [$snLike]);
+                        })->orWhereRaw('LOWER(SN) LIKE ?', [$snLike]);
+                    });
+                }
+                if ($dealer !== '') {
+                    $query->whereRaw(
+                        'LOWER(dealer) LIKE ?',
+                        [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
+                    );
+                }
             }
         } elseif ($forLoanerParent) {
             // 親案件検索（フリートークン）: 各語がいずれかの列に含まれる
@@ -1251,6 +1291,16 @@ class ServiceRecordController extends Controller
     private function likeContains(string $value): string
     {
         return '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value) . '%';
+    }
+
+    private function productNameSearchPrefix(string $productName): string
+    {
+        $trimmed = trim($productName);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        return mb_substr($trimmed, 0, 3, 'UTF-8');
     }
 
     public function linkToExisting(Request $request)
@@ -3765,8 +3815,8 @@ class ServiceRecordController extends Controller
             $asOf = $resolver->resolveLoanerPriceAsOf($child->orderDate, $parentOrderDate);
             $masterPrice = $resolver->loanerChargePrice($returnCode, $child->loanerID, $asOf);
             $current = (float) ($child->price ?? 0);
-            // loaner 詳細で無償（price=0）にした案件は、親の再計算で有償価格へ戻さない
-            $price = ($child->order_type === 'loaner' && abs($current) < 0.00001)
+            // 貸出詳細で無償（price=0）にした案件は、親の再計算で有償価格へ戻さない
+            $price = (in_array($child->order_type, ['loaner', 'waiting_list'], true) && abs($current) < 0.00001)
                 ? 0.0
                 : $masterPrice;
 

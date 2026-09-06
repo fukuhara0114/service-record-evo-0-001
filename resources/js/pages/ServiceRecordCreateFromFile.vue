@@ -186,7 +186,7 @@
                                         v-model="form.productName"
                                         type="text"
                                         class="existing-search-field"
-                                        placeholder="productName"
+                                        placeholder="productNameを3文字入力"
                                         lang="en"
                                         inputmode="latin"
                                         @input="onLoanerProductNameInput"
@@ -293,18 +293,12 @@
                                 class="info-card info-card-maintenance"
                             >
                                 <div class="maintenance-header">
-                                    <h3>保守契約検索結果</h3>
-                                    <span v-if="maintenanceSearchDone" class="maintenance-count">
-                                        {{ maintenanceContracts.length }}件
-                                    </span>
-                                    <button
-                                        v-if="selectedMaintenanceContractId"
-                                        type="button"
-                                        class="btn btn-secondary maintenance-clear-btn"
-                                        @click="clearMaintenanceSelection"
-                                    >
-                                        選択解除
-                                    </button>
+                                    <div class="maintenance-header-title">
+                                        <h3>保守契約検索結果</h3>
+                                        <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                            {{ maintenanceContracts.length }}件
+                                        </span>
+                                    </div>
                                     <div class="maintenance-ref-search">
                                         <input
                                             v-model="maintenanceRefNumberQuery"
@@ -317,12 +311,28 @@
                                         <button
                                             type="button"
                                             class="btn btn-primary maintenance-ref-btn"
-                                            :disabled="maintenanceSearchLoading || !String(maintenanceRefNumberQuery || '').trim()"
+                                            :disabled="maintenanceSearchLoading"
                                             @click="searchMaintenanceContractsByRefNumber"
                                         >
                                             {{ maintenanceSearchLoading ? '検索中...' : '契約番号で再検索' }}
                                         </button>
                                     </div>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary maintenance-copy-btn"
+                                        :disabled="maintenanceSearchLoading"
+                                        @click="copyFromSelectedMaintenanceContract"
+                                    >
+                                        契約情報からコピー
+                                    </button>
+                                    <button
+                                        v-if="selectedMaintenanceContractId"
+                                        type="button"
+                                        class="btn btn-secondary maintenance-clear-btn"
+                                        @click="clearMaintenanceSelection"
+                                    >
+                                        選択解除
+                                    </button>
                                 </div>
                                 <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
                                 <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
@@ -420,13 +430,23 @@
                             <section class="info-card info-card-delivery stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">delivery</div>
-                                    <div class="stakeholder-switches">
-                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                            switch dealer
-                                        </button>
-                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
-                                            switch E/U
-                                        </button>
+                                    <div class="stakeholder-side-actions">
+                                        <div class="stakeholder-copy-actions">
+                                            <button type="button" class="switch-btn" @click="copyStakeholderToDelivery('dealer')">
+                                                Copy dealer
+                                            </button>
+                                            <button type="button" class="switch-btn" @click="copyStakeholderToDelivery('endUser')">
+                                                Copy E/U
+                                            </button>
+                                        </div>
+                                        <div class="stakeholder-switches">
+                                            <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                                switch dealer
+                                            </button>
+                                            <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                                switch E/U
+                                            </button>
+                                        </div>
                                     </div>
                                 </aside>
                                 <div class="stakeholder-body">
@@ -556,7 +576,7 @@
                                     <input v-model="form.dealer_depart" type="text" placeholder="dealer_depart" lang="ja">
                                 </div>
                                 <div class="form-row row-contact">
-                                    <input v-model="form.contactPerson" type="text" class="w-contact" placeholder="contactPerson" lang="ja">
+                                    <input v-model="form.contactPerson" type="text" class="w-contact existing-search-field" placeholder="contactPerson" lang="ja">
                                 </div>
                                 <div class="form-row row-phone-email">
                                     <input v-model="form.phone" type="text" class="w-phone" placeholder="Phone" lang="en" inputmode="tel">
@@ -586,10 +606,38 @@
                             class="info-card info-card-maintenance"
                         >
                             <div class="maintenance-header">
-                                <h3>保守契約検索結果</h3>
-                                <span v-if="maintenanceSearchDone" class="maintenance-count">
-                                    {{ maintenanceContracts.length }}件
-                                </span>
+                                <div class="maintenance-header-title">
+                                    <h3>保守契約検索結果</h3>
+                                    <span v-if="maintenanceSearchDone" class="maintenance-count">
+                                        {{ maintenanceContracts.length }}件
+                                    </span>
+                                </div>
+                                <div class="maintenance-ref-search">
+                                    <input
+                                        v-model="maintenanceRefNumberQuery"
+                                        type="text"
+                                        class="maintenance-ref-input"
+                                        placeholder="RefNumber"
+                                        :disabled="maintenanceSearchLoading"
+                                        @keydown.enter.prevent="searchMaintenanceContractsByRefNumber"
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary maintenance-ref-btn"
+                                        :disabled="maintenanceSearchLoading"
+                                        @click="searchMaintenanceContractsByRefNumber"
+                                    >
+                                        {{ maintenanceSearchLoading ? '検索中...' : '契約番号で再検索' }}
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-primary maintenance-copy-btn"
+                                    :disabled="maintenanceSearchLoading"
+                                    @click="copyFromSelectedMaintenanceContract"
+                                >
+                                    契約情報からコピー
+                                </button>
                                 <button
                                     v-if="selectedMaintenanceContractId"
                                     type="button"
@@ -695,13 +743,23 @@
                         <section class="info-card info-card-delivery stakeholder-card">
                             <aside class="stakeholder-side">
                                 <div class="stakeholder-label">delivery</div>
-                                <div class="stakeholder-switches">
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                        switch dealer
-                                    </button>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
-                                        switch E/U
-                                    </button>
+                                <div class="stakeholder-side-actions">
+                                    <div class="stakeholder-copy-actions">
+                                        <button type="button" class="switch-btn" @click="copyStakeholderToDelivery('dealer')">
+                                            Copy dealer
+                                        </button>
+                                        <button type="button" class="switch-btn" @click="copyStakeholderToDelivery('endUser')">
+                                            Copy E/U
+                                        </button>
+                                    </div>
+                                    <div class="stakeholder-switches">
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                            switch dealer
+                                        </button>
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                            switch E/U
+                                        </button>
+                                    </div>
                                 </div>
                             </aside>
                             <div class="stakeholder-body">
@@ -785,6 +843,7 @@
                     <ExistingRecordSearchDialog
                         inline
                         purpose="file"
+                        :loaner-create="isLoanerCase"
                         :records="existingSearchRecords"
                         :query-summary="existingSearchSummary"
                         :statuses="statuses"
@@ -793,19 +852,26 @@
                         :hint="existingSearchHint"
                         @search="openExistingRecordSearch"
                         @link-selected="linkToExistingRecord"
+                        @parent-selected="onExistingServiceSelectedAsParent"
                     />
                 </div>
 
                 <div v-show="activeTab === 'loaner'" class="tab-panel tab-panel-existing">
                     <div class="loaner-flow-note">
-                        <p>
-                            検索条件: <strong>productName / enduser_SN / dealer</strong> の全て、または何れか（部分一致・AND）。
+                        <p v-if="isLoanerCase">
+                            検索条件: <strong>productName（loanermaster.item の先頭3文字）/ enduser_SN / dealer</strong>
+                            の全て、または何れか（部分一致・AND）。入力した項目で絞り込みます。
+                            結果を選択すると、申請フォームのファイルをその loaner 案件へアタッチするか確認します。
+                        </p>
+                        <p v-else>
+                            検索条件: <strong>productName → item / SN → enduser_SN / dealer / contactPerson</strong>
+                            の全て、または何れか（部分一致・AND）。
                             紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
                             得た orderID を選択した loaner の parentID に設定します。
                             最低限 <strong>productName / SN / dealer / contactPerson</strong> の入力が必要です。
                         </p>
                     </div>
-                    <div v-if="selectedLoaners.length" class="selected-loaners">
+                    <div v-if="!isLoanerCase && selectedLoaners.length" class="selected-loaners">
                         <h4>紐づけ対象（保存時に新規 service 作成 → parentID 設定）</h4>
                         <div class="selected-loaner-list">
                             <div
@@ -833,6 +899,7 @@
                     <ExistingRecordSearchDialog
                         inline
                         purpose="loaner"
+                        :loaner-create="isLoanerCase"
                         :records="loanerSearchRecords"
                         :query-summary="loanerSearchSummary"
                         :searching="loanerSearchLoading"
@@ -855,7 +922,7 @@
                 </div>
                 <div class="confirm-body">
                     <p>OCRは既存案件検索後に有効になります</p>
-                    <p>既存案件検索は{{ isLoanerCase ? 'productName, enduser_SN, dealer, contactPerson' : 'productName, SN, dealer, contactPerson' }}に入力された全て、または何れかの情報で検索されます</p>
+                    <p>既存案件検索は{{ isLoanerCase ? 'productName（先頭3文字）, enduser_SN, dealer' : 'productName, SN, dealer, contactPerson' }}に入力された全て、または何れかの情報で検索されます</p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-primary" @click="closeOcrSearchRequiredDialog">OK</button>
@@ -866,25 +933,161 @@
         <div v-if="showLoanerRequirementDialog" class="confirm-overlay" @click.self="cancelLoanerRequirementDialog">
             <div class="confirm-panel">
                 <div class="confirm-header">
-                    <h3>基本情報が不足しています</h3>
+                    <h3>入力方法を選択</h3>
                     <button type="button" class="close-btn" @click="cancelLoanerRequirementDialog">×</button>
                 </div>
                 <div class="confirm-body">
                     <p>
-                        loaner に紐づける新規 service 案件を作成するには、
-                        productName / SN / dealer / contactPerson が必要です。
+                        新規 service 案件の dealer / endUser / delivery を、
+                        どう入力しますか？
                     </p>
-                    <ul class="missing-fields">
-                        <li v-for="field in missingLoanerLinkFields" :key="field">{{ field }}</li>
-                    </ul>
-                    <p>不足項目を OCR で読み取りますか？</p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-secondary" @click="cancelLoanerRequirementDialog">キャンセル</button>
-                    <button type="button" class="btn btn-secondary" @click="chooseManualEntryForLoaner">手入力する</button>
-                    <button type="button" class="btn btn-primary" :disabled="ocrLoading || !hasSourceFile" @click="chooseOcrForLoaner">
-                        {{ ocrLoading ? 'OCR読取中...' : 'OCRで読み取る' }}
+                    <button type="button" class="btn btn-secondary" @click="chooseOcrOrManualForLoaner">OCR/手入力</button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="!pendingLoanerRecord && !selectedLoaners.length"
+                        @click="chooseCopyFromLoaner"
+                    >
+                        loaner案件からコピー
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showLoanerAttachConfirmDialog"
+            class="confirm-overlay"
+            @click.self="cancelAttachToExistingLoaner"
+        >
+            <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="loaner-attach-title">
+                <div class="confirm-header">
+                    <h3 id="loaner-attach-title">ファイルをアタッチしますか？</h3>
+                    <button type="button" class="close-btn" @click="cancelAttachToExistingLoaner">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p>
+                        選択した loaner 案件（orderID: {{ pendingAttachLoanerRecord?.orderID || '—' }}）に、
+                        現在の申請フォームをアタッチしますか？
+                    </p>
+                    <p v-if="hasSourceFile" class="confirm-detail">
+                        申請フォーム: {{ sourceFile?.documentName || `ID ${sourceFile?.id}` }}
+                        <template v-if="selectedAdditionalCount"> / 関連書類 {{ selectedAdditionalCount }}件</template>
+                    </p>
+                    <p v-else class="confirm-warning">申請フォームのファイルが無いため、アタッチできません。</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" @click="cancelAttachToExistingLoaner">アタッチしない</button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="!hasSourceFile || existingSearchLoading"
+                        @click="confirmAttachToExistingLoaner"
+                    >
+                        {{ existingSearchLoading ? 'アタッチ中...' : 'アタッチする' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showServiceParentCopyDialog"
+            class="confirm-overlay"
+            @click.self="cancelServiceParentCopyDialog"
+        >
+            <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="service-parent-copy-title">
+                <div class="confirm-header">
+                    <h3 id="service-parent-copy-title">入力方法を選択</h3>
+                    <button type="button" class="close-btn" @click="cancelServiceParentCopyDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p>
+                        親案件（orderID: {{ pendingServiceParentRecord?.orderID || form.parentID || '—' }}）の
+                        dealer / endUser / delivery を、どう入力しますか？
+                    </p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" @click="cancelServiceParentCopyDialog">キャンセル</button>
+                    <button type="button" class="btn btn-secondary" @click="chooseOcrOrManualForServiceParent">OCR/手入力</button>
+                    <button type="button" class="btn btn-primary" @click="chooseCopyFromServiceParent">service案件からコピー</button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showLoanerProductMissingDialog"
+            class="confirm-overlay"
+            @click.self="closeLoanerProductMissingDialog"
+        >
+            <div
+                class="confirm-panel"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="loaner-product-missing-title"
+            >
+                <div class="confirm-header">
+                    <h3 id="loaner-product-missing-title">機種を選択してください</h3>
+                    <button type="button" class="close-btn" @click="closeLoanerProductMissingDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p class="confirm-warning">Loanerのリストに無い機種なので改めて機種を選択</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-primary" @click="openLoanerProductFromWarning">選択</button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showOcrUnknownProductDialog"
+            class="confirm-overlay"
+            @click.self="closeOcrUnknownProductDialog"
+        >
+            <div
+                class="confirm-panel"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="ocr-unknown-product-title"
+            >
+                <div class="confirm-header">
+                    <h3 id="ocr-unknown-product-title">機種がマスタにありません</h3>
+                    <button type="button" class="close-btn" @click="closeOcrUnknownProductDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p class="confirm-warning">入力された機種が存在しません、リストから選択して下さい</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-primary" @click="openServiceMasterFromOcrWarning">機種選択</button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showProductNameMissingDialog"
+            class="confirm-overlay"
+            @click.self="closeProductNameMissingDialog"
+        >
+            <div
+                class="confirm-panel"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="product-name-missing-title"
+            >
+                <div class="confirm-header">
+                    <h3 id="product-name-missing-title">productName がマスタにありません</h3>
+                    <button type="button" class="close-btn" @click="closeProductNameMissingDialog">×</button>
+                </div>
+                <div class="confirm-body">
+                    <p class="confirm-warning">
+                        「{{ unknownProductName }}」は servicemaster に存在しません。
+                    </p>
+                    <p>機種選択から登録済みの機種を選ぶか、productName を修正してから保存してください。</p>
+                </div>
+                <div class="confirm-actions">
+                    <button type="button" class="btn btn-secondary" @click="closeProductNameMissingDialog">閉じる</button>
+                    <button type="button" class="btn btn-primary" @click="openServiceMasterFromWarning">機種選択</button>
                 </div>
             </div>
         </div>
@@ -1296,6 +1499,16 @@ const selectedLoaners = ref([])
 const showLoanerRequirementDialog = ref(false)
 const pendingLoanerRecord = ref(null)
 const loanerRequirementContext = ref(null) // 'select' | 'save'
+const showProductNameMissingDialog = ref(false)
+const showOcrUnknownProductDialog = ref(false)
+const unknownProductName = ref('')
+const showLoanerAttachConfirmDialog = ref(false)
+const pendingAttachLoanerRecord = ref(null)
+const showServiceParentCopyDialog = ref(false)
+const pendingServiceParentRecord = ref(null)
+const parentIdBeforeServiceSelect = ref('')
+const showLoanerProductMissingDialog = ref(false)
+const adoptedParentOrderId = ref(null)
 const leftPaneSize = ref(42)
 const rightPaneSize = ref(58)
 
@@ -1430,6 +1643,11 @@ function swapStakeholders(left, right) {
     writeStakeholder(right, leftValues)
 }
 
+function copyStakeholderToDelivery(source) {
+    if (source === 'delivery' || !STAKEHOLDER_FIELDS[source]) return
+    writeStakeholder('delivery', readStakeholder(source))
+}
+
 function matchFromEndUser(target) {
     if (!STAKEHOLDER_FIELDS[target] || target === 'endUser') return
     writeStakeholder(target, readStakeholder('endUser'))
@@ -1549,6 +1767,7 @@ function selectLoanerUnit(unit) {
     form.SN = unit.SN ?? ''
     applyLoanerItemToForm(unit.item)
     showLoanerStockDialog.value = false
+    showLoanerProductMissingDialog.value = false
     checkLoanerAvailability()
 }
 
@@ -1566,6 +1785,10 @@ function displayText(value) {
 }
 
 function openParentCaseDialog() {
+    parentCaseSearchProductName.value = String(form.productName ?? '').trim()
+    parentCaseSearchSn.value = String(form.enduser_SN ?? '').trim()
+    parentCaseSearchDealer.value = String(form.dealer ?? '').trim()
+    parentCaseSearchContact.value = String(form.contactPerson ?? '').trim()
     parentCaseError.value = ''
     showParentCaseDialog.value = true
 }
@@ -1701,6 +1924,20 @@ async function searchParentCaseByFields() {
     }
 }
 
+function resolveRecordOrderId(record) {
+    const raw = record?.orderID ?? record?.orderId ?? record?.id ?? ''
+    const parsed = Number.parseInt(String(raw).trim(), 10)
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function resolveFormParentId() {
+    const fromForm = Number.parseInt(String(form.parentID ?? '').trim(), 10)
+    if (Number.isInteger(fromForm) && fromForm > 0) return fromForm
+    const fromAdopted = Number.parseInt(String(adoptedParentOrderId.value ?? '').trim(), 10)
+    if (Number.isInteger(fromAdopted) && fromAdopted > 0) return fromAdopted
+    return null
+}
+
 function adoptParentCase() {
     const record = parentCaseRecord.value
     if (!record) return
@@ -1708,7 +1945,9 @@ function adoptParentCase() {
     Object.values(STAKEHOLDER_FIELDS).flat().forEach((field) => {
         form[field] = record[field] == null ? '' : String(record[field])
     })
-    form.parentID = record.orderID == null ? '' : String(record.orderID)
+    const parentId = resolveRecordOrderId(record)
+    form.parentID = parentId == null ? '' : String(parentId)
+    adoptedParentOrderId.value = parentId
 
     showParentCaseDialog.value = false
     parentCaseError.value = ''
@@ -1749,10 +1988,23 @@ const selectedProductLabel = computed(() => {
     }
     return 'productName'
 })
+
+function productNameSearchPrefix(name) {
+    const text = String(name ?? '').trim()
+    if (!text) return ''
+    return Array.from(text).slice(0, 3).join('')
+}
+
 const existingServiceSearchParams = computed(() => {
-    const productName = String(form.productName ?? '').trim()
+    const rawProductName = String(form.productName ?? '').trim()
+    const productName = isLoanerCase.value
+        ? productNameSearchPrefix(rawProductName)
+        : rawProductName
     const sn = String((isLoanerCase.value ? form.enduser_SN : form.SN) ?? '').trim()
     const dealer = String(form.dealer ?? '').trim()
+    if (isLoanerCase.value) {
+        return { productName, SN: sn, dealer }
+    }
     const contactPerson = String(form.contactPerson ?? '').trim()
     return { productName, SN: sn, dealer, contactPerson }
 })
@@ -1762,21 +2014,32 @@ const existingSearchTerms = computed(() =>
 const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / '))
 const existingSearchHint = computed(() => (
     isLoanerCase.value
-        ? '検索: productName / enduser_SN / dealer / contactPerson の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
+        ? '検索: productName（先頭3文字）/ enduser_SN / dealer の全て、または何れか（部分一致）。選択した service 案件を親案件（parentID）にします'
         : ''
 ))
 
-const loanerSearchParams = computed(() => ({
-    productName: String(form.productName ?? '').trim(),
-    SN: String(form.enduser_SN ?? '').trim(),
-    dealer: String(form.dealer ?? '').trim(),
-}))
+const loanerSearchParams = computed(() => (
+    isLoanerCase.value
+        ? {
+            productName: productNameSearchPrefix(String(form.productName ?? '').trim()),
+            SN: String(form.enduser_SN ?? '').trim(),
+            dealer: String(form.dealer ?? '').trim(),
+        }
+        : {
+            productName: String(form.productName ?? '').trim(),
+            SN: String(form.SN ?? '').trim(),
+            dealer: String(form.dealer ?? '').trim(),
+            contactPerson: String(form.contactPerson ?? '').trim(),
+        }
+))
 const loanerSearchTerms = computed(() =>
     Object.values(loanerSearchParams.value).filter(Boolean),
 )
 const loanerSearchSummary = computed(() => loanerSearchTerms.value.join(' / '))
 const loanerSearchHint = computed(() => (
-    '検索: productName / enduser_SN / dealer の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
+    isLoanerCase.value
+        ? '検索: productName（loanermaster.item の先頭3文字）/ enduser_SN / dealer の全て、または何れか（部分一致）。選択すると申請フォームのアタッチを確認します'
+        : '検索: productName→item / SN→enduser_SN / dealer / contactPerson の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
 ))
 
 const missingLoanerLinkFields = computed(() => {
@@ -1808,7 +2071,6 @@ watch(hasLoanerLinkRequiredFields, (ok) => {
     pendingLoanerRecord.value = null
     loanerRequirementContext.value = null
     error.value = ''
-    activeTab.value = 'loaner'
 })
 
 const activeSelectItems = computed(() => {
@@ -1877,11 +2139,68 @@ function onProductNameTyped() {
     form.entityID = ''
 }
 
+function productNameExistsInServiceMaster(name) {
+    const needle = String(name ?? '').trim().toLowerCase()
+    if (!needle) return false
+    return (props.servicesMaster ?? []).some(
+        item => String(item?.productName ?? '').trim().toLowerCase() === needle,
+    )
+}
+
+function closeProductNameMissingDialog() {
+    showProductNameMissingDialog.value = false
+}
+
+function closeOcrUnknownProductDialog() {
+    showOcrUnknownProductDialog.value = false
+}
+
+function openServiceMasterFromWarning() {
+    showProductNameMissingDialog.value = false
+    activeTab.value = 'basic'
+    openSelectDialog('serviceMaster')
+}
+
+function openServiceMasterFromOcrWarning() {
+    showOcrUnknownProductDialog.value = false
+    activeTab.value = 'basic'
+    openSelectDialog('serviceMaster')
+}
+
+function warnIfOcrProductNameMissingFromMaster() {
+    if (isLoanerCase.value) {
+        showOcrUnknownProductDialog.value = false
+        return
+    }
+    const productName = String(form.productName ?? '').trim()
+    if (!productName || productNameExistsInServiceMaster(productName)) {
+        showOcrUnknownProductDialog.value = false
+        return
+    }
+    showOcrUnknownProductDialog.value = true
+}
+
+function warnIfProductNameMissingFromMaster() {
+    const productName = String(form.productName ?? '').trim()
+    if (!productName) {
+        error.value = 'productName を入力または選択してください。'
+        activeTab.value = 'basic'
+        return true
+    }
+    if (productNameExistsInServiceMaster(productName)) {
+        return false
+    }
+    unknownProductName.value = productName
+    showProductNameMissingDialog.value = true
+    return true
+}
+
 function onMasterSelected(result) {
     if (activeSelectKind.value === 'serviceMaster') {
         form.serviceID = result.serviceID != null ? String(result.serviceID) : ''
         form.productName = result.productName ?? ''
         form.entityID = result.entityID ?? ''
+        showOcrUnknownProductDialog.value = false
     }
 
     if (activeSelectKind.value === 'loanerProduct') {
@@ -1893,6 +2212,7 @@ function onMasterSelected(result) {
         loanerAvailability.value = null
         waitingListAccepted.value = false
         showWaitingConfirm.value = false
+        showLoanerProductMissingDialog.value = false
         checkLoanerAvailability()
     }
 
@@ -2073,7 +2393,6 @@ async function openExistingRecordSearch() {
             const dealerInput = root.querySelector('input.w-dealer-name')
             const enduserSnInput = root.querySelector('.field-enduser-sn input')
             const productInput = root.querySelector('.field-instrument-name input')
-            const contactInput = root.querySelector('input.w-contact')
             if (productInput && String(productInput.value || '').trim()) {
                 form.productName = String(productInput.value).trim()
             }
@@ -2083,16 +2402,13 @@ async function openExistingRecordSearch() {
             if (dealerInput && String(dealerInput.value || '').trim()) {
                 form.dealer = String(dealerInput.value).trim()
             }
-            if (contactInput && String(contactInput.value || '').trim()) {
-                form.contactPerson = String(contactInput.value).trim()
-            }
         }
     }
 
     const fields = existingServiceSearchParams.value
-    if (!fields.productName && !fields.SN && !fields.dealer && !fields.contactPerson) {
+    if (!fields.productName && !fields.SN && !fields.dealer && !(fields.contactPerson ?? '')) {
         error.value = isLoanerCase.value
-            ? 'productName / enduser_SN / dealer / contactPerson の全て、または何れかを入力してから検索してください。'
+            ? 'productName（先頭3文字）/ enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
             : 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
@@ -2131,27 +2447,52 @@ async function openExistingRecordSearch() {
 }
 
 async function openLoanerRecordSearch() {
-    if (isLoanerCase.value && typeof document !== 'undefined') {
-        const root = document.querySelector('.form-stack-loaner')
-        if (root) {
-            const dealerInput = root.querySelector('input.w-dealer-name')
-            const enduserSnInput = root.querySelector('.field-enduser-sn input')
-            const productInput = root.querySelector('.field-instrument-name input')
-            if (productInput && String(productInput.value || '').trim()) {
-                form.productName = String(productInput.value).trim()
+    if (typeof document !== 'undefined') {
+        if (isLoanerCase.value) {
+            const root = document.querySelector('.form-stack-loaner')
+            if (root) {
+                const dealerInput = root.querySelector('input.w-dealer-name')
+                const enduserSnInput = root.querySelector('.field-enduser-sn input')
+                const productInput = root.querySelector('.field-instrument-name input')
+                if (productInput && String(productInput.value || '').trim()) {
+                    form.productName = String(productInput.value).trim()
+                }
+                if (enduserSnInput && String(enduserSnInput.value || '').trim()) {
+                    form.enduser_SN = String(enduserSnInput.value).trim()
+                }
+                if (dealerInput && String(dealerInput.value || '').trim()) {
+                    form.dealer = String(dealerInput.value).trim()
+                }
             }
-            if (enduserSnInput && String(enduserSnInput.value || '').trim()) {
-                form.enduser_SN = String(enduserSnInput.value).trim()
-            }
-            if (dealerInput && String(dealerInput.value || '').trim()) {
-                form.dealer = String(dealerInput.value).trim()
+        } else {
+            const root = document.querySelector('.panel-form .form-stack:not(.form-stack-loaner)')
+                || document.querySelector('.panel-form')
+            if (root) {
+                const productInput = root.querySelector('input.w-product-name')
+                const snInput = root.querySelector('.row-product-sn input.w-sn')
+                const dealerInput = root.querySelector('input.w-dealer-name')
+                const contactInput = root.querySelector('input.w-contact')
+                if (productInput && String(productInput.value || '').trim()) {
+                    form.productName = String(productInput.value).trim()
+                }
+                if (snInput && String(snInput.value || '').trim()) {
+                    form.SN = String(snInput.value).trim()
+                }
+                if (dealerInput && String(dealerInput.value || '').trim()) {
+                    form.dealer = String(dealerInput.value).trim()
+                }
+                if (contactInput && String(contactInput.value || '').trim()) {
+                    form.contactPerson = String(contactInput.value).trim()
+                }
             }
         }
     }
 
     const fields = loanerSearchParams.value
-    if (!fields.productName && !fields.SN && !fields.dealer) {
-        error.value = 'productName / enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
+    if (!fields.productName && !fields.SN && !fields.dealer && !(fields.contactPerson ?? '')) {
+        error.value = isLoanerCase.value
+            ? 'productName（先頭3文字）/ enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
+            : 'productName / SN / dealer / contactPerson の全て、または何れかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
     }
@@ -2161,9 +2502,13 @@ async function openLoanerRecordSearch() {
 
     try {
         const params = new URLSearchParams({ order_type: 'loaner' })
+        if (!isLoanerCase.value) {
+            params.set('for', 'service_loaner_link')
+        }
         if (fields.productName) params.set('productName', fields.productName)
         if (fields.SN) params.set('SN', fields.SN)
         if (fields.dealer) params.set('dealer', fields.dealer)
+        if (fields.contactPerson) params.set('contactPerson', fields.contactPerson)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -2319,8 +2664,6 @@ function applyMaintenanceSearchResult(data) {
 async function searchMaintenanceContractsByRefNumber() {
     const refNumber = String(maintenanceRefNumberQuery.value ?? '').trim()
     if (!refNumber) {
-        maintenanceSearchError.value = 'RefNumber を入力してから検索してください。'
-        maintenanceSearchDone.value = true
         return
     }
 
@@ -2370,6 +2713,68 @@ function clearMaintenanceSelection() {
     selectedMaintenanceContractId.value = null
 }
 
+function contractText(value) {
+    return value == null ? '' : String(value).trim()
+}
+
+function parseMaintenanceAddress(raw) {
+    const withoutMark = String(raw ?? '').replaceAll('〒', '').trim()
+    const spaceIndex = withoutMark.search(/[ \u3000]/)
+    const zipcode = spaceIndex === -1
+        ? withoutMark
+        : withoutMark.slice(0, spaceIndex).trim()
+    const remainder = spaceIndex === -1
+        ? ''
+        : withoutMark.slice(spaceIndex + 1).trim()
+
+    const prefectureIndex = remainder.search(/[都道府県]/)
+    if (prefectureIndex === -1) {
+        return { zipcode, address1: remainder, address2: '' }
+    }
+
+    return {
+        zipcode,
+        address1: remainder.slice(0, prefectureIndex + 1),
+        address2: remainder.slice(prefectureIndex + 1).trim(),
+    }
+}
+
+function copyFromSelectedMaintenanceContract() {
+    if (!selectedMaintenanceContractId.value) {
+        return
+    }
+
+    const selected = maintenanceContracts.value.find(
+        row => String(row.id) === String(selectedMaintenanceContractId.value ?? ''),
+    )
+    if (!selected) {
+        return
+    }
+
+    form.dealer = contractText(selected.dealer)
+    form.dealer_depart = contractText(selected.branch)
+    form.contactPerson = contractText(selected.contact)
+    form.phone = contractText(selected.phone)
+    form.email = contractText(selected.email)
+    const dealerAddress = parseMaintenanceAddress(selected.address)
+    form.zipcode = dealerAddress.zipcode
+    form.address1 = dealerAddress.address1
+    form.address2 = dealerAddress.address2
+
+    form.endUser = contractText(selected.endUser)
+    form.endUser_depart = contractText(selected.endUser_depart)
+    form.endUser_contactPerson = contractText(selected.endUser_contact)
+    form.endUser_phone = contractText(selected.endUser_phone)
+    form.endUser_email = contractText(selected.endUser_email)
+    const endUserAddress = parseMaintenanceAddress(selected.endUser_address)
+    form.endUser_zipcode = endUserAddress.zipcode
+    form.endUser_address1 = endUserAddress.address1
+    form.endUser_address2 = endUserAddress.address2
+
+    error.value = ''
+    success.value = '保守契約の dealer / endUser を反映しました。'
+}
+
 function addSelectedLoaner(record) {
     if (!record?.orderID) return
     if (record.parentID) {
@@ -2400,10 +2805,56 @@ function cancelLoanerRequirementDialog() {
     loanerRequirementContext.value = null
 }
 
-function chooseManualEntryForLoaner() {
+function chooseOcrOrManualForLoaner() {
+    const record = pendingLoanerRecord.value
     showLoanerRequirementDialog.value = false
+    if (loanerRequirementContext.value === 'select' && record) {
+        addSelectedLoaner(record)
+    }
+    pendingLoanerRecord.value = null
+    loanerRequirementContext.value = null
+    error.value = ''
     activeTab.value = 'basic'
-    error.value = `不足項目を入力してください: ${missingLoanerLinkFields.value.join(', ')}（入力後、loaner案件検索から再度追加できます）`
+}
+
+function copyStakeholderFieldsFromRecord(record) {
+    if (!record) return 0
+    let applied = 0
+    Object.values(STAKEHOLDER_FIELDS).flat().forEach((field) => {
+        if (!(field in form)) return
+        const raw = record[field]
+        form[field] = raw == null ? '' : String(raw)
+        if (String(form[field]).trim() !== '') applied += 1
+    })
+    return applied
+}
+
+function chooseCopyFromLoaner() {
+    const record = pendingLoanerRecord.value || selectedLoaners.value[0] || null
+    if (!record) {
+        error.value = 'コピー元の loaner 案件がありません。'
+        return
+    }
+
+    const shouldAddPending = loanerRequirementContext.value === 'select' && Boolean(pendingLoanerRecord.value)
+    loanerRequirementContext.value = null
+
+    copyStakeholderFieldsFromRecord(record)
+
+    if (shouldAddPending) {
+        addSelectedLoaner(record)
+    }
+    pendingLoanerRecord.value = null
+    showLoanerRequirementDialog.value = false
+    error.value = ''
+    success.value = 'loaner の dealer / endUser / delivery を反映しました。'
+    activeTab.value = 'basic'
+
+    const productName = String(form.productName ?? '').trim()
+    if (!productNameExistsInServiceMaster(productName)) {
+        unknownProductName.value = productName || '(未入力)'
+        showProductNameMissingDialog.value = true
+    }
 }
 
 function applyOcrFields(fields) {
@@ -2415,6 +2866,10 @@ function applyOcrFields(fields) {
         const text = String(value).trim()
         if (text === '' || text.toLowerCase() === 'null') return
         form[key] = text
+        if (key === 'productName') {
+            form.serviceID = ''
+            form.entityID = ''
+        }
         applied += 1
     })
     return applied
@@ -2510,6 +2965,8 @@ async function runOcrFromSourceFile({ continueLoanerFlow = false } = {}) {
             ? `${data.message}（${applied}項目を反映）`
             : `OCR 読み取り結果を反映しました。（${applied}項目）`
 
+        warnIfOcrProductNameMissingFromMaster()
+
         if (continueLoanerFlow) {
             if (hasLoanerLinkRequiredFields.value && pendingLoanerRecord.value) {
                 const record = pendingLoanerRecord.value
@@ -2545,15 +3002,116 @@ async function chooseOcrForLoaner() {
 function onLoanerSelected(payload) {
     const record = payload?.record ?? payload
     if (!record?.orderID) return
+    if (isLoanerCase.value) {
+        pendingAttachLoanerRecord.value = record
+        showLoanerAttachConfirmDialog.value = true
+        error.value = ''
+        return
+    }
     if (record.parentID) {
         error.value = `orderID ${record.orderID} は既に parentID=${record.parentID} へ紐づいています。`
         return
     }
-    if (!hasLoanerLinkRequiredFields.value) {
-        openLoanerRequirementDialog('select', record)
+    openLoanerRequirementDialog('select', record)
+}
+
+function cancelAttachToExistingLoaner() {
+    showLoanerAttachConfirmDialog.value = false
+    pendingAttachLoanerRecord.value = null
+}
+
+function confirmAttachToExistingLoaner() {
+    const record = pendingAttachLoanerRecord.value
+    if (!record?.orderID) {
+        cancelAttachToExistingLoaner()
         return
     }
-    addSelectedLoaner(record)
+    linkToExistingRecord({ record })
+}
+
+function onExistingServiceSelectedAsParent(payload) {
+    const record = payload?.record ?? payload
+    if (!record?.orderID) return
+
+    parentIdBeforeServiceSelect.value = form.parentID == null ? '' : String(form.parentID)
+    pendingServiceParentRecord.value = record
+    const parentId = resolveRecordOrderId(record)
+    form.parentID = parentId == null ? '' : String(parentId)
+    adoptedParentOrderId.value = parentId
+    showServiceParentCopyDialog.value = true
+    error.value = ''
+}
+
+function cancelServiceParentCopyDialog() {
+    form.parentID = parentIdBeforeServiceSelect.value
+    adoptedParentOrderId.value = resolveFormParentId()
+    parentIdBeforeServiceSelect.value = ''
+    pendingServiceParentRecord.value = null
+    showServiceParentCopyDialog.value = false
+}
+
+function chooseCopyFromServiceParent() {
+    const record = pendingServiceParentRecord.value
+    if (!record) {
+        error.value = 'コピー元の service 案件がありません。'
+        return
+    }
+    copyStakeholderFieldsFromRecord(record)
+    pendingServiceParentRecord.value = null
+    parentIdBeforeServiceSelect.value = ''
+    showServiceParentCopyDialog.value = false
+    error.value = ''
+    success.value = 'service の dealer / endUser / delivery を反映しました。'
+    goToBasicTabAndCheckLoanerProduct()
+}
+
+function chooseOcrOrManualForServiceParent() {
+    pendingServiceParentRecord.value = null
+    parentIdBeforeServiceSelect.value = ''
+    showServiceParentCopyDialog.value = false
+    error.value = ''
+    goToBasicTabAndCheckLoanerProduct()
+}
+
+function loanerItemSnExistsInMaster() {
+    const item = itemTextWithoutOffBookMark(form.item || form.productName)
+    const sn = String(form.SN ?? '').trim().toLowerCase()
+
+    if (form.loanerID) {
+        const unit = loanerUnits.value.find(row => String(row.loanerID) === String(form.loanerID))
+        if (!unit || isExcludedLoanerItem(unit.item)) return false
+        const unitSn = String(unit.SN ?? '').trim().toLowerCase()
+        if (sn && unitSn && unitSn !== sn) return false
+        return true
+    }
+
+    if (!item || !sn) return false
+
+    return loanerUnits.value.some((unit) => {
+        if (isExcludedLoanerItem(unit?.item)) return false
+        const unitItem = itemTextWithoutOffBookMark(unit?.item)
+        if (unitItem.toLowerCase() !== item.toLowerCase()) return false
+        return String(unit?.SN ?? '').trim().toLowerCase() === sn
+    })
+}
+
+function goToBasicTabAndCheckLoanerProduct() {
+    activeTab.value = 'basic'
+    if (loanerItemSnExistsInMaster()) {
+        showLoanerProductMissingDialog.value = false
+        return
+    }
+    showLoanerProductMissingDialog.value = true
+}
+
+function closeLoanerProductMissingDialog() {
+    showLoanerProductMissingDialog.value = false
+}
+
+function openLoanerProductFromWarning() {
+    showLoanerProductMissingDialog.value = false
+    activeTab.value = 'basic'
+    openSelectDialog('loanerProduct')
 }
 
 function removeSelectedLoaner(orderID) {
@@ -2660,6 +3218,12 @@ async function saveLoanerCase() {
     saving.value = true
     error.value = ''
 
+    const parentId = resolveFormParentId()
+    if (parentId != null) {
+        form.parentID = String(parentId)
+        adoptedParentOrderId.value = parentId
+    }
+
     try {
         const url = `${page.props.appBaseUrl}/servicerecord/loaner/store`
         const result = await apiFetch(url, {
@@ -2672,8 +3236,8 @@ async function saveLoanerCase() {
                 productName: form.productName,
                 item: form.item || null,
                 receivedDate: null,
-                linkMode: form.parentID ? 'parent' : 'none',
-                parentID: form.parentID === '' ? null : Number(form.parentID),
+                linkMode: parentId != null ? 'parent' : 'none',
+                parentID: parentId,
                 status: null,
                 returnCode: null,
                 SN: form.SN || null,
@@ -2750,6 +3314,10 @@ async function save() {
         }
     } else if (!String(form.productName || '').trim()) {
         error.value = 'productName を入力または選択してください。'
+        return
+    }
+
+    if (warnIfProductNameMissingFromMaster()) {
         return
     }
 
@@ -3033,8 +3601,15 @@ async function save() {
 .maintenance-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0;
     margin-bottom: 8px;
+}
+
+.maintenance-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
 }
 
 .maintenance-header h3 {
@@ -3050,15 +3625,17 @@ async function save() {
 }
 
 .maintenance-clear-btn {
+    margin-left: 10px;
     padding: 4px 10px;
     font-size: 12px;
 }
 
 .maintenance-ref-search {
-    margin-left: auto;
+    margin-left: 100px;
     display: flex;
     align-items: center;
     gap: 6px;
+    flex: 0 0 auto;
 }
 
 .maintenance-ref-input {
@@ -3072,6 +3649,13 @@ async function save() {
 }
 
 .maintenance-ref-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.maintenance-copy-btn {
+    margin-left: 150px;
     padding: 4px 10px;
     font-size: 12px;
     white-space: nowrap;
@@ -3276,6 +3860,7 @@ async function save() {
 
 .confirm-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
     padding: 12px 16px 16px;
@@ -3901,6 +4486,23 @@ async function save() {
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 12px;
+}
+
+.stakeholder-side-actions {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.stakeholder-copy-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 30px;
+}
+
+.stakeholder-side-actions .stakeholder-switches {
+    margin-top: 0;
 }
 
 .stakeholder-switches {

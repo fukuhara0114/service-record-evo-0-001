@@ -11,6 +11,7 @@
             </div>
             <div class="header-actions">
                 <a :href="calendarUrl" class="btn btn-secondary">カレンダー</a>
+                <a :href="intakeListUrl" class="btn btn-secondary">未登録ファイル一覧</a>
                 <a :href="adminUrl" class="btn btn-secondary">既存案件一覧</a>
                 <button
                     type="button"
@@ -599,6 +600,7 @@ const zipLookupTimers = {
 }
 
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
+const intakeListUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/intake`)
 const adminUrl = computed(() => {
     const orderType = attachedLocal.order_type === 'waiting_list' ? 'waiting_list' : 'loaner'
     return `${page.props.appBaseUrl}/servicerecord/administrator?orderType=${encodeURIComponent(orderType)}`

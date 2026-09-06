@@ -56,14 +56,14 @@ class MaintenanceContractMaster extends Model
         'orderedDate' => 'date',
         'startDate' => 'date',
         'expireDate' => 'date',
-        'certificationTicket' => 'boolean',
+        'certificationTicket' => 'integer',
         'certificationExpireDate' => 'date',
         'renewalInformation' => 'date',
         'informedDate' => 'date',
         'renewedDate' => 'date',
         'lastEditDate' => 'datetime',
         'amount' => 'decimal:2',
-        'informed' => 'boolean',
+        'informed' => 'integer',
     ];
 
     /**

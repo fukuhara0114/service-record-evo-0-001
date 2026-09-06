@@ -106,7 +106,11 @@
                                     <span>親案件ID</span>
                                     <div class="parent-id-block">
                                         <div class="parent-id-controls">
-                                            <input v-model="form.parentID" type="number">
+                                            <input
+                                                v-model="form.parentID"
+                                                type="number"
+                                                :class="{ 'parent-id-filled': String(form.parentID ?? '').trim() !== '' }"
+                                            >
                                             <button
                                                 type="button"
                                                 class="btn btn-secondary parent-id-open-btn"
@@ -247,7 +251,7 @@
                         <div class="price-adjust-row">
                             <div class="price-adjust-group">
                                 <button
-                                    v-if="record.order_type === 'loaner'"
+                                    v-if="record.order_type === 'loaner' || record.order_type === 'waiting_list'"
                                     type="button"
                                     class="charge-type-toggle"
                                     :class="{ active: chargeType === 'paid' }"
@@ -1462,7 +1466,7 @@ const masterPrice = computed(() => {
     return Number.isFinite(num) ? num : 0
 })
 const basePrice = computed(() => {
-    if (props.record.order_type === 'loaner') {
+    if (props.record.order_type === 'loaner' || props.record.order_type === 'waiting_list') {
         return chargeType.value === 'paid' ? masterPrice.value : 0
     }
     if (!form.parentID) return 0
@@ -1475,7 +1479,10 @@ const discountAmount = computed(() => {
     return Number.isFinite(num) ? num : 0
 })
 const displayPrice = computed(() => {
-    if (props.record.order_type === 'loaner' && chargeType.value === 'free') return 0
+    if (
+        (props.record.order_type === 'loaner' || props.record.order_type === 'waiting_list')
+        && chargeType.value === 'free'
+    ) return 0
     return basePrice.value + discountAmount.value
 })
 /** service 案件と同じ: price は元価格（有償=マスタ / 無償=0）、調整額は discount_service */
@@ -3321,7 +3328,7 @@ onBeforeUnmount(() => {
     overflow: hidden;
     background: #e2e8f0;
     color: #1e293b;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
 }
 .loaner-detail-page :is(input, select, textarea, button, option, th, td, label, span, strong, h1, h2, h3, h4, h5, p, a, div) {
@@ -3349,7 +3356,7 @@ onBeforeUnmount(() => {
 .page-order-id { font-size: 14px; }
 .page-title {
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: #0f172a;
     white-space: nowrap;
@@ -3368,6 +3375,7 @@ onBeforeUnmount(() => {
     cursor: pointer;
     white-space: nowrap;
 }
+.btn { font-size: 14px; }
 .btn:disabled { opacity: .6; cursor: wait; }
 .btn-primary { background: #2563eb; color: #fff; }
 .btn-danger { background: #dc2626; color: #fff; }
@@ -3379,7 +3387,7 @@ a.btn {
     box-sizing: border-box;
 }
 .btn-secondary { background: #64748b; color: #fff; }
-.select-btn { padding: 2px 8px; border-color: #94a3b8; background: #fff; color: #334155; font-size: 11px; }
+.select-btn { padding: 2px 8px; border-color: #94a3b8; background: #fff; color: #334155; font-size: 12px; }
 
 .outer-splitpanes { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .main-pane { min-width: 0; min-height: 0; padding: 0 5px; overflow: hidden; }
@@ -3399,8 +3407,9 @@ a.btn {
 .delivery-copy-btn {
     margin-left: 50px;
 }
-.panel h2 { margin: 0; font-size: 13px; }
-.panel h3 { margin: 7px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #cbd5e1; font-size: 11px; color: #475569; }
+.panel h2 { margin: 0; font-size: 16px; }
+.files-panel h2 { font-size: 14px; }
+.panel h3 { margin: 7px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #cbd5e1; font-size: 16px; color: #475569; }
 
 .loaner-panel { flex: 0 0 auto; }
 .people-row { flex: 0 0 auto; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
@@ -3410,15 +3419,15 @@ a.btn {
 .period-panel label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .period-panel .date-input-with-today { width: 142px; }
 .period-panel .date-input-with-today :deep(input) { width: 100%; min-width: 0; }
-.calendar-help, .file-help { color: #64748b; font-size: 10px; }
-.calendar-error { margin: 0 0 3px; color: #b91c1c; font-size: 11px; }
+.calendar-help, .file-help { color: #64748b; font-size: 13px; }
+.calendar-error { margin: 0 0 3px; color: #b91c1c; font-size: 13px; }
 
 .tab-panel { flex: 1 0 330px; min-height: 330px; display: flex; flex-direction: column; overflow: hidden; }
 .tab-heading { flex-wrap: wrap; gap: 6px; }
 .tab-buttons { display: flex; align-items: center; gap: 4px; }
 .notes-tbc-count {
     margin-left: 100px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     color: #dc2626;
     white-space: nowrap;
@@ -3430,7 +3439,7 @@ a.btn {
     border-radius: 3px 3px 0 0;
     background: #e2e8f0;
     color: #475569;
-    font-size: 12px;
+    font-size: 14px;
     cursor: pointer;
 }
 .tab-btn.active {
@@ -3452,7 +3461,7 @@ a.btn {
 .notes-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: 12px;
 }
 .notes-table th,
 .notes-table td {
@@ -3480,13 +3489,13 @@ a.btn {
     background: #cab7e1 !important;
 }
 .notes-table tbody tr.important-row:not(.active-row) td { background: #fef08a; }
-.empty-notes { margin: 12px 4px; color: #64748b; font-size: 12px; }
+.empty-notes { margin: 12px 4px; color: #64748b; font-size: 13px; }
 .confirm-checkbox {
     display: flex;
     align-items: center;
     gap: 6px;
     color: #475569;
-    font-size: 12px;
+    font-size: 14px;
 }
 .confirm-toggles {
     display: flex;
@@ -3499,7 +3508,7 @@ a.btn {
     border-radius: 999px;
     background: #f8fafc;
     color: #475569;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
 }
@@ -3521,13 +3530,13 @@ a.btn {
     border-radius: 3px;
     background: #f8fafc;
     color: #334155;
-    font-size: 12px;
+    font-size: 14px;
     white-space: pre-wrap;
 }
 
 .compact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 6px; }
 .compact-grid label { min-width: 0; display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 4px; }
-.compact-grid label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #475569; }
+.compact-grid label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #475569; font-size: 14px; }
 .compact-grid input,
 .compact-grid select,
 .master-value,
@@ -3541,7 +3550,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .compact-grid input[readonly] { background: #f1f5f9; color: #64748b; }
 .compact-grid .span-2 { grid-column: span 2; }
@@ -3583,7 +3592,7 @@ a.btn {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #334155;
-    font-size: 11px;
+    font-size: 14px;
 }
 .loaner-identity-col .product-name-copy-btn {
     height: 26px;
@@ -3615,7 +3624,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .loaner-identity-col .parent-id-block {
     display: flex;
@@ -3632,12 +3641,17 @@ a.btn {
 }
 .loaner-identity-col .parent-id-controls input {
     flex: 1 1 auto;
+    background: #fff;
+}
+.loaner-identity-col .parent-id-controls input.parent-id-filled {
+    background: #dcfce7;
+    border-color: #bbf7d0;
 }
 .loaner-identity-col .parent-id-open-btn {
     flex: 0 0 auto;
     height: 26px;
     padding: 0 8px;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1;
     white-space: nowrap;
 }
@@ -3650,10 +3664,10 @@ a.btn {
     flex-direction: column;
     gap: 2px;
     padding: 4px 6px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #bbf7d0;
     border-radius: 2px;
-    background: #f8fafc;
-    font-size: 11px;
+    background: #dcfce7;
+    font-size: 14px;
     line-height: 1.35;
     color: #334155;
 }
@@ -3688,7 +3702,7 @@ a.btn {
 .commerce-label,
 .commerce-date-label {
     color: #334155;
-    font-size: 11px;
+    font-size: 14px;
     white-space: nowrap;
 }
 .commerce-num,
@@ -3701,7 +3715,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .commerce-row .date-input-with-today {
     width: 100%;
@@ -3716,7 +3730,10 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
+}
+.commerce-row .date-input-with-today :deep(input) {
+    font-size: 14px;
 }
 .shipping-date-btn {
     text-align: left;
@@ -3738,7 +3755,7 @@ a.btn {
     min-height: 100%;
     min-width: 88px;
     padding: 4px 10px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -3761,7 +3778,7 @@ a.btn {
 .status-select-box > span,
 .labor-box > span {
     color: #475569;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.2;
 }
 .status-current-value {
@@ -3769,7 +3786,7 @@ a.btn {
     min-height: 28px;
     padding: 4px 2px;
     color: #0f172a;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.3;
 }
 .status-select-box select,
@@ -3783,7 +3800,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .labor-box input[readonly] {
     background: #f1f5f9;
@@ -3834,7 +3851,7 @@ a.btn {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #475569;
-    font-size: 11px;
+    font-size: 14px;
 }
 .person-stack input {
     width: 100%;
@@ -3845,7 +3862,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .person-stack .zip-row {
     grid-template-columns: 28px 100px;
@@ -3877,7 +3894,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 .address-pair .address2-input {
     flex: 1 1 160px;
@@ -3888,7 +3905,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 
 .price-adjust-row {
@@ -3922,7 +3939,7 @@ a.btn {
     border-radius: 3px;
     background: #e2e8f0;
     color: #475569;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     line-height: 1.2;
     cursor: pointer;
@@ -3956,12 +3973,12 @@ a.btn {
     gap: 8px;
     white-space: nowrap;
 }
-.price-adjust-label { color: #475569; font-size: 13px; font-weight: bold; white-space: nowrap; }
+.price-adjust-label { color: #475569; font-size: 14px; font-weight: bold; white-space: nowrap; }
 .price-adjust-value {
     flex: 0 1 auto;
     min-width: 0;
     max-width: 140px;
-    font-size: 13px;
+    font-size: 20px;
     color: #0f172a;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3970,7 +3987,7 @@ a.btn {
 .price-adjust-btn {
     min-height: 24px;
     padding: 2px 10px;
-    font-size: 11px;
+    font-size: 14px;
     white-space: nowrap;
     flex: 0 0 auto;
 }
@@ -3981,7 +3998,7 @@ a.btn {
     border-top: 3px solid #3b82f6;
     background: #4b5563;
     color: #fff;
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
 }
@@ -3997,9 +4014,9 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
-.price-adjust-delta strong { font-size: 12px; color: #0f172a; }
+.price-adjust-delta strong { font-size: 16px; color: #1d4ed8; }
 .price-adjust-enduser-sn {
     margin-left: auto;
     display: flex;
@@ -4017,7 +4034,7 @@ a.btn {
     border-radius: 2px;
     background: #fff;
     color: #1e293b;
-    font-size: 11px;
+    font-size: 14px;
 }
 
 /* 左ペイン（この行）が狭いとき: 余白縮小・enduser_SN を次行へ */
@@ -4072,11 +4089,11 @@ a.btn {
 .file-dropzone-cancel {
     flex: 0 0 auto;
 }
-.file-dropzone strong { color: #1e293b; }
-.file-dropzone span { font-size: 10px; }
+.file-dropzone strong { color: #1e293b; font-size: 14px; }
+.file-dropzone span { font-size: 13px; }
 .file-dropzone.active { border-color: #2563eb; background: #dbeafe; }
 .file-dropzone.disabled { opacity: .6; cursor: wait; }
-.file-error { margin: 0 0 6px; color: #b91c1c; font-size: 11px; }
+.file-error { margin: 0 0 6px; color: #b91c1c; font-size: 13px; }
 .files-list { flex: 1; min-height: 0; overflow: auto; padding-right: 3px; }
 .empty { margin: 12px; color: #64748b; }
 
@@ -4167,7 +4184,7 @@ a.btn {
 }
 .application-form-charge-fieldset legend {
     padding: 0 6px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: bold;
     color: #334155;
 }
@@ -4176,10 +4193,10 @@ a.btn {
     align-items: center;
     gap: 8px;
     margin: 6px 0;
-    font-size: 13px;
+    font-size: 14px;
     color: #0f172a;
 }
-.confirm-panel h3 { margin: 0 0 10px; font-size: 15px; }
+.confirm-panel h3 { margin: 0 0 10px; font-size: 16px; }
 .confirm-panel p { overflow-wrap: anywhere; }
 .confirm-header {
     display: flex;
@@ -4195,26 +4212,26 @@ a.btn {
     border: none;
     background: transparent;
     color: #64748b;
-    font-size: 18px;
+    font-size: 22px;
     line-height: 1;
     cursor: pointer;
 }
 .confirm-body { padding: 12px 0; display: grid; gap: 8px; }
-.confirm-current-price { margin: 0; color: #334155; font-size: 12px; }
-.confirm-field { display: grid; gap: 4px; color: #475569; font-size: 12px; }
+.confirm-current-price { margin: 0; color: #334155; font-size: 14px; }
+.confirm-field { display: grid; gap: 4px; color: #475569; font-size: 14px; }
 .confirm-input,
 .confirm-textarea {
     width: 100%;
     border: 1px solid #94a3b8;
     border-radius: 2px;
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: 14px;
 }
-.confirm-error { margin: 0; color: #b91c1c; font-size: 12px; }
+.confirm-error { margin: 0; color: #b91c1c; font-size: 14px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
 
 .promotion-panel { width: min(1280px, 96vw); max-height: calc(100vh - 32px); overflow: auto; }
-.promotion-lead { margin: 0 0 12px; color: #334155; font-size: 13px; line-height: 1.45; }
+.promotion-lead { margin: 0 0 12px; color: #334155; font-size: 14px; line-height: 1.45; }
 .promotion-source {
     margin: 0 0 12px;
     padding: 10px 12px;
@@ -4224,7 +4241,7 @@ a.btn {
 }
 .promotion-source h4 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: 14px;
     color: #0f172a;
 }
 .promotion-source-meta {
@@ -4235,8 +4252,8 @@ a.btn {
     margin: 0 0 10px;
 }
 .promotion-source-meta div { display: grid; gap: 2px; min-width: 0; }
-.promotion-source-meta dt { margin: 0; color: #64748b; font-size: 11px; }
-.promotion-source-meta dd { margin: 0; color: #0f172a; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.promotion-source-meta dt { margin: 0; color: #64748b; font-size: 13px; }
+.promotion-source-meta dd { margin: 0; color: #0f172a; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .promotion-source-note {
     width: 100%;
 }
@@ -4262,7 +4279,7 @@ a.btn {
     width: 160px;
     color: #334155;
     text-decoration: none;
-    font-size: 11px;
+    font-size: 13px;
 }
 .promotion-image-link img {
     width: 160px;
@@ -4276,17 +4293,17 @@ a.btn {
 .promotion-other-files {
     margin: 8px 0 0;
     padding-left: 18px;
-    font-size: 12px;
+    font-size: 13px;
 }
 .promotion-table-wrap { max-height: min(40vh, 320px); overflow: auto; border: 1px solid #cbd5e1; border-radius: 6px; }
-.promotion-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.promotion-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .promotion-table th,
 .promotion-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
 .promotion-table th { position: sticky; top: 0; background: #f8fafc; color: #475569; font-weight: 600; }
 .promotion-table tbody tr:last-child td { border-bottom: none; }
 .promotion-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.promotion-open-btn { min-height: 26px; padding: 2px 10px; font-size: 11px; }
-.promotion-empty { margin: 0; padding: 16px; color: #64748b; font-size: 13px; text-align: center; }
+.promotion-open-btn { min-height: 26px; padding: 2px 10px; font-size: 14px; }
+.promotion-empty { margin: 0; padding: 16px; color: #64748b; font-size: 14px; text-align: center; }
 
 .promote-banner {
     display: flex;
@@ -4310,12 +4327,12 @@ a.btn {
 }
 .promote-banner-text strong {
     color: #92400e;
-    font-size: 13px;
+    font-size: 14px;
 }
 .promote-banner-text p {
     margin: 0;
     color: #475569;
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.45;
 }
 .promote-source { color: #64748b !important; }
@@ -4330,7 +4347,7 @@ a.btn {
     display: grid;
     gap: 6px;
     margin: 12px 0 4px;
-    font-size: 13px;
+    font-size: 14px;
     color: #475569;
 }
 .promote-confirm-select select {
@@ -4342,30 +4359,30 @@ a.btn {
 }
 .confirm-detail {
     margin: 6px 0 0;
-    font-size: 13px;
+    font-size: 14px;
     color: #475569;
 }
 .promote-unit-select {
     display: grid;
     gap: 4px;
     color: #475569;
-    font-size: 11px;
+    font-size: 14px;
 }
 .promote-unit-select select {
     min-width: 220px;
     border: 1px solid #94a3b8;
     border-radius: 2px;
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: 14px;
     background: #fff;
 }
 
 :deep(.splitpanes__splitter) { width: 7px !important; border-left: 1px solid #64748b; border-right: 1px solid #64748b; background: #cbd5e1 !important; }
 :deep(.splitpanes__splitter:hover) { background: #60a5fa !important; }
-:deep(.fc) { font-size: 10px; }
+:deep(.fc) { font-size: 13px; }
 :deep(.fc .fc-toolbar) { margin-bottom: 3px; gap: 3px; }
-:deep(.fc .fc-toolbar-title) { font-size: 13px; }
-:deep(.fc .fc-button) { padding: 2px 5px; font-size: 10px; }
+:deep(.fc .fc-toolbar-title) { font-size: 14px; }
+:deep(.fc .fc-button) { padding: 2px 5px; font-size: 13px; }
 :deep(.fc .fc-daygrid-day-number) { padding: 1px 3px; }
 :deep(.fc .fc-event) { cursor: move; }
 :deep(.file-item) { margin-bottom: 7px; }

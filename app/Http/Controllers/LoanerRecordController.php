@@ -1134,7 +1134,7 @@ class LoanerRecordController extends Controller
             $orderDate = array_key_exists('orderDate', $validated)
                 ? $validated['orderDate']
                 : $record->orderDate;
-            if ($record->order_type === 'loaner') {
+            if ($record->order_type === 'loaner' || $record->order_type === 'waiting_list') {
                 $incomingPrice = array_key_exists('price', $validated)
                     ? $validated['price']
                     : $record->price;
@@ -1382,6 +1382,11 @@ class LoanerRecordController extends Controller
         $orderType = $available ? 'loaner' : 'waiting_list';
         $user = $request->user();
         $linkMode = $validated['linkMode'];
+        $requestedParentId = (int) ($validated['parentID'] ?? 0);
+        if ($requestedParentId > 0) {
+            $linkMode = 'parent';
+            $validated['parentID'] = $requestedParentId;
+        }
         $parentId = null;
 
         $fileIds = collect()
@@ -1487,6 +1492,11 @@ class LoanerRecordController extends Controller
                 'lastEditPerson' => $user?->kanji_name,
                 'lastEditDate' => now(),
             ]);
+
+            if ($parentId) {
+                $record->parentID = $parentId;
+                $record->save();
+            }
 
             $attached = $this->createAttachedLoanerReservation(
                 $record,
