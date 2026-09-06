@@ -149,7 +149,7 @@
                                 </label>
                                 <label class="input-field">
                                     <span>address1</span>
-                                    <input type="text" maxlength="5" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
+                                    <input type="text" class="address1-input" maxlength="5" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
                                 </label>
                                 <label class="input-field">
                                     <span>address2</span>
@@ -210,7 +210,7 @@
                                 </label>
                                 <label class="input-field">
                                     <span>address1</span>
-                                    <input type="text" maxlength="5" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
+                                    <input type="text" class="address1-input" maxlength="5" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
                                 </label>
                                 <label class="input-field">
                                     <span>address2</span>
@@ -271,7 +271,7 @@
                                 </label>
                                 <label class="input-field">
                                     <span>address1</span>
-                                    <input type="text" maxlength="5" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
+                                    <input type="text" class="address1-input" maxlength="5" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
                                 </label>
                                 <label class="input-field">
                                     <span>address2</span>
@@ -671,6 +671,13 @@ function openServiceMasterSelect() {
     background: #fff;
     font-size: 16px;
     font-weight: 700;
+}
+
+.input-field input.address1-input {
+    flex: 0 0 70px;
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
 }
 
 .a2la-row {

@@ -542,23 +542,18 @@ class MaintenanceContractController extends Controller
     public function search(Request $request)
     {
         $validated = $request->validate([
-            'productName' => 'required|string|max:255',
-            'SN' => 'required|string|max:255',
-            'dealer' => 'required|string|max:255',
+            'productName' => 'nullable|string|max:255',
+            'SN' => 'nullable|string|max:255',
+            'dealer' => 'nullable|string|max:255',
+            'RefNumber' => 'nullable|string|max:255',
             'match' => 'nullable|in:contains,prefix',
         ]);
 
-        $productName = trim((string) $validated['productName']);
-        $sn = trim((string) $validated['SN']);
-        $dealer = trim((string) $validated['dealer']);
+        $productName = trim((string) ($validated['productName'] ?? ''));
+        $sn = trim((string) ($validated['SN'] ?? ''));
+        $dealer = trim((string) ($validated['dealer'] ?? ''));
+        $refNumber = trim((string) ($validated['RefNumber'] ?? ''));
         $contains = ($validated['match'] ?? '') === 'contains';
-
-        if ($productName === '' || $sn === '' || $dealer === '') {
-            return response()->json([
-                'message' => 'productName / SN / dealer をすべて入力してください。',
-                'contracts' => [],
-            ], 422);
-        }
 
         $today = Carbon::today()->toDateString();
         $query = MaintenanceContractMaster::query()
@@ -566,17 +561,28 @@ class MaintenanceContractController extends Controller
             ->whereNotNull('expireDate')
             ->whereDate('expireDate', '>', $today);
 
-        if ($contains) {
-            $query
-                ->whereRaw('LOWER(instrumentName) LIKE ?', [$this->likeContains(mb_strtolower($productName, 'UTF-8'))])
-                ->whereRaw('LOWER(SN) LIKE ?', [$this->likeContains(mb_strtolower($sn, 'UTF-8'))])
-                ->whereRaw('LOWER(dealer) LIKE ?', [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]);
+        if ($refNumber !== '') {
+            $query->where('RefNumber', 'like', $this->likeContains($refNumber));
         } else {
-            $productPrefix = mb_substr($productName, 0, 5);
-            $query
-                ->where('instrumentName', 'like', $this->likePrefix($productPrefix))
-                ->where('SN', $sn)
-                ->where('dealer', 'like', $this->likeContains($dealer));
+            if ($productName === '' || $sn === '' || $dealer === '') {
+                return response()->json([
+                    'message' => 'productName / SN / dealer をすべて入力してください。',
+                    'contracts' => [],
+                ], 422);
+            }
+
+            if ($contains) {
+                $query
+                    ->whereRaw('LOWER(instrumentName) LIKE ?', [$this->likeContains(mb_strtolower($productName, 'UTF-8'))])
+                    ->whereRaw('LOWER(SN) LIKE ?', [$this->likeContains(mb_strtolower($sn, 'UTF-8'))])
+                    ->whereRaw('LOWER(dealer) LIKE ?', [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]);
+            } else {
+                $productPrefix = mb_substr($productName, 0, 5);
+                $query
+                    ->where('instrumentName', 'like', $this->likePrefix($productPrefix))
+                    ->where('SN', $sn)
+                    ->where('dealer', 'like', $this->likeContains($dealer));
+            }
         }
 
         $contracts = $query
@@ -591,10 +597,11 @@ class MaintenanceContractController extends Controller
             'contracts' => $contracts,
             'count' => $contracts->count(),
             'filters' => [
-                'match' => $contains ? 'contains' : 'prefix',
+                'match' => $refNumber !== '' ? 'refNumber' : ($contains ? 'contains' : 'prefix'),
                 'productName' => $productName,
                 'SN' => $sn,
                 'dealer' => $dealer,
+                'RefNumber' => $refNumber,
                 'expireDateAfter' => $today,
             ],
         ]);

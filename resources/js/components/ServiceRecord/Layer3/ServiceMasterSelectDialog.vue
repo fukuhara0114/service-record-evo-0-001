@@ -1,5 +1,6 @@
 <template>
     <BaseDialog :title="config.title" large @close="$emit('close')">
+        <div class="select-dialog-layout">
         <label class="search-field">
             検索
             <input
@@ -21,21 +22,11 @@
             </button>
         </div>
 
-        <div v-if="kind === 'dealer'" class="dealer-preview">
-            <h4>選択中の依頼者情報</h4>
-            <div class="dealer-preview-grid">
-                <label v-for="field in dealerPreviewFields" :key="field.key" class="dealer-preview-field">
-                    <span>{{ field.label }}</span>
-                    <input type="text" :value="selectedItem ? (selectedItem[field.key] ?? '') : ''" readonly>
-                </label>
-            </div>
-        </div>
-
         <div class="table-wrap">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th v-for="column in config.columns" :key="column.label">
+                        <th v-for="column in config.columns" :key="column.label" :class="column.className">
                             {{ column.label }}
                         </th>
                     </tr>
@@ -49,7 +40,7 @@
                         @click="selectedValue = itemValue(item)"
                         @dblclick="save"
                     >
-                        <td v-for="column in config.columns" :key="column.label">
+                        <td v-for="column in config.columns" :key="column.label" :class="column.className">
                             {{ column.getter(item) }}
                         </td>
                     </tr>
@@ -60,6 +51,7 @@
                 {{ filteredItems.length }}件中 {{ visibleItems.length }}件を表示中。検索で絞り込むか「さらに表示」を押してください。
                 <button type="button" class="btn-secondary more-btn" @click="showMore">さらに表示</button>
             </p>
+        </div>
         </div>
     </BaseDialog>
 </template>
@@ -175,16 +167,23 @@ const configs = {
             { label: 'contactPerson', getter: item => item?.contactPerson ?? '—' },
             { label: 'email', getter: item => item?.email ?? '—' },
             { label: 'phone', getter: item => item?.phone ?? '—' },
+            { label: 'zipcode', className: 'col-zipcode', getter: item => item?.zipcode ?? item?.zip ?? '—' },
+            { label: 'address1', getter: item => item?.address1 ?? '—' },
+            { label: 'address2', getter: item => item?.address2 ?? '—' },
         ],
         valueGetter: item => item?.id,
         initialValue: payload => payload?.dealer ?? props.record?.dealer ?? null,
-        searchFields: item => [item?.id, item?.dealerName, item?.depart, item?.contactPerson, item?.email, item?.phone, item?.dealer, item?.name, item?.companyName, item?.title, item?.note],
+        searchFields: item => [item?.id, item?.dealerName, item?.depart, item?.contactPerson, item?.email, item?.phone, item?.zipcode, item?.zip, item?.address1, item?.address2, item?.dealer, item?.name, item?.companyName, item?.title, item?.note],
         buildResult: item => ({
             dealer: item?.dealerName ?? item?.dealer ?? item?.name ?? item?.companyName ?? String(item?.id ?? ''),
             dealer_depart: item?.depart ?? '',
             contactPerson: item?.contactPerson ?? '',
             email: item?.email ?? '',
             phone: item?.phone ?? '',
+            fax: item?.fax ?? '',
+            zipcode: item?.zipcode ?? item?.zip ?? '',
+            address1: item?.address1 ?? '',
+            address2: item?.address2 ?? '',
         }),
     },
     incident: {
@@ -296,15 +295,6 @@ function itemKey(item) {
     return String(itemValue(item) ?? JSON.stringify(item))
 }
 
-const dealerPreviewFields = [
-    { key: 'id', label: 'id' },
-    { key: 'dealerName', label: 'dealerName' },
-    { key: 'depart', label: 'depart' },
-    { key: 'contactPerson', label: 'contactPerson' },
-    { key: 'email', label: 'email' },
-    { key: 'phone', label: 'phone' },
-]
-
 function save() {
     if (!selectedItem.value) {
         error.value = '項目を選択してください。'
@@ -380,17 +370,29 @@ function save() {
     color: #334155;
 }
 
+.data-table .col-zipcode {
+    width: 12em;
+    min-width: 12em;
+    white-space: nowrap;
+}
+
 .table-row {
     background: transparent;
     cursor: pointer;
 }
 
-.table-row.selected {
-    background: #dbeafe;
+.table-row.selected td {
+    background: hsl(214, 100%, 38%);
+    color: #fff;
 }
 
 .table-row:hover {
     background: #eff6ff;
+}
+
+.table-row.selected:hover td {
+    background: hsl(214, 100%, 34%);
+    color: #fff;
 }
 
 .table-row:last-child td {
@@ -407,44 +409,6 @@ function save() {
     margin: 0;
     padding: 16px;
     color: #64748b;
-}
-
-.dealer-preview {
-    margin-top: 16px;
-    padding: 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-}
-
-.dealer-preview h4 {
-    margin: 0 0 12px;
-    color: #334155;
-    font-size: 14px;
-}
-
-.dealer-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 12px;
-}
-
-.dealer-preview-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 13px;
-    color: #475569;
-}
-
-.dealer-preview-field input {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid #94a3b8;
-    border-radius: 4px;
-    box-sizing: border-box;
-    background: white;
-    color: #1e293b;
 }
 
 .btn-primary,

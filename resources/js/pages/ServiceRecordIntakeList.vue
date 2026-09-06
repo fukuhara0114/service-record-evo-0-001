@@ -532,6 +532,7 @@ async function uploadThenCreate(fileList) {
 <style scoped>
 .intake-page {
     zoom: 1.1;
+    --page-zoom: 1.1;
     width: 100%;
     height: calc(100vh / 1.1);
     padding: 24px;

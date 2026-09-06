@@ -300,6 +300,7 @@ function formatAmount(value) {
 <style scoped>
 .contract-page {
     zoom: 1.1;
+    --page-zoom: 1.1;
     width: 100%;
     min-height: calc(100vh / 1.1);
     padding: 12px 16px 24px;

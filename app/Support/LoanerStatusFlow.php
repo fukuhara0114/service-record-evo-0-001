@@ -183,6 +183,30 @@ class LoanerStatusFlow
     }
 
     /**
+     * Logistics で loaner / 旧Loaner（service）を出荷完了（status=385）したとき、
+     * 紐づく loanermaster.sentDate を今日にするか。
+     */
+    public static function shouldStampMasterSentDateOnLogisticsComplete(
+        mixed $previousStatus,
+        mixed $nextStatus,
+        mixed $orderType,
+    ): bool {
+        if ((int) $nextStatus !== self::INVOICE_MAPICS_FINAL) {
+            return false;
+        }
+        if ((int) $previousStatus === self::INVOICE_MAPICS_FINAL) {
+            return false;
+        }
+
+        $normalized = $orderType === null ? '' : strtolower(trim((string) $orderType));
+        if ($normalized === 'loaner') {
+            return true;
+        }
+
+        return self::isServiceLikeOrderType($orderType);
+    }
+
+    /**
      * 保存時に loanermaster.associatedID へ当該案件 orderID を書く対象か。
      * loaner 案件、および旧貸出（service / null かつ RMA=loaner）。
      */

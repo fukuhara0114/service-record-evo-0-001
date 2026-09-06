@@ -1074,8 +1074,8 @@ class ServiceRecordController extends Controller
         $orderTypeFilter = $request->input('order_type'); // service | loaner
 
         if ($orderTypeFilter === 'loaner') {
-            // loaner検索: productName→item / dealer→dealer
-            if ($productName === '' && $dealer === '') {
+            // loaner検索: productName / SN(enduser_SN) / dealer の入力がある項目で AND
+            if ($productName === '' && $sn === '' && $dealer === '') {
                 return response()->json(['records' => []]);
             }
         } elseif ($forLoanerParent) {
@@ -1135,20 +1135,42 @@ class ServiceRecordController extends Controller
         }
 
         if ($orderTypeFilter === 'loaner') {
-            // サービス案件の productName が loaner の item に含まれる（大文字小文字無視）
-            // サービス案件の dealer が loaner の dealer に含まれる
+            // productName → loanermaster.item / servicerecord.productName
+            // SN → attachedloaners.repairInstrument-SN / servicerecord.SN
+            // dealer → servicerecord.dealer
             if ($productName !== '') {
                 $itemLike = $this->likeContains(mb_strtolower($productName, 'UTF-8'));
                 $loanerTable = (new LoanerMaster)->getTable();
-                $query->whereExists(function ($sub) use ($itemLike, $loanerTable) {
-                    $sub->select(DB::raw(1))
-                        ->from($loanerTable)
-                        ->whereColumn("{$loanerTable}.loanerID", 'servicerecord.loanerID')
-                        ->whereRaw("LOWER({$loanerTable}.item) LIKE ?", [$itemLike]);
+                $query->where(function ($outer) use ($itemLike, $loanerTable) {
+                    $outer
+                        ->whereRaw('LOWER(productName) LIKE ?', [$itemLike])
+                        ->orWhereExists(function ($sub) use ($itemLike, $loanerTable) {
+                            $sub->select(DB::raw(1))
+                                ->from($loanerTable)
+                                ->whereColumn("{$loanerTable}.loanerID", 'servicerecord.loanerID')
+                                ->whereRaw("LOWER({$loanerTable}.item) LIKE ?", [$itemLike]);
+                        });
+                });
+            }
+            if ($sn !== '') {
+                $snLike = $this->likeContains(mb_strtolower($sn, 'UTF-8'));
+                $attachedTable = (new AttachedLoaner)->getTable();
+                $query->where(function ($outer) use ($snLike, $attachedTable) {
+                    $outer
+                        ->whereRaw('LOWER(SN) LIKE ?', [$snLike])
+                        ->orWhereExists(function ($sub) use ($snLike, $attachedTable) {
+                            $sub->select(DB::raw(1))
+                                ->from($attachedTable)
+                                ->whereColumn("{$attachedTable}.associatedID", 'servicerecord.orderID')
+                                ->whereRaw('LOWER(`repairInstrument-SN`) LIKE ?', [$snLike]);
+                        });
                 });
             }
             if ($dealer !== '') {
-                $query->where('dealer', 'like', $this->likeContains($dealer));
+                $query->whereRaw(
+                    'LOWER(dealer) LIKE ?',
+                    [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
+                );
             }
         } elseif ($forLoanerParent) {
             // 親案件検索（フリートークン）: 各語がいずれかの列に含まれる
@@ -3649,6 +3671,21 @@ class ServiceRecordController extends Controller
             }
         }
 
+        if (LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(
+            $previousStatusId,
+            $record->status,
+            $record->order_type,
+        )) {
+            try {
+                $this->stampLinkedLoanerMasterSentDate($record);
+            } catch (\Throwable $e) {
+                Log::error('Logistics 完了時の loanermaster sentDate 同期に失敗しました', [
+                    'orderID' => $record->orderID,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         if ($request->expectsJson()) {
             $freshRelations = ['returnCodeMaster', 'laborMaster'];
             if ($record->order_type === 'loaner') {
@@ -3779,6 +3816,17 @@ class ServiceRecordController extends Controller
             }
 
             LoanerMaster::unifyCurrentStatus($loanerId, LoanerStatusFlow::LENDING_OUT);
+        }
+    }
+
+    /**
+     * Logistics 出荷完了時、紐づく loanermaster.sentDate を今日（Asia/Tokyo）にする。
+     */
+    private function stampLinkedLoanerMasterSentDate(ServiceRecord $record): void
+    {
+        $today = now('Asia/Tokyo')->toDateString();
+        foreach ($this->linkedLoanerIdsForRecord($record) as $loanerId) {
+            LoanerMaster::stampSentDate($loanerId, $today);
         }
     }
 

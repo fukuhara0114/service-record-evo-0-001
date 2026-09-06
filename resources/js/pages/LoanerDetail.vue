@@ -3868,8 +3868,8 @@ a.btn {
     padding-left: 28px; /* 〒列分を空けて zipcode と左端を揃える */
 }
 .address-pair .address1-input {
-    width: 100px;
-    flex: 0 0 100px;
+    width: 70px;
+    flex: 0 0 70px;
     min-width: 0;
     height: 25px;
     padding: 2px 5px;

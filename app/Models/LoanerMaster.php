@@ -468,6 +468,40 @@ class LoanerMaster extends Model
         }
     }
 
+    /**
+     * 同じ loanerID の全版の sentDate を同一日にする。
+     */
+    public static function stampSentDate(mixed $loanerId, mixed $date): int
+    {
+        if ($loanerId === null || $loanerId === '' || (int) $loanerId === 0) {
+            return 0;
+        }
+
+        if (! Schema::hasColumn((new static)->getTable(), 'sentDate')) {
+            return 0;
+        }
+
+        if ($date instanceof \DateTimeInterface) {
+            $ymd = $date->format('Y-m-d');
+        } else {
+            $raw = trim((string) $date);
+            $ymd = preg_match('/^\d{4}-\d{2}-\d{2}/', $raw) ? substr($raw, 0, 10) : '';
+        }
+        if ($ymd === '') {
+            return 0;
+        }
+
+        static::$syncingSharedFields = true;
+
+        try {
+            return static::query()
+                ->where('loanerID', $loanerId)
+                ->update(['sentDate' => $ymd]);
+        } finally {
+            static::$syncingSharedFields = false;
+        }
+    }
+
     public static function canonicalCurrentStatus(mixed $loanerId): mixed
     {
         if ($loanerId === null || $loanerId === '') {

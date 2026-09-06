@@ -1497,7 +1497,15 @@ onBeforeUnmount(() => window.removeEventListener('resize', updateCalendarSize))
 }
 
 .row-address {
-    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.4fr);
+    grid-template-columns: 70px minmax(0, 1fr);
+}
+
+.w-address1 {
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
+    flex: 0 0 70px;
+    box-sizing: border-box;
 }
 
 .field-button,

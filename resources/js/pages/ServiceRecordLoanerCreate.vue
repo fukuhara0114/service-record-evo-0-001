@@ -186,7 +186,7 @@
                             >
                         </div>
                         <div class="form-row row-address">
-                            <input v-model="form.address1" type="text" placeholder="address1">
+                            <input v-model="form.address1" type="text" class="address1-input" placeholder="address1">
                             <input v-model="form.address2" type="text" placeholder="address2">
                         </div>
                     </section>
@@ -213,7 +213,7 @@
                             >
                         </div>
                         <div class="form-row row-address">
-                            <input v-model="form.endUser_address1" type="text" placeholder="address1">
+                            <input v-model="form.endUser_address1" type="text" class="address1-input" placeholder="address1">
                             <input v-model="form.endUser_address2" type="text" placeholder="address2">
                         </div>
                     </section>
@@ -239,7 +239,7 @@
                             >
                         </div>
                         <div class="form-row row-address">
-                            <input v-model="form.deliveryDestination_address1" type="text" placeholder="address1">
+                            <input v-model="form.deliveryDestination_address1" type="text" class="address1-input" placeholder="address1">
                             <input v-model="form.deliveryDestination_address2" type="text" placeholder="address2">
                         </div>
                     </section>
@@ -681,6 +681,9 @@ function onMasterSelected(result) {
         form.contactPerson = result.contactPerson ?? ''
         form.email = result.email ?? ''
         form.phone = result.phone ?? ''
+        form.zipcode = result.zipcode ?? ''
+        form.address1 = result.address1 ?? ''
+        form.address2 = result.address2 ?? ''
     }
 
     activeSelectKind.value = null
@@ -1242,7 +1245,7 @@ onBeforeUnmount(() => {
 }
 
 .row-address {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: 70px minmax(0, 1fr);
 }
 
 .field {

@@ -63,6 +63,7 @@ function onOverlayClick() {
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 }
 
 .dialog-overlay.plain {
@@ -87,10 +88,12 @@ function onOverlayClick() {
 
 .dialog-panel.large {
     width: min(96vw, 1600px);
-    height: 96vh;
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
     max-width: 96vw;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
 }
 
 .dialog-panel.plain {
@@ -145,7 +148,7 @@ function onOverlayClick() {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .dialog-panel.plain.large .dialog-body {

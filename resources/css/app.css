@@ -42,3 +42,29 @@
 .fc .fc-timegrid-col.fc-day-holiday-tint {
     background-color: #fef2f2 !important;
 }
+
+:root {
+    --page-zoom: 1;
+}
+
+.select-dialog-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.select-dialog-sized {
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
+}
+
+input.address1-input,
+input.w-address1 {
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    flex: 0 0 70px !important;
+    box-sizing: border-box;
+}

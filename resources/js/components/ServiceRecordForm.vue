@@ -86,7 +86,7 @@
       <input class="border p-1 w-full" v-model="form.email" placeholder="メール">
       <input class="border p-1 w-full" v-model="form.phone" placeholder="Tel">
       <input class="border p-1 w-full" v-model="form.zipcode" placeholder="〒">
-      <input class="border p-1 w-full" v-model="form.address1" placeholder="住所1">
+      <input class="border p-1 address1-input" v-model="form.address1" placeholder="住所1">
       <input class="border p-1 w-full" v-model="form.address2" placeholder="住所2">
     </div>
 
@@ -105,7 +105,7 @@
       <input class="border p-1 w-full" v-model="form.endUser_email" placeholder="メール">
       <input class="border p-1 w-full" v-model="form.endUser_phone" placeholder="電話">
       <input class="border p-1 w-full" v-model="form.endUser_zipcode" placeholder="〒">
-      <input class="border p-1 w-full" v-model="form.endUser_address1" placeholder="住所1">
+      <input class="border p-1 address1-input" v-model="form.endUser_address1" placeholder="住所1">
       <input class="border p-1 w-full" v-model="form.endUser_address2" placeholder="住所2">
     </div>
 

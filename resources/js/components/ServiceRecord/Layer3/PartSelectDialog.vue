@@ -1,5 +1,6 @@
 <template>
     <BaseDialog title="部品追加" large @close="$emit('close')">
+        <div class="select-dialog-layout">
         <p class="order-id">OrderID: {{ record?.orderID }}</p>
 
         <label class="search-field">
@@ -41,6 +42,7 @@
                         class="table-row"
                         :class="{ selected: selectedPartId === item.partID, disabled: isAlreadyAttached(item.partID) }"
                         @click="selectItem(item)"
+                        @dblclick="onRowDblClick(item)"
                     >
                         <td>{{ item.partID }}</td>
                         <td>{{ item.partName || '—' }}</td>
@@ -55,6 +57,7 @@
                 {{ filteredItems.length }}件中 {{ visibleItems.length }}件を表示中。検索で絞り込むか「さらに表示」を押してください。
                 <button type="button" class="btn-secondary more-btn" @click="showMore">さらに表示</button>
             </p>
+        </div>
         </div>
     </BaseDialog>
 </template>
@@ -139,6 +142,12 @@ function selectItem(item) {
 
     error.value = ''
     selectedPartId.value = item.partID
+}
+
+function onRowDblClick(item) {
+    selectItem(item)
+    if (String(selectedPartId.value) !== String(item?.partID)) return
+    save()
 }
 
 function formatPrice(value) {

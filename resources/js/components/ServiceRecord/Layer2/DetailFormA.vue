@@ -397,42 +397,26 @@
                                     <div class="section-header dealer-header">
                                         <button type="button" class="action-btn action-btn-primary" @click="openDealerSelect">依頼社選択</button>
                                     </div>
-                                    <div class="input-grid">
-                                        <label class="input-field">
-                                            <input type="text" placeholder="会社名" :value="draftRecord?.dealer ?? record?.dealer ?? ''" @input="updateDraftValue('dealer', $event.target.value)">
+                                    <div class="person-stack">
+                                        <label><span>会社名</span><input type="text" :value="draftRecord?.dealer ?? record?.dealer ?? ''" @input="updateDraftValue('dealer', $event.target.value)"></label>
+                                        <label><span>部署名</span><input type="text" :value="draftRecord?.dealer_depart ?? record?.dealer_depart ?? ''" @input="updateDraftValue('dealer_depart', $event.target.value)"></label>
+                                        <label><span>担当者</span><input type="text" :value="draftRecord?.contactPerson ?? record?.contactPerson ?? ''" @input="updateDraftValue('contactPerson', $event.target.value)"></label>
+                                        <label><span>phone</span><input type="text" :value="draftRecord?.phone ?? record?.phone ?? ''" @input="updateDraftValue('phone', $event.target.value)"></label>
+                                        <label><span>email</span><input type="text" :value="draftRecord?.email ?? record?.email ?? ''" @input="updateDraftValue('email', $event.target.value)"></label>
+                                        <label class="zip-row">
+                                            <span class="zip-mark">〒</span>
+                                            <input
+                                                type="text"
+                                                class="zip-input"
+                                                placeholder="zipcode"
+                                                :value="draftRecord?.zipcode ?? record?.zipcode ?? ''"
+                                                @input="onZipcodeFieldInput('dealer', $event.target.value)"
+                                            >
                                         </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="部署名" :value="draftRecord?.dealer_depart ?? record?.dealer_depart ?? ''" @input="updateDraftValue('dealer_depart', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="担当者" :value="draftRecord?.contactPerson ?? record?.contactPerson ?? ''" @input="updateDraftValue('contactPerson', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="電話番等" :value="draftRecord?.phone ?? record?.phone ?? ''" @input="updateDraftValue('phone', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="E-mail" :value="draftRecord?.email ?? record?.email ?? ''" @input="updateDraftValue('email', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>〒</span>
-                                                <input
-                                                    type="text"
-                                                    placeholder="〒"
-                                                    :value="draftRecord?.zipcode ?? record?.zipcode ?? ''"
-                                                    @input="onZipcodeFieldInput('dealer', $event.target.value)"
-                                                >
-                                            </div>
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="都道府県" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>&nbsp;&nbsp;&nbsp;</span>
-                                                <input type="text" placeholder="住所" :value="draftRecord?.address2 ?? record?.address2 ?? ''" @input="updateDraftValue('address2', $event.target.value)">
-                                            </div>
-                                        </label>
+                                        <div class="address-pair">
+                                            <input type="text" class="address1-input" placeholder="address1" :value="draftRecord?.address1 ?? record?.address1 ?? ''" @input="updateDraftValue('address1', $event.target.value)">
+                                            <input type="text" class="address2-input" placeholder="address2" :value="draftRecord?.address2 ?? record?.address2 ?? ''" @input="updateDraftValue('address2', $event.target.value)">
+                                        </div>
                                     </div>
                                 </section>
 
@@ -440,42 +424,26 @@
                                     <div class="section-header">
                                         <h3>E/U</h3>
                                     </div>
-                                    <div class="input-grid">
-                                        <label class="input-field">
-                                            <input type="text" placeholder="E/U会社名" :value="draftRecord?.endUser ?? record?.endUser ?? ''" @input="updateDraftValue('endUser', $event.target.value)">
+                                    <div class="person-stack">
+                                        <label><span>会社名</span><input type="text" :value="draftRecord?.endUser ?? record?.endUser ?? ''" @input="updateDraftValue('endUser', $event.target.value)"></label>
+                                        <label><span>部署名</span><input type="text" :value="draftRecord?.endUser_depart ?? record?.endUser_depart ?? ''" @input="updateDraftValue('endUser_depart', $event.target.value)"></label>
+                                        <label><span>担当者</span><input type="text" :value="draftRecord?.endUser_contactPerson ?? record?.endUser_contactPerson ?? ''" @input="updateDraftValue('endUser_contactPerson', $event.target.value)"></label>
+                                        <label><span>phone</span><input type="text" :value="draftRecord?.endUser_phone ?? record?.endUser_phone ?? ''" @input="updateDraftValue('endUser_phone', $event.target.value)"></label>
+                                        <label><span>email</span><input type="text" :value="draftRecord?.endUser_email ?? record?.endUser_email ?? ''" @input="updateDraftValue('endUser_email', $event.target.value)"></label>
+                                        <label class="zip-row">
+                                            <span class="zip-mark">〒</span>
+                                            <input
+                                                type="text"
+                                                class="zip-input"
+                                                placeholder="zipcode"
+                                                :value="draftRecord?.endUser_zipcode ?? record?.endUser_zipcode ?? ''"
+                                                @input="onZipcodeFieldInput('endUser', $event.target.value)"
+                                            >
                                         </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="E/U部署名" :value="draftRecord?.endUser_depart ?? record?.endUser_depart ?? ''" @input="updateDraftValue('endUser_depart', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="担当者" :value="draftRecord?.endUser_contactPerson ?? record?.endUser_contactPerson ?? ''" @input="updateDraftValue('endUser_contactPerson', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="電話番等" :value="draftRecord?.endUser_phone ?? record?.endUser_phone ?? ''" @input="updateDraftValue('endUser_phone', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="E-mail" :value="draftRecord?.endUser_email ?? record?.endUser_email ?? ''" @input="updateDraftValue('endUser_email', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>〒</span>
-                                                <input
-                                                    type="text"
-                                                    placeholder="〒"
-                                                    :value="draftRecord?.endUser_zipcode ?? record?.endUser_zipcode ?? ''"
-                                                    @input="onZipcodeFieldInput('endUser', $event.target.value)"
-                                                >
-                                            </div>
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="都道府県" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>&nbsp;&nbsp;&nbsp;</span>
-                                                <input type="text" placeholder="住所" :value="draftRecord?.endUser_address2 ?? record?.endUser_address2 ?? ''" @input="updateDraftValue('endUser_address2', $event.target.value)">
-                                            </div>
-                                        </label>
+                                        <div class="address-pair">
+                                            <input type="text" class="address1-input" placeholder="address1" :value="draftRecord?.endUser_address1 ?? record?.endUser_address1 ?? ''" @input="updateDraftValue('endUser_address1', $event.target.value)">
+                                            <input type="text" class="address2-input" placeholder="address2" :value="draftRecord?.endUser_address2 ?? record?.endUser_address2 ?? ''" @input="updateDraftValue('endUser_address2', $event.target.value)">
+                                        </div>
                                     </div>
                                 </section>
 
@@ -491,42 +459,26 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="input-grid">
-                                        <label class="input-field">
-                                            <input type="text" placeholder="発送先会社名" :value="draftRecord?.deliveryDestination_company ?? record?.deliveryDestination_company ?? ''" @input="updateDraftValue('deliveryDestination_company', $event.target.value)">
+                                    <div class="person-stack">
+                                        <label><span>会社名</span><input type="text" :value="draftRecord?.deliveryDestination_company ?? record?.deliveryDestination_company ?? ''" @input="updateDraftValue('deliveryDestination_company', $event.target.value)"></label>
+                                        <label><span>部署名</span><input type="text" :value="draftRecord?.deliveryDestination_depart ?? record?.deliveryDestination_depart ?? ''" @input="updateDraftValue('deliveryDestination_depart', $event.target.value)"></label>
+                                        <label><span>担当者</span><input type="text" :value="draftRecord?.deliveryDestination_contactPerson ?? record?.deliveryDestination_contactPerson ?? ''" @input="updateDraftValue('deliveryDestination_contactPerson', $event.target.value)"></label>
+                                        <label><span>phone</span><input type="text" :value="draftRecord?.deliveryDestination_phone ?? record?.deliveryDestination_phone ?? ''" @input="updateDraftValue('deliveryDestination_phone', $event.target.value)"></label>
+                                        <label><span>email</span><input type="text" :value="draftRecord?.deliveryDestination_email ?? record?.deliveryDestination_email ?? ''" @input="updateDraftValue('deliveryDestination_email', $event.target.value)"></label>
+                                        <label class="zip-row">
+                                            <span class="zip-mark">〒</span>
+                                            <input
+                                                type="text"
+                                                class="zip-input"
+                                                placeholder="zipcode"
+                                                :value="draftRecord?.deliveryDestination_zipcode ?? record?.deliveryDestination_zipcode ?? ''"
+                                                @input="onZipcodeFieldInput('delivery', $event.target.value)"
+                                            >
                                         </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="発送先部署名" :value="draftRecord?.deliveryDestination_depart ?? record?.deliveryDestination_depart ?? ''" @input="updateDraftValue('deliveryDestination_depart', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="担当者" :value="draftRecord?.deliveryDestination_contactPerson ?? record?.deliveryDestination_contactPerson ?? ''" @input="updateDraftValue('deliveryDestination_contactPerson', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="電話番等" :value="draftRecord?.deliveryDestination_phone ?? record?.deliveryDestination_phone ?? ''" @input="updateDraftValue('deliveryDestination_phone', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <input type="text" placeholder="E-mail" :value="draftRecord?.deliveryDestination_email ?? record?.deliveryDestination_email ?? ''" @input="updateDraftValue('deliveryDestination_email', $event.target.value)">
-                                        </label>
-                                        <label class="input-field">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>〒</span>
-                                                <input
-                                                    type="text"
-                                                    placeholder="〒"
-                                                    :value="draftRecord?.deliveryDestination_zipcode ?? record?.deliveryDestination_zipcode ?? ''"
-                                                    @input="onZipcodeFieldInput('delivery', $event.target.value)"
-                                                >
-                                            </div>
-                                        </label>
-                                        <label class="input-field">
-                                            <input type="text" placeholder="都道府県" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
-                                        </label>
-                                        <label class="input-field input-field-span2">
-                                            <div style="display: flex; align-items: center; gap: 8px;">
-                                                <span>&nbsp;&nbsp;&nbsp;</span>
-                                                <input type="text" placeholder="住所" :value="draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2 ?? ''" @input="updateDraftValue('deliveryDestination_address2', $event.target.value)">
-                                            </div>
-                                        </label>
+                                        <div class="address-pair">
+                                            <input type="text" class="address1-input" placeholder="address1" :value="draftRecord?.deliveryDestination_address1 ?? record?.deliveryDestination_address1 ?? ''" @input="updateDraftValue('deliveryDestination_address1', $event.target.value)">
+                                            <input type="text" class="address2-input" placeholder="address2" :value="draftRecord?.deliveryDestination_address2 ?? record?.deliveryDestination_address2 ?? ''" @input="updateDraftValue('deliveryDestination_address2', $event.target.value)">
+                                        </div>
                                     </div>
                                 </section>
                                 </div>
@@ -796,6 +748,7 @@
                                     :key="row.id"
                                     :class="{ selected: isMaintenanceSelected(row.id) }"
                                     @click="toggleMaintenanceSelection(row.id)"
+                                    @dblclick="selectMaintenanceAndConfirm(row.id)"
                                 >
                                     <td style="text-align: center;" @click.stop>
                                         <input
@@ -1711,6 +1664,11 @@ function toggleMaintenanceSelection(id) {
     selectedMaintenanceContractId.value = id
 }
 
+function selectMaintenanceAndConfirm(id) {
+    selectedMaintenanceContractId.value = id
+    confirmMaintenanceSelection()
+}
+
 function clearMaintenanceSelection() {
     selectedMaintenanceContractId.value = null
 }
@@ -2541,6 +2499,8 @@ defineExpose({
 .detail-pane-contacts .input-field,
 .detail-pane-contacts .input-field input,
 .detail-pane-contacts .input-field input::placeholder,
+.detail-pane-contacts .person-stack label > span,
+.detail-pane-contacts .person-stack input,
 .detail-pane-contacts .action-btn,
 .detail-pane-contacts .section-card h3 {
     font-size: 14px;
@@ -2782,16 +2742,22 @@ defineExpose({
     width: min(98vw, 1800px);
     max-width: 98vw;
     min-width: min(98vw, 1100px);
-    max-height: 96vh;
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
+}
+
+.confirm-panel.maintenance-search-panel .confirm-header,
+.confirm-panel.maintenance-search-panel .confirm-actions {
+    flex-shrink: 0;
 }
 
 .confirm-panel.maintenance-search-panel .confirm-body {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -2824,9 +2790,9 @@ defineExpose({
 }
 
 .maintenance-table-wrap {
-    flex: 0 0 auto;
-    overflow-x: hidden;
-    overflow-y: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     background: #fff;
@@ -3465,6 +3431,85 @@ defineExpose({
     gap: 6px 12px;
 }
 
+.detail-card-input .person-stack {
+    display: grid;
+    gap: 4px;
+}
+
+.detail-card-input .person-stack > label {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: calc(96px * 0.6) minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+}
+
+.detail-card-input .person-stack label > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #475569;
+    font-size: 14px;
+}
+
+.detail-card-input .person-stack input {
+    width: 100%;
+    min-width: 0;
+    height: 25px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: bold;
+    box-sizing: border-box;
+}
+
+.detail-card-input .person-stack .zip-row {
+    grid-template-columns: 28px 100px;
+}
+
+.detail-card-input .person-stack .zip-mark {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.detail-card-input .person-stack .zip-input {
+    width: 100px;
+    max-width: 100px;
+}
+
+.detail-card-input .address-pair {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    padding-left: 28px;
+}
+
+.detail-card-input .address-pair .address1-input {
+    width: 70px;
+    flex: 0 0 70px;
+    min-width: 0;
+}
+
+.detail-card-input .address-pair .address2-input {
+    flex: 1 1 160px;
+    min-width: 0;
+    height: 25px;
+    padding: 2px 5px;
+    border: 1px solid #94a3b8;
+    border-radius: 2px;
+    background: #fff;
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: bold;
+    box-sizing: border-box;
+}
+
 .input-field {
     display: flex;
     flex-direction: column;
@@ -3484,6 +3529,13 @@ defineExpose({
     background: white;
     font-weight: bold;
     line-height: 1.2;
+}
+
+.input-field input.address1-input {
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
+    flex: 0 0 70px;
 }
 
 .input-field input::placeholder {

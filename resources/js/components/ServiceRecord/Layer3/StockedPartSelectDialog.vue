@@ -1,51 +1,54 @@
 <template>
     <BaseDialog title="stocked Parts 選択" large @close="$emit('close')">
-        <p class="order-id">OrderID: {{ record?.orderID }}</p>
-        <p class="help-text">部品を選択したあと、数量入力へ進みます。</p>
+        <div class="select-dialog-layout">
+            <p class="order-id">OrderID: {{ record?.orderID }}</p>
+            <p class="help-text">部品を選択したあと、数量入力へ進みます。</p>
 
-        <label class="search-field">
-            検索
-            <input
-                v-model="searchQuery"
-                type="text"
-                class="search-input"
-                placeholder="partID / partName / description で検索"
-            >
-        </label>
+            <label class="search-field">
+                検索
+                <input
+                    v-model="searchQuery"
+                    type="text"
+                    class="search-input"
+                    placeholder="partID / partName / description で検索"
+                >
+            </label>
 
-        <p v-if="error" class="error-message">{{ error }}</p>
+            <p v-if="error" class="error-message">{{ error }}</p>
 
-        <div class="dialog-actions">
-            <button type="button" class="btn-secondary" @click="$emit('close')">キャンセル</button>
-            <button type="button" class="btn-primary" :disabled="!selectedItem" @click="goNext">
-                数量入力へ
-            </button>
-        </div>
+            <div class="dialog-actions">
+                <button type="button" class="btn-secondary" @click="$emit('close')">キャンセル</button>
+                <button type="button" class="btn-primary" :disabled="!selectedItem" @click="goNext">
+                    数量入力へ
+                </button>
+            </div>
 
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>partID</th>
-                        <th>部品名</th>
-                        <th>説明</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr
-                        v-for="item in filteredItems"
-                        :key="item.partID"
-                        class="table-row"
-                        :class="{ selected: selectedPartId === item.partID, disabled: isAlreadyAttached(item.partID) }"
-                        @click="selectItem(item)"
-                    >
-                        <td>{{ item.partID }}</td>
-                        <td>{{ item.partName || '—' }}</td>
-                        <td>{{ item.description || '—' }}</td>
-                    </tr>
-                </tbody>
-            </table>
-            <p v-if="!filteredItems.length" class="empty-message">該当する部品がありません。</p>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>partID</th>
+                            <th>部品名</th>
+                            <th>説明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="item in filteredItems"
+                            :key="item.partID"
+                            class="table-row"
+                            :class="{ selected: selectedPartId === item.partID, disabled: isAlreadyAttached(item.partID) }"
+                            @click="selectItem(item)"
+                            @dblclick="onRowDblClick(item)"
+                        >
+                            <td>{{ item.partID }}</td>
+                            <td>{{ item.partName || '—' }}</td>
+                            <td>{{ item.description || '—' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p v-if="!filteredItems.length" class="empty-message">該当する部品がありません。</p>
+            </div>
         </div>
     </BaseDialog>
 </template>
@@ -127,6 +130,12 @@ function goNext() {
         partName: selectedItem.value.partName,
         description: selectedItem.value.description,
     })
+}
+
+function onRowDblClick(item) {
+    selectItem(item)
+    if (String(selectedPartId.value) !== String(item?.partID)) return
+    goNext()
 }
 </script>
 

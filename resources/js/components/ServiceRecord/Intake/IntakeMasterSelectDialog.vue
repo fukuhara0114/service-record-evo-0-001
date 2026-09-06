@@ -1,5 +1,12 @@
 <template>
-    <div class="dialog-overlay" @click.self="$emit('close')">
+    <ServiceMasterSelectDialog
+        v-if="kind === 'dealer'"
+        :record="dealerRecord"
+        :payload="dealerPayload"
+        @close="$emit('close')"
+        @saved="onDealerSaved"
+    />
+    <div v-else class="dialog-overlay" @click.self="$emit('close')">
         <div class="dialog-panel" :class="{ 'dialog-panel-wide': kind === 'loanerProduct' }">
             <div class="dialog-header">
                 <h3>{{ title }}</h3>
@@ -44,16 +51,6 @@
 
                 <p v-if="error" class="error-message">{{ error }}</p>
 
-                <div v-if="kind === 'dealer'" class="preview-box">
-                    <div class="preview-grid">
-                        <div><span>dealerName</span><strong>{{ selectedItem?.dealerName || '—' }}</strong></div>
-                        <div><span>depart</span><strong>{{ selectedItem?.depart || '—' }}</strong></div>
-                        <div><span>contactPerson</span><strong>{{ selectedItem?.contactPerson || '—' }}</strong></div>
-                        <div><span>email</span><strong>{{ selectedItem?.email || '—' }}</strong></div>
-                        <div><span>phone</span><strong>{{ selectedItem?.phone || '—' }}</strong></div>
-                    </div>
-                </div>
-
                 <div class="table-wrap" :class="{ 'loaner-stock-table': kind === 'loanerProduct' }">
                     <table class="data-table">
                         <thead>
@@ -90,6 +87,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import ServiceMasterSelectDialog from '@/components/ServiceRecord/Layer3/ServiceMasterSelectDialog.vue'
 
 const props = defineProps({
     kind: {
@@ -111,6 +109,19 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'selected'])
+
+const dealerPayload = computed(() => ({
+    kind: 'dealer',
+    dealer: props.initialValue ?? props.initialSearchQuery ?? '',
+    searchQuery: props.initialSearchQuery ?? '',
+}))
+const dealerRecord = computed(() => ({
+    dealer: props.initialSearchQuery || props.initialValue || '',
+}))
+
+function onDealerSaved(result) {
+    emit('selected', result)
+}
 
 const searchQuery = ref('')
 const selectedValue = ref(null)
@@ -134,38 +145,6 @@ const configs = {
             serviceID: item?.serviceID,
             productName: String(item?.productName ?? item?.entityID ?? item?.serviceID ?? ''),
             entityID: item?.entityID ?? null,
-        }),
-    },
-    dealer: {
-        title: '依頼者選択',
-        searchPlaceholder: 'dealerName / depart / contactPerson / email / phone で検索',
-        columns: [
-            { key: 'id', label: 'id', getter: item => item?.id ?? '—' },
-            { key: 'dealerName', label: 'dealerName', getter: item => item?.dealerName ?? '—' },
-            { key: 'depart', label: 'depart', getter: item => item?.depart ?? '—' },
-            { key: 'contactPerson', label: 'contactPerson', getter: item => item?.contactPerson ?? '—' },
-            { key: 'email', label: 'email', getter: item => item?.email ?? '—' },
-            { key: 'phone', label: 'phone', getter: item => item?.phone ?? '—' },
-        ],
-        valueGetter: item => item?.id,
-        searchFields: item => [
-            item?.id,
-            item?.dealerName,
-            item?.depart,
-            item?.contactPerson,
-            item?.email,
-            item?.phone,
-        ],
-        buildResult: item => ({
-            dealer: item?.dealerName ?? '',
-            dealer_depart: item?.depart ?? '',
-            contactPerson: item?.contactPerson ?? '',
-            email: item?.email ?? '',
-            phone: item?.phone ?? '',
-            fax: item?.fax ?? '',
-            zipcode: item?.zipcode ?? item?.zip ?? '',
-            address1: item?.address1 ?? '',
-            address2: item?.address2 ?? '',
         }),
     },
     loanerProduct: {
@@ -398,14 +377,16 @@ function confirm() {
     z-index: 300;
     display: flex;
     justify-content: center;
-    align-items: stretch;
+    align-items: center;
     padding: 12px;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .dialog-panel {
     width: min(96vw, 1400px);
-    height: calc(100vh - 24px);
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
     background: #fff;
     border-radius: 8px;
     overflow: hidden;
@@ -485,33 +466,6 @@ function confirm() {
     justify-content: flex-end;
     align-items: center;
     gap: 8px;
-}
-
-.preview-box {
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    padding: 10px 12px;
-    min-height: 72px;
-    box-sizing: border-box;
-}
-
-.preview-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px 12px;
-    font-size: 13px;
-}
-
-.preview-grid span {
-    display: block;
-    color: #64748b;
-    margin-bottom: 2px;
-}
-
-.preview-grid strong {
-    color: #1e293b;
-    font-weight: 600;
 }
 
 .table-wrap {

@@ -1454,6 +1454,12 @@
             @close="closeLogisticsLoanerDialog"
             @returned="onLogisticsLoanerReturned"
         />
+        <EngineerLoanerAcceptanceDialog
+            v-if="engineerLoanerDialogRecord"
+            :record="engineerLoanerDialogRecord"
+            @close="closeEngineerLoanerAcceptanceDialog"
+            @accepted="onEngineerLoanerAccepted"
+        />
         <XsrvAuthDialog
             :open="xsrvAuthDialogOpen"
             :message="xsrvAuthDialogMessage"
@@ -1501,6 +1507,7 @@ import UnregisteredEmailNoteLinkDialog from '@/components/ServiceRecord/Layer3/U
 import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/DailyReportEmailPreviewDialog.vue'
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import LogisticsLoanerLendingDialog from '@/components/ServiceRecord/Layer3/LogisticsLoanerLendingDialog.vue'
+import EngineerLoanerAcceptanceDialog from '@/components/ServiceRecord/Layer3/EngineerLoanerAcceptanceDialog.vue'
 import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import RecordPreviewCardDialog from '@/components/ServiceRecord/RecordPreviewCardDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
@@ -2695,6 +2702,21 @@ async function onLogisticsLoanerReturned() {
     await reloadListRecords({ preserveState: true })
 }
 
+const engineerLoanerDialogRecord = ref(null)
+
+function closeEngineerLoanerAcceptanceDialog() {
+    engineerLoanerDialogRecord.value = null
+}
+
+function openEngineerLoanerAcceptanceDialog(record) {
+    engineerLoanerDialogRecord.value = { ...record }
+}
+
+async function onEngineerLoanerAccepted() {
+    engineerLoanerDialogRecord.value = null
+    await reloadListRecords({ preserveState: true })
+}
+
 function matchesLogisticsShippingDateFilter(record, filter) {
     if (filter === 'all') return true
     const ymd = formatListDate(record?.shippingOut_requiredDate)
@@ -3726,6 +3748,11 @@ async function openSecondLayer(record) {
         return
     }
 
+    if (props.mode === 'engineer' && record.order_type === 'loaner') {
+        openEngineerLoanerAcceptanceDialog(record)
+        return
+    }
+
     // 貸出詳細へ行くのは、実データの order_type が loaner/waiting_list のときだけ。
     // Engineer では orderTypeFilter が session に残っていても service は通常詳細を開く。
     // Invoice / Closing / ShippingPrep / Logistics では loaner でも画面内の詳細（invoice 等）を開く。
@@ -4307,6 +4334,7 @@ async function saveRecord() {
 /* 一覧画面: ブラウザ 110% 相当（10%拡大） */
 .list-page-inner.list-page-scale {
     zoom: 1.1;
+    --page-zoom: 1.1;
     width: 100%;
     height: calc(100% / 1.1);
     min-height: calc(100% / 1.1);

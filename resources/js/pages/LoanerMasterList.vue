@@ -674,6 +674,7 @@ function goToPage(url) {
 <style scoped>
 .loaner-master-page {
     zoom: 1.1;
+    --page-zoom: 1.1;
     width: 100%;
     min-height: calc(100vh / 1.1);
     padding: 12px 16px 24px;

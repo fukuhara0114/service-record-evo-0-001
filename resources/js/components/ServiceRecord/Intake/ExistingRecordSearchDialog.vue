@@ -69,6 +69,7 @@
                             class="result-item"
                             :class="{ active: selectedOrderId === record.orderID }"
                             @click="selectedOrderId = record.orderID"
+                            @dblclick="onResultDblClick(record)"
                         >
                             <strong>{{ record.productName || '—' }}</strong>
                             <span class="result-order-status-row">
@@ -225,6 +226,10 @@ const props = defineProps({
         type: String,
         default: 'file',
     },
+    hint: {
+        type: String,
+        default: '',
+    },
 })
 
 const emit = defineEmits(['close', 'link-selected', 'parent-selected', 'loaner-selected', 'search'])
@@ -253,6 +258,7 @@ const dialogTitle = computed(() => {
 })
 
 const dialogHint = computed(() => {
+    if (props.hint) return props.hint
     if (props.purpose === 'loaner') {
         return '検索: productName→item / dealer→dealer（部分一致）。選択した loaner に新規 service を作成して parentID を設定します'
     }
@@ -379,6 +385,19 @@ function confirmLoanerSelect() {
     })
 }
 
+function onResultDblClick(record) {
+    selectedOrderId.value = record.orderID
+    if (props.purpose === 'parent') {
+        confirmParentSelect()
+        return
+    }
+    if (props.purpose === 'loaner') {
+        confirmLoanerSelect()
+        return
+    }
+    openLinkConfirm()
+}
+
 function confirmLink() {
     if (!selectedRecord.value) return
     emit('link-selected', {
@@ -416,7 +435,8 @@ function confirmLink() {
 
 .dialog-panel {
     width: min(52vw, 920px);
-    height: calc(100vh - 24px);
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
     background: #fff;
     border-radius: 8px;
     overflow: hidden;

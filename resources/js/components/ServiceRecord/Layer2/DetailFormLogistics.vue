@@ -111,6 +111,7 @@
                             <label class="field field-address1">
                                 <input
                                     type="text"
+                                    class="address1-input"
                                     placeholder="address1"
                                     :value="fieldValue('deliveryDestination_address1')"
                                     @input="updateDraftValue('deliveryDestination_address1', $event.target.value)"
@@ -1078,7 +1079,7 @@ async function patchFileSort(fileId, sortNum) {
 
 .address-row {
     display: grid;
-    grid-template-columns: minmax(100px, 0.45fr) minmax(0, 1.55fr);
+    grid-template-columns: 70px minmax(0, 1fr);
     gap: 8px;
 }
 

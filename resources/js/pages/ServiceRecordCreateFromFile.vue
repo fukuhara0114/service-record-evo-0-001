@@ -156,7 +156,7 @@
                                     <input
                                         v-model="form.SN"
                                         type="text"
-                                        class="w-sn existing-search-field"
+                                        class="w-sn"
                                         placeholder="SNを入力"
                                         lang="en"
                                         inputmode="latin"
@@ -181,13 +181,15 @@
                                     <template v-if="form.loanerID">（loanerID: {{ form.loanerID }}）</template>
                                 </p>
                                 <label class="field field-inline field-instrument-name">
-                                    <span>機種名</span>
+                                    <span>productName</span>
                                     <input
-                                        v-model="form.instrumentName"
+                                        v-model="form.productName"
                                         type="text"
-                                        placeholder="機種名"
+                                        class="existing-search-field"
+                                        placeholder="productName"
                                         lang="en"
                                         inputmode="latin"
+                                        @input="onLoanerProductNameInput"
                                     >
                                 </label>
                                 <label class="field field-inline field-enduser-sn">
@@ -195,6 +197,7 @@
                                     <input
                                         v-model="form.enduser_SN"
                                         type="text"
+                                        class="existing-search-field"
                                         placeholder="enduser_SN"
                                         lang="en"
                                         inputmode="latin"
@@ -229,23 +232,24 @@
                         <div class="loaner-stakeholder-stack">
                             <section class="info-card info-card-dealer stakeholder-card">
                                 <aside class="stakeholder-side">
-                                    <div class="stakeholder-label">dealer</div>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
-                                        switch E/U
+                                    <button
+                                        type="button"
+                                        class="field-button field-button-pick"
+                                        @click="openSelectDialog('dealer')"
+                                    >
+                                        dealer選択
                                     </button>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
-                                        switch delivery
-                                    </button>
+                                    <div class="stakeholder-switches">
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
+                                            switch E/U
+                                        </button>
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
+                                            switch delivery
+                                        </button>
+                                    </div>
                                 </aside>
                                 <div class="stakeholder-body">
-                                    <div class="form-row row-dealer-top">
-                                        <button
-                                            type="button"
-                                            class="field-button field-button-pick"
-                                            @click="openSelectDialog('dealer')"
-                                        >
-                                            dealer選択
-                                        </button>
+                                    <div class="form-row row-full">
                                         <input
                                             v-model="form.dealer"
                                             type="text"
@@ -301,6 +305,24 @@
                                     >
                                         選択解除
                                     </button>
+                                    <div class="maintenance-ref-search">
+                                        <input
+                                            v-model="maintenanceRefNumberQuery"
+                                            type="text"
+                                            class="maintenance-ref-input"
+                                            placeholder="RefNumber"
+                                            :disabled="maintenanceSearchLoading"
+                                            @keydown.enter.prevent="searchMaintenanceContractsByRefNumber"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary maintenance-ref-btn"
+                                            :disabled="maintenanceSearchLoading || !String(maintenanceRefNumberQuery || '').trim()"
+                                            @click="searchMaintenanceContractsByRefNumber"
+                                        >
+                                            {{ maintenanceSearchLoading ? '検索中...' : '契約番号で再検索' }}
+                                        </button>
+                                    </div>
                                 </div>
                                 <p v-if="maintenanceSearchError" class="maintenance-error">{{ maintenanceSearchError }}</p>
                                 <div v-else-if="maintenanceContracts.length" class="maintenance-table-wrap">
@@ -353,12 +375,14 @@
                             <section class="info-card info-card-enduser stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">endUser</div>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
-                                        switch dealer
-                                    </button>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
-                                        switch delivery
-                                    </button>
+                                    <div class="stakeholder-switches">
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
+                                            switch dealer
+                                        </button>
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
+                                            switch delivery
+                                        </button>
+                                    </div>
                                 </aside>
                                 <div class="stakeholder-body">
                                     <div class="form-row row-full">
@@ -396,12 +420,14 @@
                             <section class="info-card info-card-delivery stakeholder-card">
                                 <aside class="stakeholder-side">
                                     <div class="stakeholder-label">delivery</div>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                        switch dealer
-                                    </button>
-                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
-                                        switch E/U
-                                    </button>
+                                    <div class="stakeholder-switches">
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                            switch dealer
+                                        </button>
+                                        <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                            switch E/U
+                                        </button>
+                                    </div>
                                 </aside>
                                 <div class="stakeholder-body">
                                     <div class="form-row row-full">
@@ -459,9 +485,10 @@
                                     tabindex="1"
                                     @input="onProductNameTyped"
                                 >
-                                <input :value="form.entityID || ''" type="text" placeholder="entityID" readonly>
+                                <input :value="form.entityID || ''" type="text" class="w-entity" placeholder="entityID" readonly>
                             </div>
                             <div class="form-row row-product-sn">
+                                <span class="field-side-label">SN</span>
                                 <input
                                     v-model="form.SN"
                                     type="text"
@@ -472,14 +499,21 @@
                                     tabindex="2"
                                 >
                             </div>
-                            <div class="form-row row-product-meta">
-                                <DateInputWithToday v-model="form.receivedDate" class="w-received" />
+                            <div class="form-row row-product-date">
+                                <span class="field-side-label">着荷日</span>
+                                <DateInputWithToday v-model="form.receivedDate" wrapper-class="w-status" />
+                            </div>
+                            <div class="form-row row-product-status">
+                                <span class="field-side-label">Status</span>
                                 <select v-model="form.status" class="w-status">
                                     <option value="">status</option>
                                     <option v-for="status in statuses" :key="status.processID_new" :value="String(status.processID_new)">
                                         {{ statusMasterOptionLabel(status) }}
                                     </option>
                                 </select>
+                            </div>
+                            <div class="form-row row-product-return">
+                                <span class="field-side-label">作業内容</span>
                                 <select v-model="form.returnCode" class="w-return">
                                     <option value="">returnCode</option>
                                     <option v-for="returnCode in returnCodes" :key="returnCode.id" :value="String(returnCode.id)">
@@ -491,23 +525,24 @@
 
                         <section class="info-card info-card-dealer stakeholder-card">
                             <aside class="stakeholder-side">
-                                <div class="stakeholder-label">dealer</div>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
-                                    switch E/U
+                                <button
+                                    type="button"
+                                    class="field-button field-button-pick"
+                                    @click="openSelectDialog('dealer')"
+                                >
+                                    dealer選択
                                 </button>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
-                                    switch delivery
-                                </button>
+                                <div class="stakeholder-switches">
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'endUser')">
+                                        switch E/U
+                                    </button>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('dealer', 'delivery')">
+                                        switch delivery
+                                    </button>
+                                </div>
                             </aside>
                             <div class="stakeholder-body">
-                                <div class="form-row row-dealer-top">
-                                    <button
-                                        type="button"
-                                        class="field-button field-button-pick"
-                                        @click="openSelectDialog('dealer')"
-                                    >
-                                        dealer選択
-                                    </button>
+                                <div class="form-row row-full">
                                     <input
                                         v-model="form.dealer"
                                         type="text"
@@ -615,12 +650,14 @@
                         <section class="info-card info-card-enduser stakeholder-card">
                             <aside class="stakeholder-side">
                                 <div class="stakeholder-label">endUser</div>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
-                                    switch dealer
-                                </button>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
-                                    switch delivery
-                                </button>
+                                <div class="stakeholder-switches">
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'dealer')">
+                                        switch dealer
+                                    </button>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('endUser', 'delivery')">
+                                        switch delivery
+                                    </button>
+                                </div>
                             </aside>
                             <div class="stakeholder-body">
                                 <div class="form-row row-full">
@@ -658,12 +695,14 @@
                         <section class="info-card info-card-delivery stakeholder-card">
                             <aside class="stakeholder-side">
                                 <div class="stakeholder-label">delivery</div>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
-                                    switch dealer
-                                </button>
-                                <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
-                                    switch E/U
-                                </button>
+                                <div class="stakeholder-switches">
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'dealer')">
+                                        switch dealer
+                                    </button>
+                                    <button type="button" class="switch-btn" @click="swapStakeholders('delivery', 'endUser')">
+                                        switch E/U
+                                    </button>
+                                </div>
                             </aside>
                             <div class="stakeholder-body">
                                 <div class="form-row row-full">
@@ -751,6 +790,7 @@
                         :statuses="statuses"
                         :searching="existingSearchLoading"
                         :has-searched="existingHasSearched"
+                        :hint="existingSearchHint"
                         @search="openExistingRecordSearch"
                         @link-selected="linkToExistingRecord"
                     />
@@ -759,8 +799,7 @@
                 <div v-show="activeTab === 'loaner'" class="tab-panel tab-panel-existing">
                     <div class="loaner-flow-note">
                         <p>
-                            検索条件: サービス案件の <strong>productName</strong> が loaner の <strong>item</strong> に含まれる /
-                            サービスの <strong>dealer</strong> が loaner の <strong>dealer</strong> に含まれる。
+                            検索条件: <strong>productName / enduser_SN / dealer</strong> の全て、または何れか（部分一致・AND）。
                             紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
                             得た orderID を選択した loaner の parentID に設定します。
                             最低限 <strong>productName / SN / dealer / contactPerson</strong> の入力が必要です。
@@ -798,6 +837,7 @@
                         :query-summary="loanerSearchSummary"
                         :searching="loanerSearchLoading"
                         :has-searched="loanerHasSearched"
+                        :hint="loanerSearchHint"
                         @search="openLoanerRecordSearch"
                         @loaner-selected="onLoanerSelected"
                     />
@@ -815,7 +855,7 @@
                 </div>
                 <div class="confirm-body">
                     <p>OCRは既存案件検索後に有効になります</p>
-                    <p>既存案件検索はproductName, SN, dealerに入力された何れかの情報で検索されます</p>
+                    <p>既存案件検索は{{ isLoanerCase ? 'productName, enduser_SN, dealer, contactPerson' : 'productName, SN, dealer, contactPerson' }}に入力された全て、または何れかの情報で検索されます</p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-primary" @click="closeOcrSearchRequiredDialog">OK</button>
@@ -1134,6 +1174,7 @@
                                     }"
                                     :title="isLoanerUnitAvailable(unit) ? '在庫' : '貸出中等'"
                                     @click="selectLoanerUnit(unit)"
+                                    @dblclick="selectLoanerUnit(unit)"
                                 >
                                     <td class="col-loaner-id">{{ unit.loanerID || '—' }}</td>
                                     <td>{{ unit.item || '—' }}</td>
@@ -1351,6 +1392,7 @@ const selectedMaintenanceContractId = ref(null)
 const maintenanceSearchLoading = ref(false)
 const maintenanceSearchDone = ref(false)
 const maintenanceSearchError = ref('')
+const maintenanceRefNumberQuery = ref('')
 
 const STAKEHOLDER_FIELDS = {
     dealer: ['dealer', 'dealer_depart', 'contactPerson', 'phone', 'email', 'zipcode', 'address1', 'address2'],
@@ -1455,6 +1497,24 @@ function isExcludedLoanerItem(itemText) {
     return text.includes('使用不可') || text.includes('サービス終了')
 }
 
+function itemTextWithoutOffBookMark(value) {
+    return String(value ?? '').replace(/【簿外】/g, '').trim()
+}
+
+function applyLoanerItemToForm(item) {
+    const itemForInput = itemTextWithoutOffBookMark(item)
+    form.item = itemForInput
+    form.productName = itemForInput
+    form.instrumentName = itemForInput
+}
+
+function onLoanerProductNameInput(event) {
+    const next = itemTextWithoutOffBookMark(event.target.value)
+    form.productName = next
+    form.item = next
+    form.instrumentName = next
+}
+
 function loanerUnitStatusValue(unit) {
     const column = props.loanerStatusColumn || 'currentStatus'
     const raw = unit?.[column] ?? unit?.currentStatus ?? unit?.current_status
@@ -1487,9 +1547,7 @@ function selectLoanerUnit(unit) {
 
     form.loanerID = unit.loanerID != null ? String(unit.loanerID) : ''
     form.SN = unit.SN ?? ''
-    if (unit.item) form.item = unit.item
-    if (unit.productName) form.productName = unit.productName
-    form.instrumentName = String(unit.item || unit.productName || '').trim()
+    applyLoanerItemToForm(unit.item)
     showLoanerStockDialog.value = false
     checkLoanerAvailability()
 }
@@ -1691,24 +1749,35 @@ const selectedProductLabel = computed(() => {
     }
     return 'productName'
 })
+const existingServiceSearchParams = computed(() => {
+    const productName = String(form.productName ?? '').trim()
+    const sn = String((isLoanerCase.value ? form.enduser_SN : form.SN) ?? '').trim()
+    const dealer = String(form.dealer ?? '').trim()
+    const contactPerson = String(form.contactPerson ?? '').trim()
+    return { productName, SN: sn, dealer, contactPerson }
+})
 const existingSearchTerms = computed(() =>
-    [
-        form.productName,
-        form.SN,
-        form.dealer,
-        form.contactPerson,
-    ]
-        .map(value => String(value ?? '').trim())
-        .filter(Boolean)
+    Object.values(existingServiceSearchParams.value).filter(Boolean),
 )
 const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / '))
+const existingSearchHint = computed(() => (
+    isLoanerCase.value
+        ? '検索: productName / enduser_SN / dealer / contactPerson の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
+        : ''
+))
 
+const loanerSearchParams = computed(() => ({
+    productName: String(form.productName ?? '').trim(),
+    SN: String(form.enduser_SN ?? '').trim(),
+    dealer: String(form.dealer ?? '').trim(),
+}))
 const loanerSearchTerms = computed(() =>
-    [form.productName, form.dealer]
-        .map(value => String(value ?? '').trim())
-        .filter(Boolean)
+    Object.values(loanerSearchParams.value).filter(Boolean),
 )
 const loanerSearchSummary = computed(() => loanerSearchTerms.value.join(' / '))
+const loanerSearchHint = computed(() => (
+    '検索: productName / enduser_SN / dealer の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
+))
 
 const missingLoanerLinkFields = computed(() => {
     const missing = []
@@ -1817,9 +1886,7 @@ function onMasterSelected(result) {
 
     if (activeSelectKind.value === 'loanerProduct') {
         form.loanerID = result.loanerID != null ? String(result.loanerID) : ''
-        form.productName = result.productName ?? ''
-        form.item = result.item ?? ''
-        form.instrumentName = String(result.item || result.productName || '').trim()
+        applyLoanerItemToForm(result.item)
         form.serviceID = ''
         form.entityID = ''
         form.SN = result.SN ?? ''
@@ -1835,6 +1902,9 @@ function onMasterSelected(result) {
         form.contactPerson = result.contactPerson ?? ''
         form.email = result.email ?? ''
         form.phone = result.phone ?? ''
+        form.zipcode = result.zipcode ?? ''
+        form.address1 = result.address1 ?? ''
+        form.address2 = result.address2 ?? ''
     }
 
     activeSelectKind.value = null
@@ -1887,8 +1957,7 @@ async function checkLoanerAvailability() {
 
         loanerAvailability.value = data
         if (data.loaner && unitMatchesLoanerSelection(data.loaner, form)) {
-            if (data.loaner.item) form.item = data.loaner.item
-            if (data.loaner.productName) form.productName = data.loaner.productName
+            applyLoanerItemToForm(data.loaner.item)
             if (data.loaner.SN) form.SN = data.loaner.SN
         }
         if (data.order_type === 'waiting_list') {
@@ -1998,8 +2067,33 @@ function onZipcodeInput(kind) {
 }
 
 async function openExistingRecordSearch() {
-    if (existingSearchTerms.value.length === 0) {
-        error.value = 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
+    if (isLoanerCase.value && typeof document !== 'undefined') {
+        const root = document.querySelector('.form-stack-loaner')
+        if (root) {
+            const dealerInput = root.querySelector('input.w-dealer-name')
+            const enduserSnInput = root.querySelector('.field-enduser-sn input')
+            const productInput = root.querySelector('.field-instrument-name input')
+            const contactInput = root.querySelector('input.w-contact')
+            if (productInput && String(productInput.value || '').trim()) {
+                form.productName = String(productInput.value).trim()
+            }
+            if (enduserSnInput && String(enduserSnInput.value || '').trim()) {
+                form.enduser_SN = String(enduserSnInput.value).trim()
+            }
+            if (dealerInput && String(dealerInput.value || '').trim()) {
+                form.dealer = String(dealerInput.value).trim()
+            }
+            if (contactInput && String(contactInput.value || '').trim()) {
+                form.contactPerson = String(contactInput.value).trim()
+            }
+        }
+    }
+
+    const fields = existingServiceSearchParams.value
+    if (!fields.productName && !fields.SN && !fields.dealer && !fields.contactPerson) {
+        error.value = isLoanerCase.value
+            ? 'productName / enduser_SN / dealer / contactPerson の全て、または何れかを入力してから検索してください。'
+            : 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
     }
@@ -2009,10 +2103,10 @@ async function openExistingRecordSearch() {
 
     try {
         const params = new URLSearchParams({ order_type: 'service' })
-        if (form.productName) params.set('productName', form.productName)
-        if (form.SN) params.set('SN', form.SN)
-        if (form.dealer) params.set('dealer', form.dealer)
-        if (form.contactPerson) params.set('contactPerson', form.contactPerson)
+        if (fields.productName) params.set('productName', fields.productName)
+        if (fields.SN) params.set('SN', fields.SN)
+        if (fields.dealer) params.set('dealer', fields.dealer)
+        if (fields.contactPerson) params.set('contactPerson', fields.contactPerson)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -2037,8 +2131,27 @@ async function openExistingRecordSearch() {
 }
 
 async function openLoanerRecordSearch() {
-    if (loanerSearchTerms.value.length === 0) {
-        error.value = 'productName / dealer のいずれかを入力してから検索してください。（productName→item / dealer→dealer）'
+    if (isLoanerCase.value && typeof document !== 'undefined') {
+        const root = document.querySelector('.form-stack-loaner')
+        if (root) {
+            const dealerInput = root.querySelector('input.w-dealer-name')
+            const enduserSnInput = root.querySelector('.field-enduser-sn input')
+            const productInput = root.querySelector('.field-instrument-name input')
+            if (productInput && String(productInput.value || '').trim()) {
+                form.productName = String(productInput.value).trim()
+            }
+            if (enduserSnInput && String(enduserSnInput.value || '').trim()) {
+                form.enduser_SN = String(enduserSnInput.value).trim()
+            }
+            if (dealerInput && String(dealerInput.value || '').trim()) {
+                form.dealer = String(dealerInput.value).trim()
+            }
+        }
+    }
+
+    const fields = loanerSearchParams.value
+    if (!fields.productName && !fields.SN && !fields.dealer) {
+        error.value = 'productName / enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
     }
@@ -2048,8 +2161,9 @@ async function openLoanerRecordSearch() {
 
     try {
         const params = new URLSearchParams({ order_type: 'loaner' })
-        if (form.productName) params.set('productName', form.productName)
-        if (form.dealer) params.set('dealer', form.dealer)
+        if (fields.productName) params.set('productName', fields.productName)
+        if (fields.SN) params.set('SN', fields.SN)
+        if (fields.dealer) params.set('dealer', fields.dealer)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -2112,7 +2226,7 @@ async function searchMaintenanceContracts() {
                     form.enduser_SN = String(enduserSnInput.value).trim()
                 }
                 if (instrumentInput && String(instrumentInput.value || '').trim()) {
-                    form.instrumentName = String(instrumentInput.value).trim()
+                    form.productName = String(instrumentInput.value).trim()
                 }
             } else {
                 const productInput = root.querySelector('input.w-product-name')
@@ -2132,9 +2246,7 @@ async function searchMaintenanceContracts() {
         }
     }
 
-    const itemOrProduct = isLoanerCase.value
-        ? String(form.instrumentName ?? '').trim()
-        : String(form.productName ?? '').trim()
+    const itemOrProduct = String(form.productName ?? '').trim()
     const sn = isLoanerCase.value
         ? String(form.enduser_SN ?? '').trim()
         : String(form.SN ?? '').trim()
@@ -2142,7 +2254,7 @@ async function searchMaintenanceContracts() {
 
     const missing = []
     if (isLoanerCase.value) {
-        if (!itemOrProduct) missing.push('機種名')
+        if (!itemOrProduct) missing.push('productName')
         if (!sn) missing.push('enduser_SN')
     } else {
         if (!itemOrProduct) missing.push('productName')
@@ -2186,14 +2298,57 @@ async function searchMaintenanceContracts() {
             throw new Error(validationMessage || data?.message || `保守検索に失敗しました。（HTTP ${response.status}）`)
         }
 
-        maintenanceContracts.value = Array.isArray(data.contracts) ? data.contracts : []
-        selectedMaintenanceContractId.value = null
-        maintenanceSearchDone.value = true
+        applyMaintenanceSearchResult(data)
     } catch (e) {
         maintenanceContracts.value = []
         selectedMaintenanceContractId.value = null
         maintenanceSearchDone.value = true
         maintenanceSearchError.value = e.message || '保守検索に失敗しました。'
+    } finally {
+        maintenanceSearchLoading.value = false
+    }
+}
+
+function applyMaintenanceSearchResult(data) {
+    maintenanceContracts.value = Array.isArray(data?.contracts) ? data.contracts : []
+    selectedMaintenanceContractId.value = null
+    maintenanceSearchDone.value = true
+    maintenanceSearchError.value = ''
+}
+
+async function searchMaintenanceContractsByRefNumber() {
+    const refNumber = String(maintenanceRefNumberQuery.value ?? '').trim()
+    if (!refNumber) {
+        maintenanceSearchError.value = 'RefNumber を入力してから検索してください。'
+        maintenanceSearchDone.value = true
+        return
+    }
+
+    maintenanceSearchLoading.value = true
+    maintenanceSearchError.value = ''
+    error.value = ''
+    activeTab.value = 'basic'
+
+    try {
+        const params = new URLSearchParams({ RefNumber: refNumber })
+        const url = `${page.props.appBaseUrl}/servicerecord/maintenance-contracts/search?${params.toString()}`
+        const result = await apiFetch(url)
+        if (!result) return
+
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data?.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data?.message || `契約番号検索に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        applyMaintenanceSearchResult(data)
+    } catch (e) {
+        maintenanceContracts.value = []
+        selectedMaintenanceContractId.value = null
+        maintenanceSearchDone.value = true
+        maintenanceSearchError.value = e.message || '契約番号検索に失敗しました。'
     } finally {
         maintenanceSearchLoading.value = false
     }
@@ -2895,9 +3050,31 @@ async function save() {
 }
 
 .maintenance-clear-btn {
-    margin-left: auto;
     padding: 4px 10px;
     font-size: 12px;
+}
+
+.maintenance-ref-search {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.maintenance-ref-input {
+    width: 160px;
+    min-width: 120px;
+    padding: 4px 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 13px;
+}
+
+.maintenance-ref-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 .maintenance-error,
@@ -3223,6 +3400,13 @@ async function save() {
     flex: 0 1 160px;
 }
 
+.loaner-top-row .field-sn input,
+.loaner-top-row .field-sn input[readonly] {
+    border: 1px solid #94a3b8;
+    background: #fff;
+    color: #1e293b;
+}
+
 .loaner-top-row .field-enduser-sn {
     flex: 0 1 180px;
 }
@@ -3264,12 +3448,28 @@ async function save() {
 }
 
 .loaner-unit-panel-dialog {
-    max-height: min(62vh, 560px);
+    flex: 1;
+    min-height: 0;
+    max-height: none;
 }
 
 .stock-list-panel {
     width: min(1280px, 96vw);
     max-width: 96vw;
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.stock-list-body {
+    padding-top: 4px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .parent-case-overlay {
@@ -3280,8 +3480,8 @@ async function save() {
 .parent-case-panel {
     width: min(1680px, 100%);
     max-width: 100%;
-    height: calc(100vh - 16px);
-    max-height: calc(100vh - 16px);
+    height: calc((100vh - 100px) / var(--page-zoom, 1));
+    max-height: calc((100vh - 100px) / var(--page-zoom, 1));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -3514,10 +3714,6 @@ async function save() {
     color: #0f172a;
 }
 
-.stock-list-body {
-    padding-top: 4px;
-}
-
 .stock-list-hint-row {
     display: flex;
     align-items: center;
@@ -3697,6 +3893,23 @@ async function save() {
     gap: 6px;
 }
 
+.stakeholder-side .field-button-pick {
+    width: 100%;
+    padding-left: 4px;
+    padding-right: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.stakeholder-switches {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .stakeholder-label {
     font-size: 12px;
     font-weight: 700;
@@ -3743,7 +3956,7 @@ async function save() {
 }
 
 .row-product-top {
-    grid-template-columns: 80px minmax(0, 1fr) minmax(120px, 0.7fr);
+    grid-template-columns: 80px minmax(0, 1fr) 200px;
 }
 
 .row-product-top .field-button-pick {
@@ -3762,50 +3975,42 @@ async function save() {
     width: 100%;
 }
 
-.row-dealer-top {
-    grid-template-columns: 80px minmax(0, 1fr);
-}
-
-.row-dealer-top .field-button-pick {
+.field-side-label {
+    display: flex;
+    align-items: center;
     width: 80px;
-    max-width: 80px;
     min-width: 80px;
-    padding-left: 4px;
-    padding-right: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    color: #000;
     font-size: 12px;
-}
-
-.row-dealer-top .w-dealer-name {
-    width: 100%;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .row-product-sn {
-    grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.7fr);
+    grid-template-columns: 80px minmax(0, 1fr) 200px;
+    align-items: center;
 }
 
-.row-product-sn > input {
-    grid-column: 1;
+.row-product-sn > .w-sn {
+    grid-column: 2;
+    width: 100%;
 }
 
-.row-product-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+.row-product-date,
+.row-product-status,
+.row-product-return {
+    grid-template-columns: 80px 200px;
+    align-items: center;
 }
 
-.row-product-meta .w-received,
-.row-product-meta .w-status {
-    flex: 0 0 200px;
+.row-product-date :deep(.w-status),
+.row-product-status .w-status,
+.info-card .row-product-status .w-status,
+.row-product-return .w-return,
+.info-card .row-product-return .w-return,
+.row-product-top .w-entity,
+.info-card .row-product-top .w-entity {
     width: 200px;
-    max-width: 100%;
-}
-
-.row-product-meta .w-return {
-    flex: 0 0 400px;
-    width: 400px;
     max-width: 100%;
 }
 
@@ -3837,9 +4042,9 @@ async function save() {
 }
 
 .w-address1 {
-    flex: 0 0 150px;
-    width: 150px;
-    max-width: 100%;
+    flex: 0 0 70px;
+    width: 70px;
+    max-width: 70px;
 }
 
 .w-address2 {
@@ -3878,7 +4083,7 @@ async function save() {
 }
 
 .info-card .w-address1 {
-    width: 150px;
+    width: 70px;
 }
 
 .info-card input[readonly] {

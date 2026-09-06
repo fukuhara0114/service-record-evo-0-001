@@ -147,4 +147,14 @@ class LoanerStatusFlowTest extends TestCase
             LoanerStatusFlow::masterListAssociatedCaseKind('waiting_list', null, null),
         );
     }
+
+    public function test_logistics_complete_stamps_sent_date_for_loaner_and_service(): void
+    {
+        $this->assertTrue(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(350, 385, 'loaner'));
+        $this->assertTrue(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(350, 385, 'service'));
+        $this->assertTrue(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(300, 385, null));
+        $this->assertFalse(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(385, 385, 'loaner'));
+        $this->assertFalse(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(350, 400, 'loaner'));
+        $this->assertFalse(LoanerStatusFlow::shouldStampMasterSentDateOnLogisticsComplete(350, 385, 'waiting_list'));
+    }
 }

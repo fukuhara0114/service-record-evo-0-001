@@ -1,5 +1,6 @@
 <template>
     <BaseDialog title="未登録メール Note を紐づけ" large @close="$emit('close')">
+        <div class="select-dialog-layout">
         <p class="order-id">OrderID: {{ record?.orderID }}</p>
         <p class="help-text">選択したメールリンクをこの案件の Notes に追加します（日付はメール側、記入者はログイン中のユーザー）。</p>
 
@@ -73,6 +74,7 @@
             <p v-if="!loading && !filteredNotes.length" class="empty-message">
                 {{ notes.length ? '検索条件に一致する未登録メールはありません。' : '未登録メール Notes はありません。' }}
             </p>
+        </div>
         </div>
     </BaseDialog>
 </template>
@@ -305,7 +307,8 @@ onMounted(() => {
 }
 
 .table-wrap {
-    max-height: calc(96vh - 280px);
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     border: 1px solid #e2e8f0;
     border-radius: 4px;
