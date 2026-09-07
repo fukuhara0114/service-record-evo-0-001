@@ -1,0 +1,35 @@
+件名：保守内再校正ご利用のご案内（製品:【maintenanscontractmaster.instrumentName】　SN:【maintenanscontractmaster.SN】）
+【maintenanscontractmaster.dealer】
+【maintenanscontractmaster.branch】
+【maintenanscontractmaster.contact】様
+ 
+いつも大変お世話になっております。エックスライトサービスセンター【username_kanji】でございます。
+
+【maintenanscontractmaster.endUser】【maintenanscontractmaster.endUser_contact】様ご所有の（製品:【maintenanscontractmaster.instrumentName】　SN:【maintenanscontractmaster.SN】）は
+20XX/XX/XXをもちまして、再校正保守チケットの使用期限を迎えます。
+
+＜対象機材＞
+製品:【maintenanscontractmaster.instrumentName】　SN:【maintenanscontractmaster.SN】　　
+（保守契約番号:【maintenanscontractmaster.RefNumber】　保守サービス期間:【maintenanscontractmaster.startDate】～【maintenanscontractmaster.expireDate】）
+
+保守内チケットを使用し、無償再校正をお受けいただくことが可能です。
+機材の性能を維持するためには、定期的な再校正を受けていただくことを推奨しております。
+ぜひ、ご依頼をいただきます様、ご検討の程よろしくお願いいたします。
+
+ご依頼の際には「サービス依頼書」（下記URL）に必要事項ご記入の上、
+メールにてご返信ください。
+（サービス依頼書は下記リンクよりダウンロードいただけます。）
+
+https://www.xrite.com/-/media/xrite/files/literature/misc/j/japan-service-request-form_XR.zip 
+
+＜実機発送時のお願い＞
+・サービス依頼書のコピーと「再校正チケット」の原本を必ず同梱ください
+・送状に「x-rite再校正依頼品」とご記載いただけますと幸いです
+
+お手数をおかけいたしますが、何卒よろしくお願い申し上げます。
+
+※すでにご対応済みの場合は誠に申し訳ございません。
+　行き違いご容赦ください。
+　
+　
+　

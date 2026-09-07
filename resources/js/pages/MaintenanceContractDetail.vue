@@ -153,7 +153,7 @@
                             </label>
                         </div>
                         <div class="renewal-notice-action">
-                            <button type="button" class="btn btn-primary renewal-email-btn">
+                            <button type="button" class="btn btn-primary renewal-email-btn" @click="openNoticeEmailDialog">
                                 案内E-メール
                             </button>
                         </div>
@@ -329,6 +329,13 @@
             </div>
         </div>
 
+        <MaintenanceNoticeEmailDialog
+            v-if="noticeEmailDialogOpen"
+            :contract="form"
+            :contract-types="contractTypes"
+            @close="closeNoticeEmailDialog"
+        />
+
         <div
             v-if="duplicateDialogOpen"
             class="dialog-overlay"
@@ -389,6 +396,7 @@ import { Pane, Splitpanes } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
+import MaintenanceNoticeEmailDialog from '@/components/MaintenanceContract/MaintenanceNoticeEmailDialog.vue'
 import { apiFetch } from '@/utils/apiFetch'
 
 const props = defineProps({
@@ -430,6 +438,8 @@ const ticketError = ref('')
 const ticketPdfUrl = ref('')
 const ticketPdfBlob = ref(null)
 const ticketFilename = ref('certification_ticket.pdf')
+
+const noticeEmailDialogOpen = ref(false)
 
 const duplicateSectionItems = [
     { key: 'product', label: '製品' },
@@ -634,6 +644,14 @@ function setAllDuplicateSections(value) {
     for (const item of duplicateSectionItems) {
         duplicateSections[item.key] = value
     }
+}
+
+function openNoticeEmailDialog() {
+    noticeEmailDialogOpen.value = true
+}
+
+function closeNoticeEmailDialog() {
+    noticeEmailDialogOpen.value = false
 }
 
 function openDuplicateDialog() {
