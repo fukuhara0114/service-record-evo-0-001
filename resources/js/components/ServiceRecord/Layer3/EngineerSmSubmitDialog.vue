@@ -377,6 +377,18 @@ onMounted(() => {
     text-align: left;
 }
 
+.data-table tbody tr:nth-child(even) {
+    background: #f1f5f9;
+}
+
+.data-table tbody tr:nth-child(odd) {
+    background: #fff;
+}
+
+.data-table tbody tr:nth-child(6n) td {
+    border-bottom: 3px solid #334155;
+}
+
 .data-table th {
     background: #f8fafc;
     color: #334155;
