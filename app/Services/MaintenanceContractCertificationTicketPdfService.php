@@ -157,17 +157,7 @@ class MaintenanceContractCertificationTicketPdfService
      */
     private function buildRemarks(array $data): string
     {
-        $description = trim((string) ($data['description'] ?? ''));
-        if ($description !== '') {
-            return $description;
-        }
-
-        $additional = trim((string) ($data['additional_information'] ?? ''));
-        if ($additional !== '') {
-            return $additional;
-        }
-
-        return trim((string) ($data['contractTypeDescription'] ?? ''));
+        return trim((string) ($data['additional_information'] ?? ''));
     }
 
     private function parseDate(mixed $value): ?Carbon

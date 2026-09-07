@@ -86,7 +86,7 @@ watch(
         if (payload?.mode === 'edit') {
             quantityText.value = String(payload?.stockedPart?.quantity ?? '')
         } else {
-            quantityText.value = ''
+            quantityText.value = '1'
         }
         error.value = ''
     },

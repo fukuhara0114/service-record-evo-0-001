@@ -34,6 +34,45 @@
                         <p v-if="!capturedImages.length" class="empty-message">撮影画像がありません。</p>
                     </div>
 
+                    <div
+                        v-if="showFileDropzone"
+                        class="file-dropzone"
+                        :class="{
+                            'file-dropzone-active': fileDropActive,
+                            'file-dropzone-disabled': !canDropFiles || fileDropUploading,
+                        }"
+                        @dragenter.prevent="onFileDragEnter"
+                        @dragover.prevent="onFileDragOver"
+                        @dragleave.prevent="onFileDragLeave"
+                        @drop.prevent="onFileDrop"
+                        @click="openFileDropPicker"
+                    >
+                        <input
+                            ref="fileDropInputEl"
+                            type="file"
+                            class="file-drop-input"
+                            multiple
+                            @change="onFileDropInputChange"
+                        >
+                        <div class="file-dropzone-top" @click.stop>
+                            <p class="file-dropzone-title">
+                                {{ fileDropUploading ? `アップロード中...（${fileDropProgress}）` : 'ファイルをドロップ、またはクリックして選択' }}
+                            </p>
+                            <button
+                                type="button"
+                                class="action-btn file-dropzone-cancel"
+                                :disabled="fileDropUploading"
+                                @click="closeFileDropzone"
+                            >
+                                閉じる
+                            </button>
+                        </div>
+                        <p class="file-dropzone-help">
+                            Explorer から任意ファイル（.eml / .msg / PDF / 画像など）を追加できます
+                        </p>
+                        <p v-if="fileDropError" class="file-dropzone-error" @click.stop>{{ fileDropError }}</p>
+                    </div>
+
                     <div class="files-list files-list-wrap">
                         <AttachedFileItem
                             v-for="(file, index) in sortedFiles"
@@ -320,6 +359,13 @@ const showGalleryDialog = ref(false)
 const capturedImagesOpen = ref(false)
 const galleryAssociatedId = computed(() => props.record?.orderID ?? null)
 const actionMessage = ref('')
+const fileDropInputEl = ref(null)
+const showFileDropzone = ref(false)
+const fileDropActive = ref(false)
+const fileDropUploading = ref(false)
+const fileDropError = ref('')
+const fileDropProgress = ref('')
+const fileDragDepth = ref(0)
 
 const currentUserName = computed(() => page.props.authUser?.kanji_name || '')
 
@@ -598,7 +644,165 @@ function onRemand() {
 }
 
 function openFileCreate() {
-    emit('open-dialog', 'FILE', { mode: 'create' })
+    if (!canDropFiles.value) {
+        window.alert('案件が選択されていません。')
+        return
+    }
+    showFileDropzone.value = true
+    fileDropError.value = ''
+    fileDropActive.value = false
+    fileDragDepth.value = 0
+}
+
+function closeFileDropzone() {
+    if (fileDropUploading.value) return
+    showFileDropzone.value = false
+    fileDropActive.value = false
+    fileDropError.value = ''
+    fileDragDepth.value = 0
+}
+
+const canDropFiles = computed(() => Boolean(props.record?.orderID))
+
+function guessDocumentType(file) {
+    const name = String(file?.name || '').toLowerCase()
+    const type = String(file?.type || '').toLowerCase()
+    if (name.endsWith('.eml') || name.endsWith('.msg') || type.includes('message') || type.includes('ms-outlook')) {
+        return 'メール'
+    }
+    if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return 'PDF'
+    }
+    if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(name)) {
+        return '画像'
+    }
+    return '添付ファイル'
+}
+
+function nextSortNum() {
+    const nums = (props.files ?? [])
+        .map(file => Number(file.sortNum))
+        .filter(num => Number.isFinite(num))
+    if (!nums.length) return 10
+    return Math.max(...nums) + 10
+}
+
+function onFileDragEnter(event) {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    if (![...event.dataTransfer?.types ?? []].includes('Files')) return
+    fileDragDepth.value += 1
+    fileDropActive.value = true
+}
+
+function onFileDragOver(event) {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy'
+    }
+    fileDropActive.value = true
+}
+
+function onFileDragLeave() {
+    fileDragDepth.value = Math.max(0, fileDragDepth.value - 1)
+    if (fileDragDepth.value === 0) {
+        fileDropActive.value = false
+    }
+}
+
+function onFileDrop(event) {
+    fileDragDepth.value = 0
+    fileDropActive.value = false
+    if (!canDropFiles.value || fileDropUploading.value) return
+    const files = [...(event.dataTransfer?.files ?? [])]
+    if (!files.length) {
+        fileDropError.value = 'ドロップされた内容からファイルを取得できませんでした。Explorer に保存したファイルをドロップしてください。'
+        return
+    }
+    uploadDroppedFiles(files)
+}
+
+function openFileDropPicker() {
+    if (!canDropFiles.value || fileDropUploading.value) return
+    fileDropInputEl.value?.click()
+}
+
+function onFileDropInputChange(event) {
+    const files = [...(event.target.files ?? [])]
+    event.target.value = ''
+    if (!files.length) return
+    uploadDroppedFiles(files)
+}
+
+async function uploadSingleDroppedFile(file, sortNum) {
+    const formData = new FormData()
+    formData.append('associatedID', props.record.orderID)
+    formData.append('file', file)
+    formData.append('documentName', file.name || 'untitled')
+    formData.append('documentType', guessDocumentType(file))
+    formData.append('sortNum', String(sortNum))
+
+    const result = await apiFetch(getFilesApiBase(), {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': getCsrfToken(),
+            Accept: 'application/json',
+        },
+        body: formData,
+    })
+
+    if (!result) {
+        throw new Error(`${file.name || 'ファイル'} のアップロードに失敗しました。`)
+    }
+
+    const { response, data } = result
+    if (!response.ok) {
+        const validationMessage = data.errors
+            ? Object.values(data.errors).flat().join(' ')
+            : null
+        throw new Error(
+            validationMessage
+            || data.message
+            || `${file.name || 'ファイル'} のアップロードに失敗しました。（HTTP ${response.status}）`,
+        )
+    }
+
+    return data.file
+}
+
+async function uploadDroppedFiles(files) {
+    if (!canDropFiles.value) {
+        fileDropError.value = '案件が選択されていません。'
+        return
+    }
+
+    const list = files.filter(file => file && file.size >= 0)
+    if (!list.length) {
+        fileDropError.value = 'アップロード可能なファイルがありません。'
+        return
+    }
+
+    fileDropUploading.value = true
+    fileDropError.value = ''
+    let startSort = nextSortNum()
+
+    try {
+        for (let i = 0; i < list.length; i += 1) {
+            const file = list[i]
+            fileDropProgress.value = `${i + 1}/${list.length}: ${file.name || 'untitled'}`
+            await uploadSingleDroppedFile(file, startSort)
+            startSort += 10
+        }
+        emit('reload-attachments')
+        showFileDropzone.value = false
+        fileDropActive.value = false
+        fileDragDepth.value = 0
+    } catch (e) {
+        fileDropError.value = e.message || 'アップロードに失敗しました。'
+        emit('reload-attachments')
+    } finally {
+        fileDropUploading.value = false
+        fileDropProgress.value = ''
+    }
 }
 
 function openFileDelete() {
@@ -863,6 +1067,69 @@ async function updateFileSortNum(fileId, sortNum, reload = true) {
     flex: 1;
     min-height: 0;
     overflow: auto;
+}
+
+.file-dropzone {
+    position: relative;
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+    padding: 14px 12px;
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+    background: #f8fafc;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.file-dropzone:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.file-dropzone-active {
+    border-color: #2563eb;
+    background: #dbeafe;
+}
+
+.file-dropzone-disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.file-drop-input {
+    display: none;
+}
+
+.file-dropzone-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.file-dropzone-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.file-dropzone-cancel {
+    flex: 0 0 auto;
+}
+
+.file-dropzone-help {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.file-dropzone-error {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #b91c1c;
 }
 
 .right-stack {
