@@ -1,4 +1,5 @@
 <template>
+    <div class="sm-submit-dialog-host">
     <BaseDialog title="SM Submit" :show-close="!saving" @close="onClose">
         <div class="sm-submit-stack">
             <div class="field-block">
@@ -72,6 +73,7 @@
             </button>
         </template>
     </BaseDialog>
+    </div>
 </template>
 
 <script setup>
@@ -245,7 +247,36 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.sm-submit-dialog-host :deep(.dialog-overlay) {
+    align-items: stretch;
+    justify-content: center;
+}
+
+.sm-submit-dialog-host :deep(.dialog-panel) {
+    height: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    border-radius: 0;
+}
+
+.sm-submit-dialog-host :deep(.dialog-header),
+.sm-submit-dialog-host :deep(.dialog-footer) {
+    flex: 0 0 auto;
+}
+
+.sm-submit-dialog-host :deep(.dialog-body) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .sm-submit-stack {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -255,6 +286,7 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    flex: 0 0 auto;
 }
 
 .field-label {
@@ -293,6 +325,7 @@ onMounted(() => {
 }
 
 .btn-complete {
+    flex: 0 0 auto;
     width: 100%;
     padding: 10px 16px;
     border: 1px solid #15803d;
@@ -309,14 +342,23 @@ onMounted(() => {
     cursor: not-allowed;
 }
 
+.stocked-block {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .stocked-block h4 {
     margin: 0 0 8px;
     font-size: 14px;
     color: #1e40af;
+    flex: 0 0 auto;
 }
 
 .table-wrap {
-    max-height: 280px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: auto;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
@@ -348,6 +390,7 @@ onMounted(() => {
     margin: 0;
     color: #b91c1c;
     font-size: 14px;
+    flex: 0 0 auto;
 }
 
 .btn-secondary {
