@@ -1065,10 +1065,10 @@ class ServiceRecordController extends Controller
 
     public function searchExisting(Request $request)
     {
-        $productName = trim((string) $request->input('productName', ''));
+        $productName = $this->productNameSearchPrefix(trim((string) $request->input('productName', '')));
         $sn = trim((string) $request->input('SN', ''));
-        $dealer = trim((string) $request->input('dealer', ''));
-        $contactPerson = trim((string) $request->input('contactPerson', ''));
+        $dealer = $this->dealerSearchPrefix(trim((string) $request->input('dealer', '')));
+        $contactPerson = $this->contactPersonSearchPrefix(trim((string) $request->input('contactPerson', '')));
 
         $forLoanerParent = $request->input('for') === 'loaner_parent';
         $orderTypeFilter = $request->input('order_type'); // service | loaner
@@ -1077,10 +1077,7 @@ class ServiceRecordController extends Controller
 
         if ($orderTypeFilter === 'loaner') {
             // loaner検索: 入力がある項目で AND（部分一致）
-            $loanerSearchEmpty = $forServiceLoanerLink
-                ? ($productName === '' && $sn === '' && $dealer === '' && $contactPerson === '')
-                : ($productName === '' && $sn === '' && $dealer === '');
-            if ($loanerSearchEmpty) {
+            if ($productName === '' && $sn === '' && $dealer === '' && $contactPerson === '') {
                 return response()->json(['records' => []]);
             }
         } elseif ($forLoanerParent) {
@@ -1181,10 +1178,9 @@ class ServiceRecordController extends Controller
                 }
             } else {
                 // 新規 loaner 作成: productName 先頭3文字 → loanermaster.item /
-                // enduser_SN → attachedloaners.repairInstrument-SN / dealer（含む・AND）
-                $productPrefix = $this->productNameSearchPrefix($productName);
-                if ($productPrefix !== '') {
-                    $itemLike = $this->likeContains(mb_strtolower($productPrefix, 'UTF-8'));
+                // SN → attachedloaners.repairInstrument-SN / dealer / contactPerson（含む・AND）
+                if ($productName !== '') {
+                    $itemLike = $this->likeContains(mb_strtolower($productName, 'UTF-8'));
                     $query->where(function ($nameQuery) use ($itemLike, $loanerTable) {
                         $nameQuery->whereExists(function ($sub) use ($itemLike, $loanerTable) {
                             $sub->select(DB::raw(1))
@@ -1209,6 +1205,12 @@ class ServiceRecordController extends Controller
                     $query->whereRaw(
                         'LOWER(dealer) LIKE ?',
                         [$this->likeContains(mb_strtolower($dealer, 'UTF-8'))]
+                    );
+                }
+                if ($contactPerson !== '') {
+                    $query->whereRaw(
+                        'LOWER(contactPerson) LIKE ?',
+                        [$this->likeContains(mb_strtolower($contactPerson, 'UTF-8'))]
                     );
                 }
             }
@@ -1301,6 +1303,44 @@ class ServiceRecordController extends Controller
         }
 
         return mb_substr($trimmed, 0, 3, 'UTF-8');
+    }
+
+    private function dealerSearchPrefix(string $dealer): string
+    {
+        $text = trim($dealer);
+        $marks = ['株式会社', '㈱', '（株）', '(株)'];
+        $changed = true;
+        while ($changed && $text !== '') {
+            $changed = false;
+            foreach ($marks as $mark) {
+                $markLength = mb_strlen($mark, 'UTF-8');
+                if (mb_strpos($text, $mark, 0, 'UTF-8') === 0) {
+                    $text = trim(mb_substr($text, $markLength, null, 'UTF-8'));
+                    $changed = true;
+                }
+                $textLength = mb_strlen($text, 'UTF-8');
+                if ($textLength >= $markLength && mb_substr($text, -$markLength, null, 'UTF-8') === $mark) {
+                    $text = trim(mb_substr($text, 0, $textLength - $markLength, 'UTF-8'));
+                    $changed = true;
+                }
+            }
+        }
+
+        if ($text === '') {
+            return '';
+        }
+
+        return mb_substr($text, 0, 3, 'UTF-8');
+    }
+
+    private function contactPersonSearchPrefix(string $contactPerson): string
+    {
+        $trimmed = trim($contactPerson);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        return mb_substr($trimmed, 0, 1, 'UTF-8');
     }
 
     public function linkToExisting(Request $request)

@@ -347,6 +347,7 @@ import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMa
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
 import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
 import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
+import { buildCaseSearchKeywords } from '@/utils/caseSearchKeywords'
 
 const props = defineProps({
     loanerProducts: {
@@ -610,22 +611,27 @@ function onParentSelected(payload) {
 }
 
 async function openParentSearch() {
-    const tokens = parentSearchQuery.value
+    const keywords = buildCaseSearchKeywords({
+        productName: form.productName,
+        SN: form.SN,
+        dealer: form.dealer,
+        contactPerson: form.contactPerson,
+    })
+    const queryTokens = parentSearchQuery.value
         .trim()
         .split(/\s+/)
         .filter(Boolean)
+    const useKeywords = queryTokens.length > 0
+        ? buildCaseSearchKeywords({
+            productName: queryTokens[0] ?? '',
+            SN: queryTokens[1] ?? '',
+            dealer: queryTokens[2] ?? '',
+            contactPerson: queryTokens[3] ?? '',
+        })
+        : keywords
 
-    const fallbackTokens = [
-        form.productName,
-        form.SN,
-        form.dealer,
-        form.contactPerson,
-    ].map(v => String(v ?? '').trim()).filter(Boolean)
-
-    const useTokens = tokens.length > 0 ? tokens : fallbackTokens
-
-    if (useTokens.length === 0) {
-        error.value = '検索キーワードを入力するか、dealer / productName 等を入力してから検索してください。'
+    if (!useKeywords.productName && !useKeywords.SN && !useKeywords.dealer && !useKeywords.contactPerson) {
+        error.value = '検索キーワードを入力するか、productName / SN / dealer / contactPerson を入力してから検索してください。'
         return
     }
 
@@ -634,11 +640,10 @@ async function openParentSearch() {
 
     try {
         const params = new URLSearchParams({ for: 'loaner_parent' })
-        // API は productName/SN/dealer/contactPerson を個別に受けるため、先頭〜4語を割当
-        const keys = ['productName', 'SN', 'dealer', 'contactPerson']
-        useTokens.slice(0, 4).forEach((token, index) => {
-            params.set(keys[index], token)
-        })
+        if (useKeywords.productName) params.set('productName', useKeywords.productName)
+        if (useKeywords.SN) params.set('SN', useKeywords.SN)
+        if (useKeywords.dealer) params.set('dealer', useKeywords.dealer)
+        if (useKeywords.contactPerson) params.set('contactPerson', useKeywords.contactPerson)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -653,7 +658,7 @@ async function openParentSearch() {
         parentHasSearched.value = true
         showParentSearch.value = true
         if (!parentSearchQuery.value.trim()) {
-            parentSearchQuery.value = useTokens.join(' ')
+            parentSearchQuery.value = Object.values(useKeywords).filter(Boolean).join(' ')
         }
     } catch (e) {
         error.value = e.message || '検索に失敗しました。'

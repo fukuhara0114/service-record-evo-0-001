@@ -214,10 +214,11 @@
                                 <button
                                     type="button"
                                     class="tab-btn tab-btn-action btn-parent-case"
+                                    :disabled="parentCaseLoading"
                                     @click="openParentCaseDialog"
                                 >
-                                    親案件
-                                    <template v-if="form.parentID">（{{ form.parentID }}）</template>
+                                    {{ parentCaseLoading ? '検索中...' : '親案件' }}
+                                    <template v-if="!parentCaseLoading && form.parentID">（{{ form.parentID }}）</template>
                                 </button>
                                 <button
                                     type="button"
@@ -875,13 +876,13 @@
                 <div v-show="activeTab === 'loaner'" class="tab-panel tab-panel-existing">
                     <div class="loaner-flow-note">
                         <p v-if="isLoanerCase">
-                            検索条件: <strong>productName（loanermaster.item の先頭3文字）/ enduser_SN / dealer</strong>
-                            の全て、または何れか（部分一致・AND）。入力した項目で絞り込みます。
+                            検索条件: <strong>productName（先頭3文字）/ SN（全文字）/ dealer（株式会社・㈱・（株）を除いた先頭3文字）/ contactPerson（先頭1文字）</strong>
+                            の最大4つ（部分一致・AND）。入力した項目で絞り込みます。
                             結果を選択すると、申請フォームのファイルをその loaner 案件へアタッチするか確認します。
                         </p>
                         <p v-else>
-                            検索条件: <strong>productName → item / SN → enduser_SN / dealer / contactPerson</strong>
-                            の全て、または何れか（部分一致・AND）。
+                            検索条件: <strong>productName（先頭3文字）/ SN（全文字）/ dealer（株式会社・㈱・（株）を除いた先頭3文字）/ contactPerson（先頭1文字）</strong>
+                            の最大4つ（部分一致・AND）。
                             紐づけでは、この画面で<strong>新規 service 案件を作成</strong>し、
                             得た orderID を選択した loaner の parentID に設定します。
                             最低限 <strong>productName / SN / dealer / contactPerson</strong> の入力が必要です。
@@ -938,7 +939,7 @@
                 </div>
                 <div class="confirm-body">
                     <p>OCRは既存案件検索後に有効になります</p>
-                    <p>既存案件検索は{{ isLoanerCase ? 'productName（先頭3文字）, enduser_SN, dealer' : 'productName, SN, dealer, contactPerson' }}に入力された全て、または何れかの情報で検索されます</p>
+                    <p>既存案件検索は productName（先頭3文字）、SN（全文字）、dealer（株式会社・㈱・（株）を除いた先頭3文字）、contactPerson（先頭1文字）の最大4つで検索されます</p>
                 </div>
                 <div class="confirm-actions">
                     <button type="button" class="btn btn-primary" @click="closeOcrSearchRequiredDialog">OK</button>
@@ -1169,14 +1170,6 @@
                     <h3>親案件検索</h3>
                     <div class="parent-case-header-actions">
                         <button type="button" class="btn btn-secondary" @click="closeParentCaseDialog">閉じる</button>
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            :disabled="!parentCaseRecord"
-                            @click="adoptParentCase"
-                        >
-                            採用
-                        </button>
                         <button type="button" class="close-btn" @click="closeParentCaseDialog">×</button>
                     </div>
                 </div>
@@ -1251,95 +1244,18 @@
                         </button>
                     </div>
                     <p v-if="parentCaseError" class="parent-case-error">{{ parentCaseError }}</p>
-                    <div v-if="parentCaseRecords.length" class="parent-case-hits">
-                        <button
-                            v-for="record in parentCaseRecords"
-                            :key="record.orderID"
-                            type="button"
-                            class="parent-case-hit"
-                            :class="{ active: Number(parentCaseRecord?.orderID) === Number(record.orderID) }"
-                            @click="selectParentCaseRecord(record)"
-                        >
-                            <span>orderID: {{ record.orderID }}</span>
-                            <span>{{ record.productName || '—' }}</span>
-                            <span>SN: {{ record.SN || '—' }}</span>
-                            <span>{{ record.dealer || '—' }}</span>
-                            <span>{{ record.contactPerson || '—' }}</span>
-                        </button>
-                    </div>
-                    <div v-if="parentCaseRecord" class="parent-case-split">
-                        <div class="parent-case-result">
-                            <p class="parent-case-result-meta">
-                                orderID: {{ parentCaseRecord.orderID }}
-                                <template v-if="parentCaseRecord.order_type"> / {{ parentCaseRecord.order_type }}</template>
-                                <template v-if="parentCaseRecord.productName"> / {{ parentCaseRecord.productName }}</template>
-                                <template v-if="parentCaseRecord.SN"> / SN {{ parentCaseRecord.SN }}</template>
-                            </p>
-                            <div class="parent-case-stakeholder-grid">
-                                <section class="parent-case-stakeholder">
-                                    <h4>dealer</h4>
-                                    <dl>
-                                        <div><dt>dealer</dt><dd>{{ displayText(parentCaseRecord.dealer) }}</dd></div>
-                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.dealer_depart) }}</dd></div>
-                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.contactPerson) }}</dd></div>
-                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.phone) }}</dd></div>
-                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.email) }}</dd></div>
-                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.zipcode) }}</dd></div>
-                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.address1) }}</dd></div>
-                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.address2) }}</dd></div>
-                                    </dl>
-                                </section>
-                                <section class="parent-case-stakeholder">
-                                    <h4>endUser</h4>
-                                    <dl>
-                                        <div><dt>endUser</dt><dd>{{ displayText(parentCaseRecord.endUser) }}</dd></div>
-                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.endUser_depart) }}</dd></div>
-                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.endUser_contactPerson) }}</dd></div>
-                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.endUser_phone) }}</dd></div>
-                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.endUser_email) }}</dd></div>
-                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.endUser_zipcode) }}</dd></div>
-                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.endUser_address1) }}</dd></div>
-                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.endUser_address2) }}</dd></div>
-                                    </dl>
-                                </section>
-                                <section class="parent-case-stakeholder">
-                                    <h4>delivery</h4>
-                                    <dl>
-                                        <div><dt>delivery</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_company) }}</dd></div>
-                                        <div><dt>depart</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_depart) }}</dd></div>
-                                        <div><dt>contact</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_contactPerson) }}</dd></div>
-                                        <div><dt>phone</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_phone) }}</dd></div>
-                                        <div><dt>email</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_email) }}</dd></div>
-                                        <div><dt>zip</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_zipcode) }}</dd></div>
-                                        <div><dt>address1</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address1) }}</dd></div>
-                                        <div><dt>address2</dt><dd>{{ displayText(parentCaseRecord.deliveryDestination_address2) }}</dd></div>
-                                    </dl>
-                                </section>
-                            </div>
-                        </div>
-                        <section class="parent-case-files">
-                            <h4>Files（{{ parentCaseFilesSorted.length }}件）</h4>
-                            <p v-if="parentCaseFilesLoading" class="parent-case-files-status">Files を読み込み中...</p>
-                            <p v-else-if="parentCaseFilesError" class="parent-case-files-status error">{{ parentCaseFilesError }}</p>
-                            <div v-else class="parent-case-files-list">
-                                <AttachedFileItem
-                                    v-for="file in parentCaseFilesSorted"
-                                    :key="file.id"
-                                    :file="file"
-                                    :order-id="parentCaseRecord.orderID"
-                                    :file-base-url="parentCaseFilesBaseUrl"
-                                    :selected="parentCaseSelectedFileId === file.id"
-                                    :can-move-up="false"
-                                    :can-move-down="false"
-                                    :sorting="false"
-                                    @select="parentCaseSelectedFileId = file.id"
-                                />
-                                <p v-if="!parentCaseFilesSorted.length" class="parent-case-files-status">
-                                    書類ファイルがありません。
-                                </p>
-                            </div>
-                        </section>
-                    </div>
+                    <ExistingRecordSearchDialog
+                        inline
+                        purpose="parent"
+                        :records="parentCaseRecords"
+                        :query-summary="parentCaseSearchSummary"
+                        :statuses="statuses"
+                        :searching="parentCaseLoading"
+                        :has-searched="parentCaseHasSearched"
+                        hint="左の一覧から案件を選び、Notes / Files を確認して親として選択できます。"
+                        @search="searchParentCaseByFields"
+                        @parent-selected="onParentCaseDialogSelected"
+                    />
                 </div>
             </div>
         </div>
@@ -1433,11 +1349,11 @@ import { latestMastersByKey } from '@/utils/resolveServiceWorkPrice'
 import IntakeMasterSelectDialog from '@/components/ServiceRecord/Intake/IntakeMasterSelectDialog.vue'
 import IntakeFilePreviewDialog from '@/components/ServiceRecord/Intake/IntakeFilePreviewDialog.vue'
 import ExistingRecordSearchDialog from '@/components/ServiceRecord/Intake/ExistingRecordSearchDialog.vue'
-import AttachedFileItem from '@/components/ServiceRecord/AttachedFileItem.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
 import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import { unitMatchesLoanerSelection } from '@/utils/loanerProductSelection'
 import { formatZipcodeDisplay, zipcodeDigits } from '@/utils/zipcode'
+import { buildCaseSearchKeywords } from '@/utils/caseSearchKeywords'
 
 const props = defineProps({
     sourceFile: {
@@ -1602,20 +1518,19 @@ const parentCaseRecords = ref([])
 const parentCaseRecord = ref(null)
 const parentCaseLoading = ref(false)
 const parentCaseError = ref('')
-const parentCaseFiles = ref([])
-const parentCaseFilesLoading = ref(false)
-const parentCaseFilesError = ref('')
-const parentCaseSelectedFileId = ref(null)
-let parentCaseFilesRequestSeq = 0
-const parentCaseFilesBaseUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/files`)
-const parentCaseFilesSorted = computed(() =>
-    [...(parentCaseFiles.value ?? [])].sort((a, b) => {
-        const aSort = Number(a?.sortNum ?? Number.MAX_SAFE_INTEGER)
-        const bSort = Number(b?.sortNum ?? Number.MAX_SAFE_INTEGER)
-        if (aSort !== bSort) return aSort - bSort
-        return Number(a?.id ?? 0) - Number(b?.id ?? 0)
-    }),
-)
+const parentCaseHasSearched = ref(false)
+const parentCaseSearchKeywords = computed(() => buildCaseSearchKeywords({
+    productName: parentCaseSearchProductName.value,
+    SN: parentCaseSearchSn.value,
+    dealer: parentCaseSearchDealer.value,
+    contactPerson: parentCaseSearchContact.value,
+}))
+const parentCaseSearchSummary = computed(() => {
+    const terms = Object.values(parentCaseSearchKeywords.value).filter(Boolean)
+    const orderId = String(parentCaseSearchId.value ?? '').trim()
+    if (orderId) terms.unshift(`parentID:${orderId}`)
+    return terms.join(' / ')
+})
 const maintenanceContracts = ref([])
 const selectedMaintenanceContractId = ref(null)
 const maintenanceSearchLoading = ref(false)
@@ -1795,18 +1710,18 @@ function closeLoanerStockDialog() {
     showLoanerStockDialog.value = false
 }
 
-function displayText(value) {
-    const text = value == null ? '' : String(value).trim()
-    return text === '' ? '—' : text
-}
-
-function openParentCaseDialog() {
+async function openParentCaseDialog() {
     parentCaseSearchProductName.value = String(form.productName ?? '').trim()
-    parentCaseSearchSn.value = String(form.enduser_SN ?? '').trim()
+    parentCaseSearchSn.value = String(form.enduser_SN ?? form.SN ?? '').trim()
     parentCaseSearchDealer.value = String(form.dealer ?? '').trim()
     parentCaseSearchContact.value = String(form.contactPerson ?? '').trim()
     parentCaseError.value = ''
+    parentCaseRecord.value = null
+    parentCaseRecords.value = []
+    parentCaseHasSearched.value = false
     showParentCaseDialog.value = true
+    await nextTick()
+    await searchParentCaseByFields()
 }
 
 function closeParentCaseDialog() {
@@ -1814,49 +1729,6 @@ function closeParentCaseDialog() {
     showParentCaseDialog.value = false
     parentCaseError.value = ''
 }
-
-function selectParentCaseRecord(record) {
-    parentCaseRecord.value = record
-    parentCaseError.value = ''
-}
-
-async function loadParentCaseFiles(orderID) {
-    const requestSeq = ++parentCaseFilesRequestSeq
-    parentCaseFiles.value = []
-    parentCaseFilesError.value = ''
-    parentCaseSelectedFileId.value = null
-
-    if (!orderID) {
-        parentCaseFilesLoading.value = false
-        return
-    }
-
-    parentCaseFilesLoading.value = true
-    try {
-        const url = `${page.props.appBaseUrl}/servicerecord/attachments/${encodeURIComponent(orderID)}`
-        const result = await apiFetch(url)
-        if (requestSeq !== parentCaseFilesRequestSeq) return
-        if (!result?.response?.ok) {
-            throw new Error(result?.data?.message || 'Files の取得に失敗しました。')
-        }
-        parentCaseFiles.value = result.data?.files ?? []
-        parentCaseSelectedFileId.value = parentCaseFiles.value[0]?.id ?? null
-    } catch (e) {
-        if (requestSeq !== parentCaseFilesRequestSeq) return
-        parentCaseFilesError.value = e.message || 'Files の取得に失敗しました。'
-    } finally {
-        if (requestSeq === parentCaseFilesRequestSeq) {
-            parentCaseFilesLoading.value = false
-        }
-    }
-}
-
-watch(
-    () => parentCaseRecord.value?.orderID,
-    (orderID) => {
-        loadParentCaseFiles(orderID)
-    },
-)
 
 async function searchParentCase() {
     const orderId = String(parentCaseSearchId.value ?? '').trim()
@@ -1879,6 +1751,7 @@ async function searchParentCase() {
 
         const { response, data } = result
         if (response.status === 404) {
+            parentCaseHasSearched.value = true
             throw new Error(`parentID ${orderId} の案件は見つかりません。`)
         }
         if (!response.ok) {
@@ -1886,6 +1759,7 @@ async function searchParentCase() {
         }
         parentCaseRecord.value = data
         parentCaseRecords.value = data ? [data] : []
+        parentCaseHasSearched.value = true
     } catch (e) {
         parentCaseError.value = e.message || '親案件の検索に失敗しました。'
     } finally {
@@ -1894,12 +1768,9 @@ async function searchParentCase() {
 }
 
 async function searchParentCaseByFields() {
-    const productName = String(parentCaseSearchProductName.value ?? '').trim()
-    const sn = String(parentCaseSearchSn.value ?? '').trim()
-    const dealer = String(parentCaseSearchDealer.value ?? '').trim()
-    const contactPerson = String(parentCaseSearchContact.value ?? '').trim()
+    const keywords = parentCaseSearchKeywords.value
 
-    if (!productName && !sn && !dealer && !contactPerson) {
+    if (!keywords.productName && !keywords.SN && !keywords.dealer && !keywords.contactPerson) {
         parentCaseError.value = '機種名 / SN / dealer / 担当者のいずれかを入力してください。'
         parentCaseRecord.value = null
         parentCaseRecords.value = []
@@ -1913,10 +1784,10 @@ async function searchParentCaseByFields() {
 
     try {
         const params = new URLSearchParams({ order_type: 'service' })
-        if (productName) params.set('productName', productName)
-        if (sn) params.set('SN', sn)
-        if (dealer) params.set('dealer', dealer)
-        if (contactPerson) params.set('contactPerson', contactPerson)
+        if (keywords.productName) params.set('productName', keywords.productName)
+        if (keywords.SN) params.set('SN', keywords.SN)
+        if (keywords.dealer) params.set('dealer', keywords.dealer)
+        if (keywords.contactPerson) params.set('contactPerson', keywords.contactPerson)
 
         const url = `${page.props.appBaseUrl}/servicerecord/search-existing?${params.toString()}`
         const result = await apiFetch(url)
@@ -1927,12 +1798,8 @@ async function searchParentCaseByFields() {
             throw new Error(data.message || `検索に失敗しました。（HTTP ${response.status}）`)
         }
 
-        const records = data.records ?? []
-        parentCaseRecords.value = records
-        if (records.length === 0) {
-            throw new Error('該当する親案件はありません。')
-        }
-        parentCaseRecord.value = records[0]
+        parentCaseRecords.value = data.records ?? []
+        parentCaseHasSearched.value = true
     } catch (e) {
         parentCaseError.value = e.message || '親案件の検索に失敗しました。'
     } finally {
@@ -1952,6 +1819,13 @@ function resolveFormParentId() {
     const fromAdopted = Number.parseInt(String(adoptedParentOrderId.value ?? '').trim(), 10)
     if (Number.isInteger(fromAdopted) && fromAdopted > 0) return fromAdopted
     return null
+}
+
+function onParentCaseDialogSelected(payload) {
+    const record = payload?.record ?? payload
+    if (!record?.orderID) return
+    parentCaseRecord.value = record
+    adoptParentCase()
 }
 
 function adoptParentCase() {
@@ -2005,57 +1879,32 @@ const selectedProductLabel = computed(() => {
     return 'productName'
 })
 
-function productNameSearchPrefix(name) {
-    const text = String(name ?? '').trim()
-    if (!text) return ''
-    return Array.from(text).slice(0, 3).join('')
-}
-
-const existingServiceSearchParams = computed(() => {
-    const rawProductName = String(form.productName ?? '').trim()
-    const productName = isLoanerCase.value
-        ? productNameSearchPrefix(rawProductName)
-        : rawProductName
-    const sn = String((isLoanerCase.value ? form.enduser_SN : form.SN) ?? '').trim()
-    const dealer = String(form.dealer ?? '').trim()
-    if (isLoanerCase.value) {
-        return { productName, SN: sn, dealer }
-    }
-    const contactPerson = String(form.contactPerson ?? '').trim()
-    return { productName, SN: sn, dealer, contactPerson }
-})
+const caseSearchParams = computed(() => buildCaseSearchKeywords({
+    productName: form.productName,
+    SN: isLoanerCase.value ? form.enduser_SN : form.SN,
+    dealer: form.dealer,
+    contactPerson: form.contactPerson,
+}))
+const existingServiceSearchParams = caseSearchParams
 const existingSearchTerms = computed(() =>
     Object.values(existingServiceSearchParams.value).filter(Boolean),
 )
 const existingSearchSummary = computed(() => existingSearchTerms.value.join(' / '))
 const existingSearchHint = computed(() => (
     isLoanerCase.value
-        ? '検索: productName（先頭3文字）/ enduser_SN / dealer の全て、または何れか（部分一致）。選択した service 案件を親案件（parentID）にします'
+        ? '検索: productName（先頭3文字）/ SN / dealer（株式会社等を除いた先頭3文字）/ contactPerson（先頭1文字）の全て、または何れか。選択した service 案件を親案件（parentID）にします'
         : ''
 ))
 
-const loanerSearchParams = computed(() => (
-    isLoanerCase.value
-        ? {
-            productName: productNameSearchPrefix(String(form.productName ?? '').trim()),
-            SN: String(form.enduser_SN ?? '').trim(),
-            dealer: String(form.dealer ?? '').trim(),
-        }
-        : {
-            productName: String(form.productName ?? '').trim(),
-            SN: String(form.SN ?? '').trim(),
-            dealer: String(form.dealer ?? '').trim(),
-            contactPerson: String(form.contactPerson ?? '').trim(),
-        }
-))
+const loanerSearchParams = caseSearchParams
 const loanerSearchTerms = computed(() =>
     Object.values(loanerSearchParams.value).filter(Boolean),
 )
 const loanerSearchSummary = computed(() => loanerSearchTerms.value.join(' / '))
 const loanerSearchHint = computed(() => (
     isLoanerCase.value
-        ? '検索: productName（loanermaster.item の先頭3文字）/ enduser_SN / dealer の全て、または何れか（部分一致）。選択すると申請フォームのアタッチを確認します'
-        : '検索: productName→item / SN→enduser_SN / dealer / contactPerson の全て、または何れか（部分一致）。入力した項目は AND で絞り込みます'
+        ? '検索: productName（先頭3文字）/ SN / dealer（株式会社等を除いた先頭3文字）/ contactPerson（先頭1文字）の全て、または何れか。選択すると申請フォームのアタッチを確認します'
+        : '検索: productName（先頭3文字）/ SN / dealer（株式会社等を除いた先頭3文字）/ contactPerson（先頭1文字）の全て、または何れか。入力した項目は AND で絞り込みます'
 ))
 
 const missingLoanerLinkFields = computed(() => {
@@ -2423,9 +2272,7 @@ async function openExistingRecordSearch() {
 
     const fields = existingServiceSearchParams.value
     if (!fields.productName && !fields.SN && !fields.dealer && !(fields.contactPerson ?? '')) {
-        error.value = isLoanerCase.value
-            ? 'productName（先頭3文字）/ enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
-            : 'productName / SN / dealer / contactPerson のいずれかを入力してから検索してください。'
+        error.value = 'productName（先頭3文字）/ SN / dealer（株式会社等を除いた先頭3文字）/ contactPerson（先頭1文字）のいずれかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
     }
@@ -2506,9 +2353,7 @@ async function openLoanerRecordSearch() {
 
     const fields = loanerSearchParams.value
     if (!fields.productName && !fields.SN && !fields.dealer && !(fields.contactPerson ?? '')) {
-        error.value = isLoanerCase.value
-            ? 'productName（先頭3文字）/ enduser_SN / dealer の全て、または何れかを入力してから検索してください。'
-            : 'productName / SN / dealer / contactPerson の全て、または何れかを入力してから検索してください。'
+        error.value = 'productName（先頭3文字）/ SN / dealer（株式会社等を除いた先頭3文字）/ contactPerson（先頭1文字）のいずれかを入力してから検索してください。'
         activeTab.value = 'basic'
         return
     }
@@ -4129,6 +3974,11 @@ async function save() {
     padding-bottom: 12px;
 }
 
+.parent-case-body :deep(.inline-root) {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .parent-case-search-row {
     display: flex;
     align-items: flex-end;
@@ -4171,169 +4021,10 @@ async function save() {
     font-size: 14px;
 }
 
-.parent-case-hits {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 0 0 auto;
-    max-height: 150px;
-    overflow: auto;
-    margin-bottom: 12px;
-}
-
-.parent-case-hit {
-    display: grid;
-    grid-template-columns: 120px 1.4fr 1fr 1fr 1fr;
-    gap: 8px;
-    width: 100%;
-    text-align: left;
-    padding: 8px 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #fff;
-    color: #0f172a;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.parent-case-hit.active {
-    border-color: #2563eb;
-    background: #eff6ff;
-}
-
-.parent-case-hit span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.parent-case-split {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
-    gap: 12px;
-    overflow: hidden;
-}
-
-.parent-case-result {
-    min-width: 0;
-    min-height: 0;
-    overflow: auto;
-}
-
-.parent-case-files {
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    margin-bottom: 0;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    padding: 10px;
-}
-
-.parent-case-files h4 {
-    margin: 0 0 8px;
-    font-size: 13px;
-    color: #1e40af;
-    flex: 0 0 auto;
-}
-
-.parent-case-files-list {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow: auto;
-}
-
-.parent-case-files-list :deep(.file-item) {
-    flex: 0 0 auto;
-}
-
-.parent-case-files-list :deep(.file-preview) {
-    width: 100%;
-    aspect-ratio: 210 / 297;
-    max-height: none;
-    height: auto;
-}
-
-.parent-case-files-list :deep(.pdf-frame),
-.parent-case-files-list :deep(.image-preview) {
-    width: 100%;
-    height: 100%;
-}
-
-.parent-case-files-status {
-    margin: 0;
-    font-size: 12px;
-    color: #64748b;
-}
-
-.parent-case-files-status.error {
-    color: #b91c1c;
-    font-weight: 700;
-}
-
 .parent-case-error {
     margin: 0 0 10px;
     color: #b91c1c;
     font-weight: 700;
-}
-
-.parent-case-result-meta {
-    margin: 0 0 10px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.parent-case-stakeholder-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.parent-case-stakeholder {
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    background: #f8fafc;
-    padding: 10px;
-    min-width: 0;
-}
-
-.parent-case-stakeholder h4 {
-    margin: 0 0 8px;
-    font-size: 13px;
-    color: #1e40af;
-}
-
-.parent-case-stakeholder dl {
-    margin: 0;
-}
-
-.parent-case-stakeholder dl > div {
-    display: grid;
-    grid-template-columns: 72px 1fr;
-    gap: 6px;
-    margin-bottom: 4px;
-}
-
-.parent-case-stakeholder dt {
-    color: #64748b;
-    font-size: 11px;
-}
-
-.parent-case-stakeholder dd {
-    margin: 0;
-    font-size: 12px;
-    overflow-wrap: anywhere;
-    color: #0f172a;
 }
 
 .stock-list-hint-row {
