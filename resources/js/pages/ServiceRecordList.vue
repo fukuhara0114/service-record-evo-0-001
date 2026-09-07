@@ -84,7 +84,11 @@
             </div>
             <!-- グループB: 件数 + 日付フィルタ + Quick Filter + Clear + RMA + Update SM -->
             <div class="header-center">
-                <span class="filtered-count" aria-live="polite" title="Quick Filter を含む絞り込み後の件数">
+                <span
+                    class="filtered-count"
+                    aria-live="polite"
+                    :title="mode === 'engineer' ? '表示件数' : 'Quick Filter を含む絞り込み後の件数'"
+                >
                     {{ filteredRecords.length }}件
                 </span>
                 <div v-if="!isRestrictedListMode" class="arrival-date-filters">
@@ -193,12 +197,13 @@
                 </div>
                 <div class="search-area">
                     <input
+                        v-if="mode !== 'engineer'"
                         type="text"
                         id="customSearchInput"
                         v-model="searchQuery"
                         placeholder="Quick Filter : 複数キーワードはスペース区切り（例: sony 修理）"
                     >
-                    <button type="button" @click="clearSearch">Clear</button>
+                    <button v-if="mode !== 'engineer'" type="button" @click="clearSearch">Clear</button>
                     <button
                         v-if="mode === 'logistics'"
                         type="button"
@@ -1460,6 +1465,12 @@
             @close="closeEngineerLoanerAcceptanceDialog"
             @accepted="onEngineerLoanerAccepted"
         />
+        <EngineerSmSubmitDialog
+            v-if="engineerSmSubmitDialogRecord"
+            :record="engineerSmSubmitDialogRecord"
+            @close="closeEngineerSmSubmitDialog"
+            @completed="onEngineerSmSubmitCompleted"
+        />
         <XsrvAuthDialog
             :open="xsrvAuthDialogOpen"
             :message="xsrvAuthDialogMessage"
@@ -1508,6 +1519,7 @@ import DailyReportEmailPreviewDialog from '@/components/ServiceRecord/Layer3/Dai
 import ShippingOutDateDialog from '@/components/ServiceRecord/Layer3/ShippingOutDateDialog.vue'
 import LogisticsLoanerLendingDialog from '@/components/ServiceRecord/Layer3/LogisticsLoanerLendingDialog.vue'
 import EngineerLoanerAcceptanceDialog from '@/components/ServiceRecord/Layer3/EngineerLoanerAcceptanceDialog.vue'
+import EngineerSmSubmitDialog from '@/components/ServiceRecord/Layer3/EngineerSmSubmitDialog.vue'
 import XsrvAuthDialog from '@/components/XsrvAuthDialog.vue'
 import RecordPreviewCardDialog from '@/components/ServiceRecord/RecordPreviewCardDialog.vue'
 import HolidayJp from '@holiday-jp/holiday_jp'
@@ -1597,7 +1609,7 @@ onMounted(() => {
 
     const params = new URLSearchParams(window.location.search)
     const initialQuery = params.get('q')?.trim()
-    if (initialQuery) {
+    if (initialQuery && props.mode !== 'engineer') {
         searchQuery.value = initialQuery
     }
 
@@ -2004,7 +2016,7 @@ function matchesDailyReportStatus(record) {
     const orderType = record?.order_type ?? 'service'
     const status = Number(record?.status)
     return (orderType === 'service' || orderType === '' || orderType == null)
-        && (status === 90 || status === 180 || status === 185)
+        && (status === 180 || status === 185)
 }
 
 function listEntityId(record) {
@@ -2363,7 +2375,11 @@ async function copySmQuoteFromRecord(record) {
 function onListRowDblClick(record) {
     if (engineerDailyReportMode.value) return
     if (engineerSmSubmitMode.value) {
-        copySmQuoteFromRecord(record)
+        if (isAbroadSelected(record.orderID)) {
+            openEngineerSmSubmitDialog(record)
+        } else {
+            openSecondLayer(record)
+        }
         return
     }
     openSecondLayer(record)
@@ -2717,6 +2733,21 @@ async function onEngineerLoanerAccepted() {
     await reloadListRecords({ preserveState: true })
 }
 
+const engineerSmSubmitDialogRecord = ref(null)
+
+function closeEngineerSmSubmitDialog() {
+    engineerSmSubmitDialogRecord.value = null
+}
+
+function openEngineerSmSubmitDialog(record) {
+    engineerSmSubmitDialogRecord.value = { ...record }
+}
+
+async function onEngineerSmSubmitCompleted() {
+    engineerSmSubmitDialogRecord.value = null
+    await reloadListRecords({ preserveState: true })
+}
+
 function matchesLogisticsShippingDateFilter(record, filter) {
     if (filter === 'all') return true
     const ymd = formatListDate(record?.shippingOut_requiredDate)
@@ -2925,7 +2956,7 @@ const filteredRecords = computed(() => {
         )
     }
 
-    if (searchQuery.value) {
+    if (searchQuery.value && props.mode !== 'engineer') {
         const queries = searchQuery.value
             .toLowerCase()
             .trim()
