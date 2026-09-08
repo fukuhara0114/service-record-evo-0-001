@@ -688,6 +688,19 @@
                     </button>
                 </div>
             </div>
+            <!-- Engineer: SM Submit → Check SM -->
+            <div v-else-if="mode === 'engineer' && engineerSmSubmitMode" class="abroad-toolbar abroad-toolbar-sm">
+                <div class="abroad-toolbar-main">
+                    <button
+                        type="button"
+                        class="abroad-excel-btn abroad-check-sm-btn"
+                        :disabled="engineerQuoteCoBusy"
+                        @click="checkSmSubmitSelected"
+                    >
+                        Check SM{{ abroadSelectedCount > 0 ? ` (${abroadSelectedCount})` : '' }}
+                    </button>
+                </div>
+            </div>
             <!-- RMA / Update SM: Sync SM + Auto update -->
             <div v-else-if="isSmListMode" class="abroad-toolbar abroad-toolbar-sm">
                 <div class="abroad-toolbar-main">
@@ -1993,6 +2006,19 @@ function quoteCoWarrantyPeriod(dealer) {
     return String(dealer ?? '').includes('小森コーポレーション') ? '6' : '3'
 }
 
+function quoteCoQuoteValue(record) {
+    const quoteRaw = record?.sm_quote
+    if (quoteRaw === null || quoteRaw === undefined || String(quoteRaw).trim() === '') {
+        return '-1'
+    }
+    const quoteNum = Number(quoteRaw)
+    const workorderNum = Number(record?.sm_workorder)
+    if (Number.isFinite(quoteNum) && quoteNum > workorderNum) {
+        return String(quoteRaw).trim()
+    }
+    return '-1'
+}
+
 function matchesEngineerQuoteCoSmQuote(record) {
     const smQuoteRaw = record?.sm_quote
     if (smQuoteRaw === null || smQuoteRaw === undefined) return true
@@ -2448,6 +2474,7 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
             signature: currentUserSignature.value,
             employeeid: currentUserEmployeeId.value,
             sm_workorder,
+            quote: quoteCoQuoteValue(r),
             entityid: entityID,
             sn,
             returncode: smReturnCodeValue(r.returnCode),
@@ -2467,6 +2494,39 @@ async function exportQuoteCoParamJson(theUserNameKanji, smMode = 'quote_co') {
     await launchSmsyncWithXsrvAuth(finalOutput)
 }
 
+async function exportCheckSmParamJson(theUserNameKanji) {
+    const rows = filteredRecords.value
+    if (!rows.length) {
+        alert('データテーブルが表示されていません。')
+        return
+    }
+
+    const selectedRows = rows.filter((r) => isAbroadSelected(r.orderID))
+    if (selectedRows.length === 0) {
+        alert('「Sel」列にチェックが入っている行がありません。出力したいデータの「Sel」にチェックを入れてください。')
+        return
+    }
+
+    const jsonData = selectedRows.map((r) => ({
+        orderid: String(r.orderID ?? '').trim(),
+        employeeid: currentUserEmployeeId.value,
+        sm_workorder: String(r.sm_workorder ?? '').trim(),
+        quote: quoteCoQuoteValue(r),
+        entityid: String(r.entityID ?? '').trim(),
+        sn: String(r.SN ?? '').trim(),
+        returncode: smReturnCodeValue(r.returnCode),
+        price: String(r.price ?? '').trim(),
+        ponum: String(r.poNum ?? '').trim(),
+        customer_number: String(r.customerNum ?? '').trim(),
+    }))
+
+    await launchSmsyncWithXsrvAuth({
+        sm_mode: 'check_sm',
+        who_exported: theUserNameKanji,
+        param: jsonData,
+    })
+}
+
 async function syncQuoteCoSelected() {
     if (engineerQuoteCoBusy.value) return
     engineerQuoteCoBusy.value = true
@@ -2475,6 +2535,20 @@ async function syncQuoteCoSelected() {
     } catch (e) {
         if (!isXsrvAuthDenied(e) && e?.message !== 'XSRV_AUTH_DENIED') {
             alert(e.message || 'Sync SM に失敗しました。')
+        }
+    } finally {
+        engineerQuoteCoBusy.value = false
+    }
+}
+
+async function checkSmSubmitSelected() {
+    if (engineerQuoteCoBusy.value) return
+    engineerQuoteCoBusy.value = true
+    try {
+        await exportCheckSmParamJson(currentUserKanji.value)
+    } catch (e) {
+        if (!isXsrvAuthDenied(e) && e?.message !== 'XSRV_AUTH_DENIED') {
+            alert(e.message || 'Check SM に失敗しました。')
         }
     } finally {
         engineerQuoteCoBusy.value = false
@@ -4694,6 +4768,14 @@ async function saveRecord() {
 
 .abroad-sync-sm-btn:hover:not(:disabled) {
     background: #0d9488;
+}
+
+.abroad-check-sm-btn {
+    background: #475569;
+}
+
+.abroad-check-sm-btn:hover:not(:disabled) {
+    background: #64748b;
 }
 
 .entity-id-input {
