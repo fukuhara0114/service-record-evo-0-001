@@ -209,8 +209,8 @@
                                             <span>海外発送日：</span>
                                             <DateInputWithToday
                                                 class="field-input"
-                                                :model-value="toDateInputValue(draftRecord?.sentOut ?? record?.sentOut)"
-                                                @update:model-value="updateDraftDateValue('sentOut', $event)"
+                                                :model-value="toDateInputValue(draftRecord?.shippedDate ?? record?.shippedDate)"
+                                                @update:model-value="updateDraftDateValue('shippedDate', $event)"
                                             />
                                         </label>
                                     </div>
@@ -220,8 +220,8 @@
                                             <span>出荷日：</span>
                                             <DateInputWithToday
                                                 class="field-input"
-                                                :model-value="toDateInputValue(draftRecord?.shippingOut_requiredDate ?? record?.shippingOut_requiredDate)"
-                                                @update:model-value="updateDraftDateValue('shippingOut_requiredDate', $event)"
+                                                :model-value="toDateInputValue(draftRecord?.sentOut ?? record?.sentOut)"
+                                                @update:model-value="updateDraftDateValue('sentOut', $event)"
                                             />
                                         </label>
                                         <button type="button" class="yayoi-search-btn">弥生検索</button>
@@ -1566,13 +1566,13 @@ const displayAdjustmentAmount = computed(() => {
     return props.draftRecord?.discount_service ?? props.record?.discount_service ?? ''
 })
 
-/** service は作業内容価格のみ draft.price へ同期（計は discount_service と合わせて表示）。loaner は潰さない。 */
+/** service は表示「価格」（作業内容 + A2LA + attachedparts）を draft.price へ同期。loaner は潰さない。 */
 watch(
-    [workPrice, () => props.draftRecord],
+    [() => priceCard.value.subtotal, () => props.draftRecord],
     () => {
         if (!props.draftRecord) return
         if (isLoanerOrderType.value) return
-        props.draftRecord.price = workPrice.value
+        props.draftRecord.price = priceCard.value.subtotal
     },
     { immediate: true },
 )
@@ -1823,11 +1823,11 @@ async function confirmPriceAdjust() {
             throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
         }
 
-        // 調整額のみ更新。作業内容価格（workPrice）は別 watch で draft.price へ同期。表示「価格」= 計
+        // 調整額のみ更新。表示「価格」（subtotal）は別 watch で draft.price へ同期。
         props.draftRecord.discount_service = amount
         sessionAdjustmentAmount.value = amount
         if (!isLoanerOrderType.value) {
-            props.draftRecord.price = workPrice.value
+            props.draftRecord.price = basePrice.value
         }
         showPriceAdjustDialog.value = false
         emit('save')
@@ -1859,7 +1859,7 @@ function updateDraftDateValue(field, value) {
     if (field === 'orderDate') {
         applyLinePricesForAsOf()
         if (!isLoanerOrderType.value) {
-            props.draftRecord.price = workPrice.value
+            props.draftRecord.price = basePrice.value
         }
     }
 }

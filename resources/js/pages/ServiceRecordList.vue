@@ -4209,13 +4209,13 @@ function resolveDetailFormAPrice(draft, parts = []) {
         partsMaster: page.props.partsMaster ?? [],
         discountService: draft.discount_service ?? 0,
     })
-    // 保存する price は作業内容（計ではない）。service は returnCode マスタ、loaner は既存 price を維持。
+    // 保存する price は作業内容 + attachedparts（+ A2LA）。loaner は既存 price を維持。
     const orderType = String(draft.order_type ?? '').trim().toLowerCase()
     if (orderType === 'loaner') {
         const stored = Number(draft.price)
         return Number.isFinite(stored) ? stored : totals.workPrice
     }
-    return totals.workPrice
+    return totals.subtotal
 }
 
 function confirmPendingTbcIfStatus300Plus(status) {
@@ -4269,7 +4269,7 @@ async function saveRecord() {
     isSavingRecord.value = true
     saveError.value = ''
 
-    // DetailFormA: 詳細再取得で draft が差し替わっても、保存時に表示価格を確実に price へ載せる
+    // DetailFormA: 詳細再取得で draft が差し替わっても、保存時に表示「価格」（作業+パーツ）を price へ載せる
     if (detailLayout.value === 'A') {
         const resolvedPrice = resolveDetailFormAPrice(draftRecord.value, activeParts.value)
         if (resolvedPrice != null) {
