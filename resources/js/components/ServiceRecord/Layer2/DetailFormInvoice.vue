@@ -1474,12 +1474,27 @@ watch(
 }
 
 .price-table th,
-.price-table td,
-.data-table th,
-.data-table td {
+.price-table td {
     border-bottom: 1px solid #cbd5e1;
     padding: 7px 8px;
     text-align: left;
+}
+
+.data-table th,
+.data-table td {
+    border: 1px solid #333333;
+    padding: 7px 8px;
+    text-align: left;
+    font-weight: 700;
+}
+
+.data-table th {
+    background: #2f63cc;
+    color: #fff;
+}
+
+.data-table td {
+    background: #f5f5f5;
 }
 
 .notes-table th,

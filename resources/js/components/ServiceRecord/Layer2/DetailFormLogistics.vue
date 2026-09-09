@@ -1209,17 +1209,24 @@ async function patchFileSort(fileId, sortNum) {
 .data-table th,
 .data-table td {
     padding: 6px 8px;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     text-align: left;
     font-size: 13px;
     vertical-align: top;
+    font-weight: 700;
 }
 
 .data-table th {
     position: sticky;
     top: 0;
-    background: #e2e8f0;
-    z-index: 1;
+    background: #2f63cc;
+    color: #fff;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.data-table td {
+    background: #f5f5f5;
 }
 
 .notes-table th,
@@ -1231,8 +1238,9 @@ async function patchFileSort(fileId, sortNum) {
     cursor: pointer;
 }
 
-.table-row.active-row {
-    background: #dbeafe;
+.table-row.active-row td {
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .table-row.important-row {

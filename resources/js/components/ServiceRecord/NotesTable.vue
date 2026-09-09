@@ -239,24 +239,24 @@ function normalizeCssWidth(value) {
 
 .data-table th,
 .data-table td {
-    border: 1px solid #94a3b8;
+    border: 1px solid #333333;
     padding: 6px 8px;
     text-align: left;
     vertical-align: top;
 }
 
 .data-table thead th {
-    background: #e2e8f0;
-    color: #000;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
+}
+
+.data-table tbody td {
+    background: #f5f5f5;
 }
 
 .table-row {
     cursor: pointer;
-}
-
-.table-row:hover td {
-    background: #dbeafe;
 }
 
 .active-row td {
@@ -295,7 +295,7 @@ function normalizeCssWidth(value) {
 }
 
 .notes-table tbody td {
-    background: #fff;
+    background: #f5f5f5;
 }
 
 .notes-table tbody tr.important-row:not(.active-row) td {

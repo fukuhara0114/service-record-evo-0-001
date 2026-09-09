@@ -428,22 +428,29 @@ table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    background: #f0f0f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 th,
 td {
-    padding: 8px 10px;
+    padding: 6px 8px;
     text-align: left;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     vertical-align: middle;
+    font-weight: 700;
 }
 th {
     position: sticky;
     top: 0;
-    z-index: 1;
-    background: #f8fafc;
-    color: #475569;
-    font-weight: 600;
+    z-index: 10;
+    background: #2f63cc;
+    color: #fff;
+    font-weight: 700;
     white-space: nowrap;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+td {
+    background: #f5f5f5;
 }
 .col-id {
     width: 64px;

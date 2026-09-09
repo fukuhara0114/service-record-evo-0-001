@@ -19,19 +19,37 @@
 
         <section class="list-card">
             <form class="search-bar" @submit.prevent="search">
-                <div class="search-grid">
-                    <div class="search-field">
-                        <input v-model="searchForm.dealer" type="text" placeholder="dealer" aria-label="dealer">
+                <div class="search-row-top">
+                    <div class="search-fields">
+                        <div class="search-field">
+                            <input v-model="searchForm.dealer" type="text" placeholder="dealer" aria-label="dealer">
+                        </div>
+                        <div class="search-field">
+                            <input v-model="searchForm.instrumentName" type="text" placeholder="instrumentName" aria-label="instrumentName">
+                        </div>
+                        <div class="search-field">
+                            <input v-model="searchForm.SN" type="text" placeholder="SN" aria-label="SN">
+                        </div>
+                        <div class="search-field">
+                            <input v-model="searchForm.endUser" type="text" placeholder="endUser" aria-label="endUser">
+                        </div>
                     </div>
-                    <div class="search-field">
-                        <input v-model="searchForm.instrumentName" type="text" placeholder="instrumentName" aria-label="instrumentName">
+                    <div class="quick-filter">
+                        <input
+                            id="contractQuickFilter"
+                            v-model="quickFilter"
+                            type="text"
+                            class="quick-filter-input"
+                            placeholder="Quick Filter : 複数キーワードはスペース区切り"
+                            aria-label="Quick Filter"
+                            @keydown.enter.prevent
+                        >
+                        <button type="button" class="btn btn-secondary" @click="clearQuickFilter">
+                            clear
+                        </button>
                     </div>
-                    <div class="search-field">
-                        <input v-model="searchForm.SN" type="text" placeholder="SN" aria-label="SN">
-                    </div>
-                    <div class="search-field">
-                        <input v-model="searchForm.endUser" type="text" placeholder="endUser" aria-label="endUser">
-                    </div>
+                </div>
+                <div class="search-row-bottom">
                     <div class="search-range">
                         <span class="range-label">有効期限（expireDate）</span>
                         <div class="range-inputs">
@@ -162,6 +180,7 @@ const props = defineProps({
 const page = usePage()
 const searching = ref(false)
 const selectedId = ref(null)
+const quickFilter = ref('')
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/maintenance-contracts`)
 
@@ -182,8 +201,17 @@ const isActiveScope = computed(() => searchForm.scope !== 'all')
 const isNoticeFilter = computed(() => Boolean(searchForm.notice))
 const rows = computed(() => {
     const all = props.contracts ?? []
-    if (!isNoticeFilter.value) return all
-    return all.filter(isNoticeTarget)
+    const scoped = isNoticeFilter.value ? all.filter(isNoticeTarget) : all
+    const queries = String(quickFilter.value || '')
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)
+        .filter((q) => q.length > 0)
+    if (queries.length === 0) return scoped
+    return scoped.filter((row) => {
+        const rowText = rowSearchText(row)
+        return queries.every((q) => rowText.includes(q))
+    })
 })
 const totalCount = computed(() => rows.value.length)
 
@@ -245,6 +273,42 @@ function toggleScope() {
     runQuery(listUrl.value, buildQuery())
 }
 
+function rowSearchText(row) {
+    return [
+        row?.id,
+        row?.contractType,
+        row?.contractTypeName,
+        row?.contractTypeDescription,
+        row?.dealer,
+        row?.branch,
+        row?.contact,
+        row?.phone,
+        row?.email,
+        row?.address,
+        row?.endUser,
+        row?.endUser_depart,
+        row?.endUser_contact,
+        row?.endUser_phone,
+        row?.endUser_email,
+        row?.endUser_address,
+        row?.instrumentName,
+        row?.SN,
+        row?.startDate,
+        row?.expireDate,
+        row?.certificationExpireDate,
+        row?.renewalInformation,
+        row?.informedDate,
+        row?.renewedDate,
+        row?.informed,
+        row?.status,
+        row?.amount,
+        row?.RefNumber,
+    ]
+        .map((value) => (value == null || value === '' ? '' : String(value)))
+        .join(' ')
+        .toLowerCase()
+}
+
 function clearSearch() {
     searchForm.dealer = ''
     searchForm.endUser = ''
@@ -257,6 +321,11 @@ function clearSearch() {
     searchForm.notice = false
     // scope（有効/全件）は維持
     runQuery(listUrl.value, buildQuery())
+}
+
+function clearQuickFilter() {
+    quickFilter.value = ''
+    document.getElementById('contractQuickFilter')?.focus()
 }
 
 function toggleNoticeFilter() {
@@ -360,17 +429,32 @@ function formatAmount(value) {
 }
 
 .search-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     margin-bottom: 10px;
     padding-bottom: 10px;
     border-bottom: 1px solid #e2e8f0;
 }
 
-.search-grid {
+.search-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.search-fields,
+.search-row-bottom {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     align-items: end;
     justify-content: flex-start;
+}
+
+.search-fields {
+    flex: 0 1 auto;
 }
 
 .search-field {
@@ -384,6 +468,28 @@ function formatAmount(value) {
     min-width: 200px;
     font-size: 12px;
     color: #475569;
+}
+
+.quick-filter {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 220px;
+}
+
+.quick-filter-input {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 360px;
+    box-sizing: border-box;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    padding: 7px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
 }
 
 .search-field input {
@@ -500,23 +606,32 @@ table {
     border-collapse: collapse;
     font-size: 12px;
     min-width: 1100px;
+    background: #f0f0f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 th,
 td {
-    border-bottom: 1px solid #e2e8f0;
-    padding: 8px 10px;
+    border: 1px solid #333333;
+    padding: 6px 8px;
     text-align: left;
     vertical-align: top;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 th {
     position: sticky;
     top: 0;
-    background: #f1f5f9;
-    color: #475569;
-    z-index: 1;
-    white-space: nowrap;
+    z-index: 10;
+    background: #2f63cc;
+    color: #fff;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+td {
+    background: #f5f5f5;
 }
 
 .empty {
@@ -529,12 +644,9 @@ th {
     cursor: pointer;
 }
 
-.data-row:hover td {
-    background: #f8fafc;
-}
-
 .data-row.selected td {
-    background: #dbeafe;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .nowrap {

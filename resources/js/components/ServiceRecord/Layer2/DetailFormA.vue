@@ -2820,32 +2820,35 @@ defineExpose({
 
 .maintenance-table th,
 .maintenance-table td {
-    border-bottom: 1px solid #e2e8f0;
-    padding: 8px 10px;
+    border: 1px solid #333333;
+    padding: 6px 8px;
     text-align: left;
     white-space: nowrap;
+    font-weight: 700;
 }
 
 .maintenance-table th {
     position: sticky;
     top: 0;
-    background: #f1f5f9;
-    color: #334155;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
-    z-index: 1;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
 .maintenance-table tbody tr {
     cursor: pointer;
 }
 
-.maintenance-table tbody tr:hover {
-    background: #f8fafc;
+.maintenance-table td {
+    background: #f5f5f5;
 }
 
 .maintenance-table tbody tr.selected,
 .maintenance-table tbody tr.selected td {
-    background: #dbeafe;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .confirm-overlay {
@@ -3016,7 +3019,7 @@ defineExpose({
 }
 
 .linked-loaner-card .loaner-case-table tbody td {
-    background: #fff;
+    background: #f5f5f5;
 }
 
 .linked-loaner-card .loaner-case-table th:last-child,
@@ -3611,24 +3614,24 @@ defineExpose({
 
 .data-table th,
 .data-table td {
-    border: 1px solid #94a3b8;
+    border: 1px solid #333333;
     padding: 6px 8px;
     text-align: left;
     vertical-align: top;
 }
 
 .data-table thead th {
-    background: #e2e8f0;
-    color: #000;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
+}
+
+.data-table tbody td {
+    background: #f5f5f5;
 }
 
 .table-row {
     cursor: pointer;
-}
-
-.table-row:hover td {
-    background: #dbeafe;
 }
 
 .active-row td {
@@ -3666,7 +3669,7 @@ defineExpose({
 }
 
 .notes-table tbody td {
-    background: #fff;
+    background: #f5f5f5;
 }
 
 .notes-table .col-note-date,
@@ -3852,7 +3855,7 @@ defineExpose({
 }
 
 .parts-table tbody td {
-    background: #fff;
+    background: #f5f5f5;
 }
 
 .attachment-table-wrap {

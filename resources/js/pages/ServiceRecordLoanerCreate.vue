@@ -1033,23 +1033,32 @@ onBeforeUnmount(() => {
 .data-table {
     width: 100%;
     border-collapse: collapse;
+    background: #f0f0f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .data-table th,
 .data-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 8px;
+    border: 1px solid #333333;
     text-align: left;
     font-size: 12px;
     color: #1e293b;
     white-space: nowrap;
+    font-weight: 700;
 }
 
 .data-table th {
     position: sticky;
     top: 0;
-    background: #e2e8f0;
-    z-index: 1;
+    background: #2f63cc;
+    color: #fff;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.data-table td {
+    background: #f5f5f5;
 }
 
 .badge {

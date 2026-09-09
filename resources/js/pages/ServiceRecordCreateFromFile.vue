@@ -3573,36 +3573,41 @@ async function save() {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    background: #f0f0f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .maintenance-table th,
 .maintenance-table td {
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     padding: 6px 8px;
     text-align: left;
     white-space: nowrap;
+    font-weight: 700;
 }
 
 .maintenance-table th {
     position: sticky;
     top: 0;
-    background: #f1f5f9;
-    color: #334155;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
-    z-index: 1;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.maintenance-table td {
+    background: #f5f5f5;
 }
 
 .maintenance-table tbody tr {
     cursor: pointer;
 }
 
-.maintenance-table tbody tr:hover {
-    background: #f8fafc;
-}
-
 .maintenance-table tbody tr.selected,
 .maintenance-table tbody tr.selected td {
-    background: #dbeafe;
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .tab-panel {

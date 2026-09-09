@@ -323,31 +323,34 @@ onMounted(() => {
 .data-table th,
 .data-table td {
     padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     text-align: left;
     vertical-align: middle;
+    font-weight: 700;
 }
 
 .data-table th {
     position: sticky;
     top: 0;
-    background: #f8fafc;
-    color: #475569;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
     white-space: nowrap;
-    z-index: 1;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.data-table td {
+    background: #f5f5f5;
 }
 
 .table-row {
     cursor: pointer;
 }
 
-.table-row:hover {
-    background: #eff6ff;
-}
-
-.table-row.selected {
-    background: #dbeafe;
+.table-row.selected td {
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .col-date,

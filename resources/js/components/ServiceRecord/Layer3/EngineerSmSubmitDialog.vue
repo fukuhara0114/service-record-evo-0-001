@@ -373,16 +373,13 @@ onMounted(() => {
 .data-table th,
 .data-table td {
     padding: 6px 8px;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     text-align: left;
+    font-weight: 700;
 }
 
-.data-table tbody tr:nth-child(even) {
-    background: #f1f5f9;
-}
-
-.data-table tbody tr:nth-child(odd) {
-    background: #fff;
+.data-table td {
+    background: #f5f5f5;
 }
 
 .data-table tbody tr:nth-child(6n) td {
@@ -390,8 +387,8 @@ onMounted(() => {
 }
 
 .data-table th {
-    background: #f8fafc;
-    color: #334155;
+    background: #2f63cc;
+    color: #fff;
 }
 
 .text-cell {

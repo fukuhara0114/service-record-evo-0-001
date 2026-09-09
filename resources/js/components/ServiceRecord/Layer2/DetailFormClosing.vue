@@ -1233,23 +1233,24 @@ watch(
 
 .notes-card .data-table th,
 .notes-card .data-table td {
-    border: 1px solid #94a3b8;
+    border: 1px solid #333333;
     padding: 4px 6px;
     text-align: left;
     vertical-align: top;
 }
 
 .notes-card .data-table thead th {
-    background: #e2e8f0;
+    background: #2f63cc;
+    color: #fff;
     font-weight: 700;
+}
+
+.notes-card .data-table tbody td {
+    background: #f5f5f5;
 }
 
 .notes-card .table-row {
     cursor: pointer;
-}
-
-.notes-card .table-row:hover td {
-    background: #dbeafe;
 }
 
 .notes-card .active-row td {
@@ -1404,9 +1405,19 @@ watch(
 
 .data-table th,
 .data-table td {
-    border-bottom: 1px solid #cbd5e1;
+    border: 1px solid #333333;
     padding: 7px 8px;
     text-align: left;
+    font-weight: 700;
+}
+
+.data-table th {
+    background: #2f63cc;
+    color: #fff;
+}
+
+.data-table td {
+    background: #f5f5f5;
 }
 
 .info-block h4 {

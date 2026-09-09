@@ -266,28 +266,37 @@ async function save() {
 .data-table th,
 .data-table td {
     padding: 10px 12px;
-    border-bottom: 1px solid #e2e8f0;
+    border: 1px solid #333333;
     text-align: left;
     font-size: 13px;
     color: #1e293b;
 }
 
+.data-table td {
+    background: #f5f5f5;
+}
+
 .data-table th {
     position: sticky;
     top: 0;
-    z-index: 1;
-    background: #e2e8f0;
-    font-weight: 600;
-    color: #334155;
+    z-index: 10;
+    background: #2f63cc;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
 .table-row {
-    background: transparent;
     cursor: pointer;
 }
 
 .table-row.selected {
-    background: #dbeafe;
+    background: #cab7e1;
+}
+
+.table-row.selected td {
+    color: #1e293b !important;
+    background-color: #cab7e1 !important;
 }
 
 .table-row.disabled {

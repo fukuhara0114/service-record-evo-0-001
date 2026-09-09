@@ -944,9 +944,10 @@ async function submit() {
     overflow: auto;
     overscroll-behavior: contain;
 }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th, td { border-bottom: 1px solid #cbd5e1; padding: 5px 6px; text-align: left; vertical-align: middle; }
-th { position: sticky; top: 0; background: #f1f5f9; z-index: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; background: #f0f0f0; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+th, td { border: 1px solid #333333; padding: 5px 6px; text-align: left; vertical-align: middle; font-weight: 700; }
+th { position: sticky; top: 0; z-index: 10; background: #2f63cc; color: #fff; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1); }
+td { background: #f5f5f5; }
 td.dates { white-space: nowrap; color: #64748b; }
 table input { width: 100%; min-width: 88px; }
 .warn { flex: 0 0 auto; margin: 0 0 8px; color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; padding: 6px 8px; font-size: 12px; }
