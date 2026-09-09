@@ -3567,7 +3567,7 @@ class ServiceRecordController extends Controller
                 'order_type' => $orderType === 'loaner' ? 'loaner' : 'service',
                 'RMA' => $orderType === 'loaner' ? 'loaner' : null,
                 'lastEditPerson' => $user?->kanji_name,
-                'lastEditDate' => now(),
+                'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
             ]);
 
             if ($fileIds->isNotEmpty()) {
@@ -3587,7 +3587,7 @@ class ServiceRecordController extends Controller
                     ->update([
                         'parentID' => $record->orderID,
                         'lastEditPerson' => $user?->kanji_name,
-                        'lastEditDate' => now(),
+                        'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
                     ]);
             }
 
@@ -3689,7 +3689,7 @@ class ServiceRecordController extends Controller
 
         unset($data['lastEditDate'], $data['lastEditPerson']);
         $data['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
-        $data['lastEditDate'] = now();
+        $data['lastEditDate'] = now('Asia/Tokyo')->format('Y-m-d H:i:s');
 
         $wasRemandOn = $this->isRemandFlagOn($record->remand);
         $notifyRemandRequested = $request->boolean('notify_remand');

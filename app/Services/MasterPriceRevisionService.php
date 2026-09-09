@@ -509,7 +509,7 @@ class MasterPriceRevisionService
             'price' => $this->pickValue($input, 'price', $current['price']),
             'associatedID' => $base->associatedID ?? null,
             'lastEditPerson' => auth()->user()?->kanji_name,
-            'lastEditDate' => now(),
+            'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
             'property' => ($base->property ?? null) ?: 'サービス',
             'groupName' => $current['groupName'] ?? ($base->groupName ?? ''),
             'validDateMin' => $openDate,
@@ -640,7 +640,7 @@ class MasterPriceRevisionService
             'currentStatus' => $input['currentStatus'] ?? '0',
             'property' => $input['property'] ?? 'サービス',
             'lastEditPerson' => auth()->user()?->kanji_name,
-            'lastEditDate' => now(),
+            'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
             'validDateMin' => $openDate,
             'validDateMax' => $openEnd,
         ];

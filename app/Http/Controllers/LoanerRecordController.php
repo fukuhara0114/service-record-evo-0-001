@@ -356,7 +356,7 @@ class LoanerRecordController extends Controller
                 $record->promotion_source_orderID = null;
             }
             $record->lastEditPerson = $user?->kanji_name;
-            $record->lastEditDate = now();
+            $record->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
             $record->save();
 
             $attached->loanerID = $available->loanerID;
@@ -518,7 +518,7 @@ class LoanerRecordController extends Controller
                 $loanerRecord->promotion_source_orderID = null;
             }
             $loanerRecord->lastEditPerson = $user?->kanji_name;
-            $loanerRecord->lastEditDate = now();
+            $loanerRecord->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
             $loanerRecord->save();
 
             $attachedColumns = Schema::getColumnListing('attachedloaners');
@@ -547,7 +547,7 @@ class LoanerRecordController extends Controller
                 $waitingRecord->promotion_source_orderID = null;
             }
             $waitingRecord->lastEditPerson = $user?->kanji_name;
-            $waitingRecord->lastEditDate = now();
+            $waitingRecord->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
             $waitingRecord->save();
 
             $waitingAttached->loanerID = $loanerId;
@@ -626,7 +626,7 @@ class LoanerRecordController extends Controller
                 $record->promotion_source_orderID = null;
             }
             $record->lastEditPerson = $user?->kanji_name;
-            $record->lastEditDate = now();
+            $record->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
             $record->save();
 
             $attachedColumns = Schema::getColumnListing('attachedloaners');
@@ -1157,7 +1157,7 @@ class LoanerRecordController extends Controller
                 $record->laborID = $validated['laborID'];
             }
             $record->lastEditPerson = $request->user()?->kanji_name;
-            $record->lastEditDate = now();
+            $record->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
             $record->save();
 
             $attachedPayload = collect($validated)->only($attachedFields)->all();
@@ -1490,7 +1490,7 @@ class LoanerRecordController extends Controller
                 'deliveryDestination_address1' => $validated['deliveryDestination_address1'] ?? null,
                 'deliveryDestination_address2' => $validated['deliveryDestination_address2'] ?? null,
                 'lastEditPerson' => $user?->kanji_name,
-                'lastEditDate' => now(),
+                'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
             ]);
 
             if ($parentId) {
@@ -1720,7 +1720,7 @@ class LoanerRecordController extends Controller
         $update = [
             'parentID' => (int) $parent->orderID,
             'lastEditPerson' => $request->user()?->kanji_name,
-            'lastEditDate' => now(),
+            'lastEditDate' => now('Asia/Tokyo')->format('Y-m-d H:i:s'),
         ];
 
         if ($record->order_type === 'loaner' && array_key_exists('status', $validated) && $validated['status'] !== null) {
@@ -1882,7 +1882,7 @@ class LoanerRecordController extends Controller
                 }
                 if ($shouldSaveRecord) {
                     $record->lastEditPerson = $request->user()?->kanji_name;
-                    $record->lastEditDate = now();
+                    $record->lastEditDate = now('Asia/Tokyo')->format('Y-m-d H:i:s');
                     $record->save();
                     if ($isLoaner && array_key_exists('status', $validated)) {
                         $loanerId = $record->loanerID ?? $attached->loanerID;

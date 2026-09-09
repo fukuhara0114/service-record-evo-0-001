@@ -160,7 +160,7 @@ class LoanerMasterController extends Controller
         }
 
         $payload['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
-        $payload['lastEditDate'] = now();
+        $payload['lastEditDate'] = now('Asia/Tokyo')->format('Y-m-d H:i:s');
 
         $row->fill($payload);
         $row->save();

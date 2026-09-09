@@ -122,7 +122,7 @@ class MaintenanceContractController extends Controller
         $validated = $this->validateContractPayload($request);
 
         $validated['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
-        $validated['lastEditDate'] = now();
+        $validated['lastEditDate'] = now('Asia/Tokyo')->format('Y-m-d H:i:s');
 
         $contract->fill($validated);
         $contract->save();
@@ -166,7 +166,7 @@ class MaintenanceContractController extends Controller
         $payload = $this->validateContractPayload($request);
         $attributes = $this->attributesForDuplicateSections($payload, $sections);
         $attributes['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
-        $attributes['lastEditDate'] = now();
+        $attributes['lastEditDate'] = now('Asia/Tokyo')->format('Y-m-d H:i:s');
 
         $contract = new MaintenanceContractMaster();
         $contract->fill($attributes);
