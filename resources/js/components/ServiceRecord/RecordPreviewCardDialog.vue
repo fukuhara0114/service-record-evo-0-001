@@ -45,7 +45,7 @@
                         <dl class="preview-grid preview-grid-2">
                             <div>
                                 <dt>最終編集日</dt>
-                                <dd>{{ display(record.lastEditDate) }}</dd>
+                                <dd>{{ formatLastEditDateTime(record.lastEditDate) }}</dd>
                             </div>
                             <div>
                                 <dt>最終編集者</dt>
@@ -61,6 +61,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue'
+import { formatLastEditDateTime } from '@/utils/formatNoteDateTime'
 
 const props = defineProps({
     open: { type: Boolean, default: false },

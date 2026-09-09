@@ -913,6 +913,41 @@
         return String(value);
     }
 
+    function formatLastEditDateTime(value) {
+        if (value == null || value === '') return '—';
+        const text = String(value).trim();
+        if (!text || text.startsWith('0000-00-00')) return '—';
+
+        const formatTokyo = (date) => {
+            if (Number.isNaN(date.getTime())) return null;
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(date);
+            const get = (type) => (parts.find((part) => part.type === type) || {}).value || '';
+            return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
+        };
+
+        if (/^\d{4}-\d{2}-\d{2}T/.test(text) || /[Zz]$/.test(text) || /[+-]\d{2}:\d{2}$/.test(text)) {
+            const formatted = formatTokyo(new Date(text));
+            if (formatted) return formatted;
+        }
+
+        const match = text.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (match) {
+            const formatted = formatTokyo(new Date(`${match[1]}T${match[2]}:${match[3]}:${match[4] || '00'}Z`));
+            if (formatted) return formatted;
+        }
+
+        return previewDisplay(value);
+    }
+
     function renderPreviewItems(items) {
         return items.map((item) => (
             `<div${item.span2 ? ' class="span2"' : ''}><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.value)}</dd></div>`
@@ -948,7 +983,7 @@
         });
 
         html += '</section>';
-        html += `<section class="record-preview-section"><h4>最終編集</h4><dl class="record-preview-grid"><div><dt>最終編集日</dt><dd>${escapeHtml(previewDisplay(record.lastEditDate))}</dd></div><div><dt>最終編集者</dt><dd>${escapeHtml(previewDisplay(record.lastEditPerson))}</dd></div></dl></section>`;
+        html += `<section class="record-preview-section"><h4>最終編集</h4><dl class="record-preview-grid"><div><dt>最終編集日</dt><dd>${escapeHtml(formatLastEditDateTime(record.lastEditDate))}</dd></div><div><dt>最終編集者</dt><dd>${escapeHtml(previewDisplay(record.lastEditPerson))}</dd></div></dl></section>`;
         return html;
     }
 

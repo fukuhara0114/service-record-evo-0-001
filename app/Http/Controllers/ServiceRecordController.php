@@ -3687,6 +3687,10 @@ class ServiceRecordController extends Controller
             ], 422);
         }
 
+        unset($data['lastEditDate'], $data['lastEditPerson']);
+        $data['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
+        $data['lastEditDate'] = now();
+
         $wasRemandOn = $this->isRemandFlagOn($record->remand);
         $notifyRemandRequested = $request->boolean('notify_remand');
         $previousStatusId = $record->status;
