@@ -78,6 +78,10 @@
                         <span class="header-summary-item header-summary-sn">SN: {{ headerSn }}</span>
                         <span class="header-summary-item header-summary-return">{{ headerReturnCodeLabel }}</span>
                         <span
+                            v-if="mode === 'engineer'"
+                            class="header-summary-item header-summary-engineer-price"
+                        >{{ headerStoredPrice }}</span>
+                        <span
                             v-if="mode === 'logistics' || layout === 'logistics'"
                             class="header-summary-item header-summary-price"
                         >価格：{{ headerPrice }}</span>
@@ -346,6 +350,15 @@ const headerReturnCodeLabel = computed(() => {
     return found?.description || (id != null && id !== '' ? String(id) : '—')
 })
 
+/** Engineer ヘッダー: servicerecord.price をそのまま表示 */
+const headerStoredPrice = computed(() => {
+    const value = props.draftRecord?.price ?? props.record?.price
+    if (value === undefined || value === null || value === '') return '—'
+    const num = Number(value)
+    if (!Number.isFinite(num)) return `￥${value}`
+    return `￥${num.toLocaleString('ja-JP')}`
+})
+
 /** Logistics ヘッダー価格 = 価格カードの「計」（受注日版作業内容 + a2la + parts + 調整） */
 const headerPrice = computed(() => {
     const orderDate = props.draftRecord?.orderDate
@@ -508,6 +521,14 @@ function toggleRemand() {
     flex: 0 0 auto;
     width: auto;
     min-width: 100px;
+}
+
+.header-summary-engineer-price {
+    flex: 0 0 auto;
+    width: auto;
+    /* header-summary の gap 20px と合わせて returnCode から 100px */
+    margin-left: 80px;
+    font-weight: 700;
 }
 
 .header-summary-price {

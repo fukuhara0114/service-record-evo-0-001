@@ -261,8 +261,8 @@
                                     <aside class="card-side">
                                         <h3>Parts（{{ parts.length }}件）</h3>
                                         <div class="card-side-actions">
-                                            <button type="button" class="action-btn action-btn-primary" @click="openPartCreate">新規追加</button>
-                                            <button type="button" class="action-btn" :disabled="!selectedPartId" @click="openPartDelete">削除</button>
+                                            <button type="button" class="action-btn action-btn-primary" disabled title="Engineer 詳細では Parts の追加はできません">新規追加</button>
+                                            <button type="button" class="action-btn" disabled title="Engineer 詳細では Parts の削除はできません">削除</button>
                                         </div>
                                     </aside>
                                     <div class="card-main">
