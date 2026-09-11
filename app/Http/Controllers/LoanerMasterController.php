@@ -9,6 +9,7 @@ use App\Support\LoanerStatusFlow;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -35,19 +36,20 @@ class LoanerMasterController extends Controller
         }
 
         $query = LoanerMaster::query()
-            ->whereIn('id', $this->latestVersionIdQuery($table))
-            ->where(function ($builder) {
+            ->select("{$table}.*")
+            ->whereIn("{$table}.id", $this->latestVersionIdQuery($table))
+            ->where(function ($builder) use ($table) {
                 $builder
-                    ->whereNull('item')
-                    ->orWhere(function ($inner) {
+                    ->whereNull("{$table}.item")
+                    ->orWhere(function ($inner) use ($table) {
                         $inner
-                            ->where('item', 'not like', '%【使用不可】%')
-                            ->where('item', 'not like', '%【サービス終了】%');
+                            ->where("{$table}.item", 'not like', '%【使用不可】%')
+                            ->where("{$table}.item", 'not like', '%【サービス終了】%');
                     });
             });
 
-        $this->applyStatusScope($query, $statusColumn, $scope);
-        $this->applySearch($query, $columns, $search);
+        $this->applyStatusScope($query, $statusColumn, $scope, $table);
+        $this->applySearch($query, $columns, $search, $table);
 
         if ($sort === 'lending_parent_status') {
             $this->applyLendingParentStatusSort($query, $table, $direction);
@@ -55,16 +57,16 @@ class LoanerMasterController extends Controller
             // MySQL 5.7/8 共通: 【使用不可】【サービス終了】を除いてソート（REGEXP_REPLACE 非使用）
             $query
                 ->orderByRaw(
-                    "TRIM(REPLACE(REPLACE(COALESCE(item, ''), '【使用不可】', ''), '【サービス終了】', '')) {$direction}"
+                    "TRIM(REPLACE(REPLACE(COALESCE(`{$table}`.item, ''), '【使用不可】', ''), '【サービス終了】', '')) {$direction}"
                 )
-                ->orderBy('item', $direction);
+                ->orderBy("{$table}.item", $direction);
         } else {
-            $query->orderBy($sort, $direction);
+            $query->orderBy("{$table}.{$sort}", $direction);
         }
 
         $masters = $query
-            ->orderBy('loanerID')
-            ->orderByDesc('id')
+            ->orderBy("{$table}.loanerID")
+            ->orderByDesc("{$table}.id")
             ->paginate(100)
             ->withQueryString();
 
@@ -278,13 +280,13 @@ class LoanerMasterController extends Controller
     /**
      * currentStatus（statusmaster_loaner.processID_new）で絞り込み。
      */
-    private function applyStatusScope($query, string $statusColumn, string $scope): void
+    private function applyStatusScope($query, string $statusColumn, string $scope, string $table): void
     {
         if ($scope === 'all' || $statusColumn === '') {
             return;
         }
 
-        $statusExpr = 'CAST('.$statusColumn.' AS SIGNED)';
+        $statusExpr = "CAST(`{$table}`.`{$statusColumn}` AS SIGNED)";
 
         match ($scope) {
             'stock' => $query->whereRaw("{$statusExpr} = 0"),
@@ -300,7 +302,7 @@ class LoanerMasterController extends Controller
     /**
      * @param  array<int, string>  $columns
      */
-    private function applySearch($query, array $columns, string $search): void
+    private function applySearch($query, array $columns, string $search, string $table): void
     {
         if ($search === '') {
             return;
@@ -316,9 +318,9 @@ class LoanerMasterController extends Controller
         }
 
         $like = '%'.$search.'%';
-        $query->where(function ($builder) use ($targets, $like) {
+        $query->where(function ($builder) use ($targets, $like, $table) {
             foreach ($targets as $column) {
-                $builder->orWhere($column, 'like', $like);
+                $builder->orWhere("{$table}.{$column}", 'like', $like);
             }
         });
     }
@@ -326,13 +328,34 @@ class LoanerMasterController extends Controller
     /**
      * 貸出中の「親案件状況」表示文字列順に近いソート。
      * グループ: — → 作業中 → 出荷完了後xx日経過（xx は日数）
+     *
+     * associatedID が loaner 案件のときは parentID の service を見る。
+     * （表示の resolveAssociatedCaseMeta / lendingParentCell と同じ）
+     * associatedID 直下の status だと貸出中(388)になり、親が完了済みでも「作業中」側へ混ざる。
      */
     private function applyLendingParentStatusSort($query, string $table, string $direction): void
     {
         $dir = $direction === 'desc' ? 'DESC' : 'ASC';
         $today = Carbon::now('Asia/Tokyo')->toDateString();
-        $statusExpr = "(SELECT status FROM servicerecord WHERE orderID = CAST(`{$table}`.associatedID AS SIGNED) LIMIT 1)";
-        $shipExpr = "(SELECT shippingOut_requiredDate FROM servicerecord WHERE orderID = CAST(`{$table}`.associatedID AS SIGNED) LIMIT 1)";
+
+        $query
+            ->select("{$table}.*")
+            ->leftJoin('servicerecord as lending_assoc_sr', function ($join) use ($table) {
+                $join->on(
+                    'lending_assoc_sr.orderID',
+                    '=',
+                    DB::raw("CAST(`{$table}`.associatedID AS SIGNED)"),
+                );
+            })
+            ->leftJoin('servicerecord as lending_parent_sr', function ($join) {
+                $join->on('lending_parent_sr.orderID', '=', 'lending_assoc_sr.parentID')
+                    ->whereRaw("LOWER(TRIM(COALESCE(lending_assoc_sr.order_type, ''))) = 'loaner'")
+                    ->whereRaw('COALESCE(lending_assoc_sr.parentID, 0) > 0')
+                    ->whereColumn('lending_assoc_sr.parentID', '!=', 'lending_assoc_sr.orderID');
+            });
+
+        $statusExpr = 'COALESCE(lending_parent_sr.status, lending_assoc_sr.status)';
+        $shipExpr = 'COALESCE(lending_parent_sr.shippingOut_requiredDate, lending_assoc_sr.shippingOut_requiredDate)';
 
         // 表示文字列の並び: — / 作業中 / 出荷完了後…
         $groupExpr = "CASE
