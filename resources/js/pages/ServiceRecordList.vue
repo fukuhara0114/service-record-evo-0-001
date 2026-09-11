@@ -25,14 +25,6 @@
                     <button
                         type="button"
                         class="order-type-btn"
-                        :class="{ active: orderTypeFilter === 'tech_comp' }"
-                        @click="orderTypeFilter = 'tech_comp'"
-                    >
-                        Tech Comp.
-                    </button>
-                    <button
-                        type="button"
-                        class="order-type-btn"
                         :class="{ active: orderTypeFilter === 'closing' }"
                         @click="orderTypeFilter = 'closing'"
                     >
@@ -1693,7 +1685,6 @@ function resolveOpenOrderIdFromSearch(search) {
 const searchQuery = ref('')
 const ORDER_TYPE_FILTERS = [
     'service',
-    'tech_comp',
     'closing',
     'invoice',
     'loaner',
@@ -1756,7 +1747,6 @@ const isSmListMode = computed(() =>
 const DEFAULT_DOCUMENT_TAB_TITLE = 'ServiceRecord Evo'
 const ORDER_TYPE_DOCUMENT_TAB_TITLES = {
     service: 'service',
-    tech_comp: 'Tech Comp.',
     closing: 'closing',
     invoice: 'Invoice',
     loaner: 'loaner',
@@ -3606,10 +3596,6 @@ function matchesOrderTypeFilter(record, filter) {
 
     if (filter === 'service') {
         return orderType === 'service' || orderType == null || orderType === ''
-    }
-    if (filter === 'tech_comp') {
-        const isService = orderType === 'service' || orderType == null || orderType === ''
-        return isService && (status === 190 || status === 191)
     }
     if (filter === 'closing') {
         const isServiceOrLoaner = orderType === 'service'
