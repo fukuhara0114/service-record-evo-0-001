@@ -84,7 +84,7 @@ import { apiFetch } from '@/utils/apiFetch'
 import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
 import { getServiceRecordBasePath } from '@/utils/serviceRecordApiBase'
 
-const NEXT_STATUS_FROM_185 = 190
+const NEXT_STATUS_FROM_185 = 200
 
 const props = defineProps({
     record: { type: Object, required: true },

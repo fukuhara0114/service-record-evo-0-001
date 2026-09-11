@@ -579,7 +579,7 @@ function resolveCompleteNextStatus(orderType, currentStatus) {
         return 185
     }
     if (currentStatus === 185) {
-        return 190
+        return 200
     }
     return null
 }
