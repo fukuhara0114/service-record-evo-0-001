@@ -1982,7 +1982,7 @@ function symptomsNumForRecord(record) {
 function smReturnCodeValue(returnCode) {
     const code = Number(returnCode)
     if ([1, 5].includes(code)) return 'CERTIFICATION'
-    if ([2, 4].includes(code)) return 'FLAT RATE REPAIR'
+    if ([2, 4, 7].includes(code)) return 'FLAT RATE REPAIR'
     if (code === 3) return 'WARRANTY REPAIR'
     if (code === 12) return 'FIELD SERVICE REGIONAL'
     return ''
@@ -2497,18 +2497,32 @@ async function exportCheckSmParamJson(theUserNameKanji) {
         return
     }
 
-    const jsonData = selectedRows.map((r) => ({
-        orderid: String(r.orderID ?? '').trim(),
-        employeeid: currentUserEmployeeId.value,
-        sm_workorder: String(r.sm_workorder ?? '').trim(),
-        quote: quoteCoQuoteValue(r),
-        entityid: String(r.entityID ?? '').trim(),
-        sn: String(r.SN ?? '').trim(),
-        returncode: smReturnCodeValue(r.returnCode),
-        price: String(r.price ?? '').trim(),
-        ponum: String(r.poNum ?? '').trim(),
-        customer_number: String(r.customerNum ?? '').trim(),
-    }))
+    const jsonData = []
+    for (const r of selectedRows) {
+        const orderID = String(r.orderID ?? '').trim()
+
+        let stockedParts = []
+        try {
+            stockedParts = await fetchStockedPartsForQuoteCo(orderID)
+        } catch (e) {
+            alert(e.message || `OrderID ${orderID || '不明'}: stocked Parts の取得に失敗しました。`)
+            return
+        }
+
+        jsonData.push({
+            orderid: orderID,
+            employeeid: currentUserEmployeeId.value,
+            sm_workorder: String(r.sm_workorder ?? '').trim(),
+            quote: quoteCoQuoteValue(r),
+            entityid: String(r.entityID ?? '').trim(),
+            sn: String(r.SN ?? '').trim(),
+            returncode: smReturnCodeValue(r.returnCode),
+            price: String(r.price ?? '').trim(),
+            ponum: String(r.poNum ?? '').trim(),
+            customer_number: String(r.customerNum ?? '').trim(),
+            stockedparts: quoteCoStockedPartsFromAttachment(stockedParts),
+        })
+    }
 
     await launchSmsyncWithXsrvAuth({
         sm_mode: 'check_sm',
