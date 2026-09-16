@@ -82,6 +82,10 @@
                             class="header-summary-item header-summary-engineer-price"
                         >{{ headerStoredPrice }}</span>
                         <span
+                            v-if="mode === 'engineer'"
+                            class="header-summary-item header-summary-rma-wo"
+                        >RMA : {{ headerRma }}&nbsp;&nbsp;&nbsp;WO : {{ headerWorkorder }}</span>
+                        <span
                             v-if="mode === 'logistics' || layout === 'logistics'"
                             class="header-summary-item header-summary-price"
                         >価格：{{ headerPrice }}</span>
@@ -334,6 +338,8 @@ function headerText(field) {
 const headerDealer = computed(() => headerText('dealer'))
 const headerProductName = computed(() => headerText('productName'))
 const headerSn = computed(() => headerText('SN'))
+const headerRma = computed(() => headerText('RMA'))
+const headerWorkorder = computed(() => headerText('sm_workorder'))
 
 const headerReturnCodeLabel = computed(() => {
     const id = props.draftRecord?.returnCode ?? props.record?.returnCode
@@ -503,6 +509,14 @@ function toggleRemand() {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.header-summary-rma-wo {
+    flex: 0 0 auto;
+    width: auto;
+    /* header-summary の gap 20px と合わせて価格から 150px */
+    margin-left: 130px;
+    font-weight: 700;
 }
 
 .header-summary-orderid {

@@ -3308,6 +3308,29 @@ class ServiceRecordController extends Controller
         ]);
     }
 
+    public function storeStockedPartMaster(Request $request)
+    {
+        $validated = $request->validate([
+            'partName' => 'required|string|max:255',
+            'description' => 'nullable|string|max:2000',
+        ]);
+
+        $row = new StockedPartMaster();
+        $row->partName = trim((string) $validated['partName']);
+        $description = trim((string) ($validated['description'] ?? ''));
+        $row->description = $description === '' ? null : $description;
+        $row->save();
+
+        return response()->json([
+            'message' => 'stocked Parts を追加しました。',
+            'master' => [
+                'partID' => $row->partID,
+                'partName' => $row->partName,
+                'description' => $row->description,
+            ],
+        ], 201);
+    }
+
     public function storeStockedPart(Request $request)
     {
         $validated = $request->validate([

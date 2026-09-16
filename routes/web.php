@@ -103,6 +103,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/servicerecord/loaner/period/{id}/parent', [LoanerRecordController::class, 'linkParent'])->name('servicerecord.loaner.period.parent');
     Route::get('/servicerecord/loaner/master', [LoanerMasterController::class, 'index'])->name('servicerecord.loaner.master');
     Route::put('/servicerecord/loaner/master/{id}/current-status', [LoanerMasterController::class, 'updateCurrentStatus'])->name('servicerecord.loaner.master.current-status');
+    Route::post('/servicerecord/loaner/master/{id}/duplicate', [LoanerMasterController::class, 'duplicate'])->name('servicerecord.loaner.master.duplicate');
     Route::put('/servicerecord/loaner/master/{id}', [LoanerMasterController::class, 'update'])->name('servicerecord.loaner.master.update');
     Route::get('/servicerecord/loaner/calendar', [LoanerCalendarController::class, 'index'])->name('servicerecord.loaner.calendar');
     Route::get('/servicerecord/loaner/calendar/events', [LoanerCalendarController::class, 'events'])->name('servicerecord.loaner.calendar.events');
@@ -129,6 +130,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/servicerecord/files/{id}', [ServiceRecordController::class, 'destroyFile'])->name('servicerecord.files.destroy');
     Route::post('/servicerecord/parts', [ServiceRecordController::class, 'storePart'])->name('servicerecord.parts.store');
     Route::delete('/servicerecord/parts/{id}', [ServiceRecordController::class, 'destroyPart'])->name('servicerecord.parts.destroy');
+    Route::post('/servicerecord/stocked-parts-master', [ServiceRecordController::class, 'storeStockedPartMaster'])->name('servicerecord.stocked-parts-master.store');
     Route::post('/servicerecord/stocked-parts', [ServiceRecordController::class, 'storeStockedPart'])->name('servicerecord.stocked-parts.store');
     Route::put('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'updateStockedPart'])->name('servicerecord.stocked-parts.update');
     Route::delete('/servicerecord/stocked-parts/{id}', [ServiceRecordController::class, 'destroyStockedPart'])->name('servicerecord.stocked-parts.destroy');

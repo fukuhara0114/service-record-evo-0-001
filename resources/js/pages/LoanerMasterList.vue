@@ -153,9 +153,18 @@
                     <h3 id="edit-dialog-title">LoanerMaster 詳細</h3>
                     <div class="edit-dialog-header-actions">
                         <button
+                            v-if="canDuplicateLoanerMaster"
+                            type="button"
+                            class="edit-duplicate-btn"
+                            :disabled="editSaving || duplicating"
+                            @click="openDuplicateDialog"
+                        >
+                            複製保存
+                        </button>
+                        <button
                             type="button"
                             class="edit-save-btn"
-                            :disabled="editSaving"
+                            :disabled="editSaving || duplicating"
                             @click="saveEditDialog"
                         >
                             {{ editSaving ? '保存中...' : '保存' }}
@@ -164,7 +173,7 @@
                             type="button"
                             class="detail-choice-close"
                             aria-label="閉じる"
-                            :disabled="editSaving"
+                            :disabled="editSaving || duplicating"
                             @click="closeEditDialog"
                         >
                             X
@@ -184,7 +193,7 @@
                             v-if="column === statusColumn"
                             v-model="editForm[column]"
                             class="edit-input"
-                            :disabled="editSaving"
+                            :disabled="editSaving || duplicating"
                         >
                             <option value="">—</option>
                             <option
@@ -200,23 +209,121 @@
                             v-model="editForm[column]"
                             type="date"
                             class="edit-input"
-                            :disabled="editSaving || isReadonlyColumn(column)"
+                            :disabled="editSaving || isReadonlyColumn(column) || duplicating"
                         >
                         <input
                             v-else-if="isNumberColumn(column)"
                             v-model="editForm[column]"
                             type="number"
                             class="edit-input"
-                            :disabled="editSaving || isReadonlyColumn(column)"
+                            :disabled="editSaving || isReadonlyColumn(column) || duplicating"
                         >
                         <input
                             v-else
                             v-model="editForm[column]"
                             type="text"
                             class="edit-input"
-                            :disabled="editSaving || isReadonlyColumn(column)"
+                            :disabled="editSaving || isReadonlyColumn(column) || duplicating"
                         >
                     </label>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="duplicateDialogOpen"
+            class="dialog-overlay duplicate-overlay"
+            @click.self="closeDuplicateDialog"
+        >
+            <div
+                class="dialog-panel duplicate-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="duplicate-dialog-title"
+            >
+                <header class="detail-choice-header">
+                    <h3 id="duplicate-dialog-title">複製保存</h3>
+                    <div class="edit-dialog-header-actions">
+                        <button
+                            type="button"
+                            class="edit-duplicate-btn"
+                            :disabled="duplicating"
+                            @click="requestDuplicate"
+                        >
+                            複製
+                        </button>
+                        <button
+                            type="button"
+                            class="detail-choice-close"
+                            aria-label="閉じる"
+                            :disabled="duplicating"
+                            @click="closeDuplicateDialog"
+                        >
+                            X
+                        </button>
+                    </div>
+                </header>
+                <p v-if="duplicateError" class="detail-choice-error">{{ duplicateError }}</p>
+                <div class="duplicate-dialog-body">
+                    <label class="duplicate-row duplicate-row-all">
+                        <input
+                            type="checkbox"
+                            :checked="isAllDuplicateChecked"
+                            :disabled="duplicating"
+                            @change="toggleDuplicateAll"
+                        >
+                        <span class="duplicate-col-name">全て</span>
+                    </label>
+                    <label
+                        v-for="column in duplicateColumns"
+                        :key="column"
+                        class="duplicate-row"
+                    >
+                        <input
+                            type="checkbox"
+                            :checked="!!duplicateChecked[column]"
+                            :disabled="duplicating"
+                            @change="duplicateChecked[column] = $event.target.checked"
+                        >
+                        <span class="duplicate-col-name">{{ columnLabel(column) }}</span>
+                        <span class="duplicate-col-value">{{ displayDuplicateValue(column) }}</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="duplicateConfirmOpen"
+            class="dialog-overlay duplicate-confirm-overlay"
+            @click.self="closeDuplicateConfirm"
+        >
+            <div
+                class="dialog-panel duplicate-confirm-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="duplicate-confirm-title"
+            >
+                <p id="duplicate-confirm-title" class="duplicate-confirm-message">
+                    複製して、詳細画面を開きます
+                </p>
+                <p v-if="duplicateError" class="detail-choice-error duplicate-confirm-error">{{ duplicateError }}</p>
+                <div class="duplicate-confirm-actions">
+                    <button
+                        type="button"
+                        class="duplicate-confirm-cancel"
+                        :disabled="duplicating"
+                        @click="closeDuplicateConfirm"
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="edit-duplicate-btn"
+                        :disabled="duplicating"
+                        @click="confirmDuplicate"
+                    >
+                        {{ duplicating ? '作成中...' : 'OK' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -279,7 +386,13 @@ const editDialogOpen = ref(false)
 const editSaving = ref(false)
 const editError = ref('')
 const editForm = reactive({})
-const DATE_COLUMNS = new Set(['certificatedDate', 'sentDate', 'returnedDate'])
+const editSourceRow = ref(null)
+const duplicateDialogOpen = ref(false)
+const duplicateConfirmOpen = ref(false)
+const duplicating = ref(false)
+const duplicateError = ref('')
+const duplicateChecked = reactive({})
+const DATE_COLUMNS = new Set(['certificatedDate', 'sentDate', 'returnedDate', 'validDateMin', 'validDateMax'])
 const NUMBER_COLUMNS = new Set(['loanerID', 'price', 'associatedID', 'inventory', 'book'])
 const READONLY_COLUMNS = new Set(['id'])
 const FULL_WIDTH_COLUMNS = new Set(['note1', 'note2', 'note3'])
@@ -290,13 +403,37 @@ const HIDDEN_EDIT_COLUMNS = new Set([
     'validDateMax',
     'groupName',
 ])
+const EXCLUDED_DUPLICATE_COLUMNS = new Set([
+    'id',
+    'loanerID',
+    'currentStatus',
+    'current_status',
+    'certificatedDate',
+    'sentDate',
+    'returnedDate',
+    'associatedID',
+    'validDateMin',
+    'validDateMax',
+])
 watch(() => props.q, (value) => {
     searchInput.value = value || ''
 })
 const editColumns = computed(() =>
     (props.columns ?? []).filter((column) => !HIDDEN_EDIT_COLUMNS.has(column)),
 )
+const duplicateColumns = computed(() =>
+    (props.columns ?? []).filter((column) => !EXCLUDED_DUPLICATE_COLUMNS.has(column)),
+)
+const copyableDuplicateColumns = computed(() => duplicateColumns.value)
+const isAllDuplicateChecked = computed(() => (
+    copyableDuplicateColumns.value.length > 0
+    && copyableDuplicateColumns.value.every((column) => !!duplicateChecked[column])
+))
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
+const canDuplicateLoanerMaster = computed(() => {
+    const permission = String(page.props.authUser?.permission ?? '').trim().toLowerCase()
+    return permission === 'administrator' || permission === 'loaner_admin'
+})
 const rows = computed(() => props.masters?.data ?? [])
 const totalCount = computed(() => props.masters?.total ?? rows.value.length)
 const currentSort = computed(() => props.sort || 'groupName')
@@ -533,6 +670,7 @@ function toEditDateValue(value) {
 function openEditDialog(row) {
     if (!row) return
     editError.value = ''
+    editSourceRow.value = { ...row }
     for (const key of Object.keys(editForm)) {
         delete editForm[key]
     }
@@ -550,9 +688,10 @@ function openEditDialog(row) {
 }
 
 function closeEditDialog() {
-    if (editSaving.value) return
+    if (editSaving.value || duplicating.value || duplicateDialogOpen.value || duplicateConfirmOpen.value) return
     editDialogOpen.value = false
     editError.value = ''
+    editSourceRow.value = null
 }
 
 function getCsrfToken() {
@@ -623,6 +762,159 @@ async function saveEditDialog() {
         editError.value = e.message || '保存に失敗しました。'
     } finally {
         editSaving.value = false
+    }
+}
+
+function resetDuplicateChecked(checked = true) {
+    for (const key of Object.keys(duplicateChecked)) {
+        delete duplicateChecked[key]
+    }
+    for (const column of duplicateColumns.value) {
+        duplicateChecked[column] = checked
+    }
+}
+
+function duplicateColumnValue(column) {
+    if (Object.prototype.hasOwnProperty.call(editForm, column)) {
+        return editForm[column]
+    }
+    return editSourceRow.value?.[column]
+}
+
+function displayDuplicateValue(column) {
+    const value = duplicateColumnValue(column)
+    if (isDateColumn(column)) {
+        return displayCell(toEditDateValue(value))
+    }
+    if (column === props.statusColumn) {
+        const id = value == null || value === '' ? '' : String(value)
+        if (id === '') return '—'
+        const opt = uniqueStatusOptions.value.find((item) => String(item.id) === id)
+        return opt ? `${opt.label} (${opt.id})` : id
+    }
+    return displayCell(value)
+}
+
+function openDuplicateDialog() {
+    if (!canDuplicateLoanerMaster.value || editSaving.value || duplicating.value) return
+    duplicateError.value = ''
+    duplicateConfirmOpen.value = false
+    resetDuplicateChecked(true)
+    duplicateDialogOpen.value = true
+}
+
+function closeDuplicateDialog() {
+    if (duplicating.value) return
+    duplicateConfirmOpen.value = false
+    duplicateDialogOpen.value = false
+    duplicateError.value = ''
+}
+
+function closeDuplicateConfirm() {
+    if (duplicating.value) return
+    duplicateConfirmOpen.value = false
+}
+
+function toggleDuplicateAll(event) {
+    resetDuplicateChecked(!!event?.target?.checked)
+}
+
+function buildDuplicateValues(selectedColumns) {
+    const values = {}
+    for (const column of selectedColumns) {
+        let value = nullableEditValue(duplicateColumnValue(column))
+        if (
+            (column === props.statusColumn || NUMBER_COLUMNS.has(column))
+            && value != null
+            && value !== ''
+        ) {
+            const num = Number(value)
+            value = Number.isFinite(num) ? num : value
+        }
+        values[column] = value
+    }
+    return values
+}
+
+function selectedDuplicateColumns() {
+    return copyableDuplicateColumns.value.filter((column) => !!duplicateChecked[column])
+}
+
+function requestDuplicate() {
+    if (!canDuplicateLoanerMaster.value || duplicating.value) return
+    if (!(editForm.id ?? editSourceRow.value?.id)) {
+        duplicateError.value = '複製元の id がありません。'
+        return
+    }
+    if (selectedDuplicateColumns().length === 0) {
+        duplicateError.value = 'コピーするカラムを1つ以上選択してください。'
+        return
+    }
+    duplicateError.value = ''
+    duplicateConfirmOpen.value = true
+}
+
+async function confirmDuplicate() {
+    if (!canDuplicateLoanerMaster.value) return
+    const id = editForm.id ?? editSourceRow.value?.id
+    if (!id) {
+        duplicateError.value = '複製元の id がありません。'
+        return
+    }
+
+    const selectedColumns = selectedDuplicateColumns()
+    if (selectedColumns.length === 0) {
+        duplicateError.value = 'コピーするカラムを1つ以上選択してください。'
+        duplicateConfirmOpen.value = false
+        return
+    }
+
+    duplicating.value = true
+    duplicateError.value = ''
+    try {
+        const result = await apiFetch(
+            `${page.props.appBaseUrl}/servicerecord/loaner/master/${id}/duplicate`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    columns: selectedColumns,
+                    values: buildDuplicateValues(selectedColumns),
+                }),
+            },
+        )
+        if (!result) throw new Error('複製に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `複製に失敗しました。（HTTP ${response.status}）`)
+        }
+
+        const created = data?.master
+        if (!created?.id) throw new Error('複製後のIDを取得できませんでした。')
+
+        duplicateConfirmOpen.value = false
+        duplicateDialogOpen.value = false
+        selectedId.value = created.id
+        openEditDialog(created)
+        loading.value = true
+        router.reload({
+            only: ['masters'],
+            preserveScroll: true,
+            onFinish: () => {
+                loading.value = false
+            },
+        })
+    } catch (e) {
+        duplicateError.value = e.message || '複製に失敗しました。'
+    } finally {
+        duplicating.value = false
     }
 }
 
@@ -1066,6 +1358,133 @@ td {
 .edit-save-btn:disabled {
     opacity: 0.6;
     cursor: wait;
+}
+
+.edit-duplicate-btn {
+    min-height: 34px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    background: #0f766e;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.edit-duplicate-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.duplicate-overlay {
+    z-index: 220;
+}
+
+.duplicate-confirm-overlay {
+    z-index: 230;
+}
+
+.duplicate-confirm-dialog {
+    width: min(420px, calc(100vw - 32px));
+    padding: 20px 18px 16px;
+}
+
+.duplicate-confirm-message {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.5;
+}
+
+.duplicate-confirm-error {
+    margin: 0 0 12px;
+}
+
+.duplicate-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
+.duplicate-confirm-cancel {
+    min-height: 34px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    background: #64748b;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.duplicate-confirm-cancel:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.duplicate-dialog {
+    width: min(720px, calc(100vw - 32px));
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.duplicate-dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 14px 14px;
+    overflow: auto;
+}
+
+.duplicate-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    cursor: pointer;
+}
+
+.duplicate-row:hover {
+    background: #e2e8f0;
+}
+
+.duplicate-row-all {
+    margin-bottom: 6px;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 10px;
+    background: #f1f5f9;
+}
+
+.duplicate-row input[type='checkbox'] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+.duplicate-col-name {
+    flex: 0 0 160px;
+    width: 160px;
+}
+
+.duplicate-col-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #334155;
+    font-weight: 600;
 }
 
 .edit-dialog-body {

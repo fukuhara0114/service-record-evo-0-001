@@ -182,6 +182,81 @@ class LoanerMasterController extends Controller
     }
 
     /**
+     * 詳細ダイアログからの複製。チェックされたカラムだけコピーして新しい行を作る。
+     */
+    public function duplicate(Request $request, int $id)
+    {
+        if (! $this->canDuplicateLoanerMaster()) {
+            abort(403, 'この操作を行う権限がありません。');
+        }
+
+        $source = LoanerMaster::query()->findOrFail($id);
+        $table = $source->getTable();
+        $columns = Schema::getColumnListing($table);
+        $copyable = array_values(array_diff($columns, $this->duplicateExcludedColumns()));
+
+        $validated = $request->validate([
+            'columns' => 'required|array|min:1',
+            'columns.*' => 'string',
+            'values' => 'nullable|array',
+        ]);
+
+        $selected = array_values(array_intersect($copyable, $validated['columns']));
+        if ($selected === []) {
+            return response()->json([
+                'message' => 'コピーするカラムを1つ以上選択してください。',
+            ], 422);
+        }
+
+        $values = is_array($validated['values'] ?? null) ? $validated['values'] : [];
+        $payload = [];
+        foreach ($selected as $column) {
+            if (array_key_exists($column, $values)) {
+                $value = $values[$column];
+            } else {
+                $value = $source->getAttribute($column);
+            }
+            if ($value === '') {
+                $value = null;
+            }
+            $payload[$column] = $value;
+        }
+
+        if (in_array('loanerID', $columns, true)) {
+            $payload['loanerID'] = ((int) LoanerMaster::query()->max('loanerID')) + 1;
+        }
+        $statusColumn = $this->resolveStatusColumn();
+        if (in_array($statusColumn, $columns, true)) {
+            $payload[$statusColumn] = 0;
+        }
+        if (in_array('associatedID', $columns, true)) {
+            $payload['associatedID'] = -1;
+        }
+        foreach (['validDateMin', 'validDateMax'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $payload[$column] = $source->getAttribute($column);
+            }
+        }
+
+        $payload['lastEditPerson'] = trim((string) (auth()->user()?->kanji_name ?? auth()->user()?->name ?? ''));
+        $payload['lastEditDate'] = now('Asia/Tokyo')->format('Y-m-d H:i:s');
+
+        $row = new LoanerMaster();
+        foreach ($payload as $column => $value) {
+            $row->setAttribute($column, $value);
+        }
+        $row->save();
+
+        $statusLabels = $this->buildStatusLabelMap();
+        $serialized = $this->serializeRow($row->fresh(), $columns, $statusColumn, $statusLabels);
+
+        return response()->json([
+            'message' => 'LoanerMaster を複製しました。',
+            'master' => $serialized,
+        ], 201);
+    }
+
+    /**
      * @return array<string, string>
      */
     private function buildStatusLabelMap(): array
@@ -246,6 +321,34 @@ class LoanerMasterController extends Controller
         }
 
         return $column = 'currentStatus';
+    }
+
+    private function canDuplicateLoanerMaster(): bool
+    {
+        $permission = strtolower(trim((string) (auth()->user()?->permission ?? '')));
+
+        return in_array($permission, ['administrator', 'loaner_admin'], true);
+    }
+
+    /**
+     * 複製ダイアログで選択させないカラム。
+     *
+     * @return array<int, string>
+     */
+    private function duplicateExcludedColumns(): array
+    {
+        return [
+            'id',
+            'loanerID',
+            'currentStatus',
+            'current_status',
+            'certificatedDate',
+            'sentDate',
+            'returnedDate',
+            'associatedID',
+            'validDateMin',
+            'validDateMax',
+        ];
     }
 
     /**

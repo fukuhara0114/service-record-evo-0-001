@@ -8,10 +8,10 @@
             </div>
 
             <div class="field-block">
-                <span class="field-label">QUOTE</span>
+                <span class="field-label">WorkOrder</span>
                 <div class="quote-row">
                     <input
-                        v-model="quoteInput"
+                        v-model="workorderInput"
                         type="text"
                         class="quote-input"
                         :disabled="saving"
@@ -20,7 +20,7 @@
                         type="button"
                         class="btn-secondary"
                         :disabled="saving"
-                        @click="copyQuote"
+                        @click="copyWorkOrder"
                     >
                         コピー
                     </button>
@@ -61,7 +61,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p v-else class="status-message">stocked Parts がありません。</p>
+                <p v-else class="status-message">stocked Parts がありません。Submitの必要はないので、そのまま「完了」して下さい。</p>
             </section>
 
             <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
@@ -97,7 +97,7 @@ const saving = ref(false)
 const errorMessage = ref('')
 const copyMessage = ref('')
 let copyMessageTimer = null
-const quoteInput = ref(String(props.record?.sm_quote ?? ''))
+const workorderInput = ref(String(props.record?.sm_workorder ?? ''))
 const stockedParts = ref([])
 const partsLoading = ref(false)
 const partsError = ref('')
@@ -154,11 +154,11 @@ async function writeTextToClipboard(text) {
     if (!ok) throw new Error('クリップボードへのコピーに失敗しました。')
 }
 
-async function copyQuote() {
-    const text = String(quoteInput.value ?? '').trim()
+async function copyWorkOrder() {
+    const text = String(workorderInput.value ?? '').trim()
     if (copyMessageTimer) clearTimeout(copyMessageTimer)
     if (!text) {
-        copyMessage.value = 'QUOTE が空です'
+        copyMessage.value = 'WorkOrder が空です'
         copyMessageTimer = setTimeout(() => {
             copyMessage.value = ''
         }, 2000)
@@ -220,7 +220,7 @@ async function onComplete() {
     try {
         const payload = {
             status: nextStatus,
-            sm_quote: String(quoteInput.value ?? '').trim(),
+            sm_workorder: String(workorderInput.value ?? '').trim(),
         }
         const result = await apiFetch(recordApiUrl(), {
             method: 'POST',

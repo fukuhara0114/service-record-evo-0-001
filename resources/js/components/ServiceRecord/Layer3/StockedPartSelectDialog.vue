@@ -1,7 +1,18 @@
 <template>
+    <div class="stocked-part-select-host">
     <BaseDialog title="stocked Parts 選択" large @close="$emit('close')">
         <div class="select-dialog-layout">
-            <p class="order-id">OrderID: {{ record?.orderID }}</p>
+            <div class="order-row">
+                <p class="order-id">OrderID: {{ record?.orderID }}</p>
+                <button
+                    type="button"
+                    class="btn-add-master"
+                    :disabled="creatingMaster"
+                    @click="openCreateMasterDialog"
+                >
+                    新規Parts追加
+                </button>
+            </div>
             <p class="help-text">部品を選択したあと、数量入力へ進みます。</p>
 
             <label class="search-field">
@@ -51,12 +62,83 @@
             </div>
         </div>
     </BaseDialog>
+
+        <div
+            v-if="createMasterOpen"
+            class="create-master-overlay"
+            @click.self="closeCreateMasterDialog"
+        >
+            <div
+                class="create-master-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="create-master-title"
+            >
+                <header class="create-master-header">
+                    <h3 id="create-master-title">新規Parts追加</h3>
+                    <button
+                        type="button"
+                        class="create-master-close"
+                        aria-label="閉じる"
+                        :disabled="creatingMaster"
+                        @click="closeCreateMasterDialog"
+                    >
+                        ×
+                    </button>
+                </header>
+                <div class="create-master-body">
+                    <p class="create-master-help">stockedpartmaster に新しい部品を追加します。</p>
+                    <label class="create-field">
+                        <span>部品名</span>
+                        <input
+                            v-model="createForm.partName"
+                            type="text"
+                            class="create-input"
+                            :disabled="creatingMaster"
+                            placeholder="partName"
+                        >
+                    </label>
+                    <label class="create-field">
+                        <span>説明</span>
+                        <textarea
+                            v-model="createForm.description"
+                            class="create-input create-textarea"
+                            :disabled="creatingMaster"
+                            placeholder="description"
+                            rows="3"
+                        />
+                    </label>
+                    <p v-if="createError" class="error-message">{{ createError }}</p>
+                </div>
+                <footer class="create-master-footer">
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        :disabled="creatingMaster"
+                        @click="closeCreateMasterDialog"
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-primary"
+                        :disabled="creatingMaster"
+                        @click="saveNewMaster"
+                    >
+                        {{ creatingMaster ? '追加中...' : '追加' }}
+                    </button>
+                </footer>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import BaseDialog from './BaseDialog.vue'
+import { apiFetch } from '@/utils/apiFetch'
+import { getServiceRecordBasePath } from '@/utils/serviceRecordApiBase'
 
 const props = defineProps({
     record: Object,
@@ -69,9 +151,24 @@ const page = usePage()
 const searchQuery = ref('')
 const selectedPartId = ref(null)
 const error = ref('')
+const extraMasters = ref([])
+const createMasterOpen = ref(false)
+const creatingMaster = ref(false)
+const createError = ref('')
+const createForm = reactive({
+    partName: '',
+    description: '',
+})
 
 const attachedPartIds = computed(() => new Set((props.payload?.attachedPartIds ?? []).map(String)))
-const items = computed(() => page.props.stockedPartsMaster ?? [])
+const items = computed(() => {
+    const extras = extraMasters.value
+    const extraIds = new Set(extras.map((item) => String(item.partID)))
+    const rest = (page.props.stockedPartsMaster ?? []).filter(
+        (item) => !extraIds.has(String(item.partID)),
+    )
+    return [...extras, ...rest]
+})
 
 const filteredItems = computed(() => {
     const tokens = searchQuery.value
@@ -137,13 +234,207 @@ function onRowDblClick(item) {
     if (String(selectedPartId.value) !== String(item?.partID)) return
     goNext()
 }
+
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+function resetCreateForm() {
+    createForm.partName = ''
+    createForm.description = ''
+    createError.value = ''
+}
+
+function openCreateMasterDialog() {
+    if (creatingMaster.value) return
+    resetCreateForm()
+    createMasterOpen.value = true
+}
+
+function closeCreateMasterDialog() {
+    if (creatingMaster.value) return
+    createMasterOpen.value = false
+    createError.value = ''
+}
+
+async function saveNewMaster() {
+    const partName = String(createForm.partName ?? '').trim()
+    if (!partName) {
+        createError.value = '部品名を入力してください。'
+        return
+    }
+
+    const payload = {
+        partName,
+        description: String(createForm.description ?? '').trim() || null,
+    }
+
+    creatingMaster.value = true
+    createError.value = ''
+    try {
+        const result = await apiFetch(
+            `${window.location.origin}${getServiceRecordBasePath()}/stocked-parts-master`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(payload),
+            },
+        )
+        if (!result) throw new Error('追加に失敗しました。')
+        const { response, data } = result
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : null
+            throw new Error(validationMessage || data.message || `追加に失敗しました。（HTTP ${response.status}）`)
+        }
+        const created = data?.master
+        if (!created?.partID) throw new Error('追加後の partID を取得できませんでした。')
+
+        extraMasters.value = [
+            created,
+            ...extraMasters.value.filter((item) => String(item.partID) !== String(created.partID)),
+        ]
+        selectedPartId.value = created.partID
+        error.value = ''
+        createMasterOpen.value = false
+        resetCreateForm()
+    } catch (e) {
+        createError.value = e.message || '追加に失敗しました。'
+    } finally {
+        creatingMaster.value = false
+    }
+}
 </script>
 
 <style scoped>
-.order-id {
+.order-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin: 0 0 8px;
+}
+
+.order-id {
+    margin: 0;
     color: #475569;
     font-size: 14px;
+}
+
+.btn-add-master {
+    flex: 0 0 auto;
+    min-width: 140px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-add-master:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.create-master-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 230;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.create-master-panel {
+    width: min(480px, calc(100vw - 32px));
+    background: #fff;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+}
+
+.create-master-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #1e293b;
+    color: #fff;
+}
+
+.create-master-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.create-master-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    background: #475569;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.create-master-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 14px;
+}
+
+.create-master-help {
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.create-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.create-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font: inherit;
+    font-weight: 600;
+}
+
+.create-textarea {
+    resize: vertical;
+    min-height: 72px;
+}
+
+.create-master-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 14px 14px;
 }
 
 .help-text {
