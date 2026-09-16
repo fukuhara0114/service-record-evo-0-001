@@ -54,25 +54,6 @@
         </header>
 
         <section class="list-card">
-            <div v-if="masters?.links?.length" class="pager">
-                <template v-for="link in masters.links" :key="`${link.label}-${link.url}`">
-                    <button
-                        v-if="link.url"
-                        type="button"
-                        class="page-link"
-                        :class="{ active: link.active }"
-                        :disabled="loading"
-                        @click="goToPage(link.url)"
-                        v-html="link.label"
-                    />
-                    <span
-                        v-else
-                        class="page-link disabled"
-                        v-html="link.label"
-                    />
-                </template>
-            </div>
-
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -950,17 +931,6 @@ function toggleSort(column) {
     }))
 }
 
-function goToPage(url) {
-    if (!url || loading.value) return
-    loading.value = true
-    router.get(url, {}, {
-        preserveState: true,
-        preserveScroll: true,
-        onFinish: () => {
-            loading.value = false
-        },
-    })
-}
 </script>
 
 <style scoped>
@@ -1148,35 +1118,6 @@ function goToPage(url) {
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     padding: 12px;
-}
-
-.pager {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-}
-
-.page-link {
-    min-width: 34px;
-    padding: 4px 8px;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    background: #fff;
-    color: #334155;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.page-link.active {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: #fff;
-}
-
-.page-link.disabled {
-    opacity: 0.5;
-    cursor: default;
 }
 
 .table-wrap {

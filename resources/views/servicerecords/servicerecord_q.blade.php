@@ -591,6 +591,7 @@
                     <th class="sortable-th" data-sort-key="receivedDate" style="width:  80px;">着荷日</th>
                     <th class="sortable-th" data-sort-key="orderDate" style="width:  80px;">受注日</th>
                     <th class="sortable-th" data-sort-key="status" style="width: 120px;">Status</th>
+                    <th class="sortable-th" data-sort-key="work_completion_date" style="width: 90px;">作業完了日</th>
                     <th class="sortable-th" data-sort-key="tat" style="width:  60px;">TAT</th>
                     <th class="sortable-th" data-sort-key="RMA" style="width:  80px;">RMA</th>
                     <th class="sortable-th" data-sort-key="productName" style="width: 150px;">製品名</th>
@@ -674,6 +675,7 @@
                 return record?.labor_master?.laborName || '';
             case 'receivedDate':
             case 'orderDate':
+            case 'work_completion_date':
             case 'RMA':
             case 'productName':
             case 'SN':
@@ -755,6 +757,7 @@
                 <td style="text-align: center;" >${r.receivedDate || ''}</td>
                 <td style="text-align: center;" >${r.orderDate || ''}</td>
                 <td                             >${statusLabel(r)}</td>
+                <td style="text-align: center;" >${(r.work_completion_date || '').toString().slice(0, 10)}</td>
                 <td style="text-align: center;" >${r.tat ?? ''}</td>
                 <td style="text-align: center;" >${r.RMA || ''}</td>
                 <td                             >${r.productName || ''}</td>
@@ -808,7 +811,7 @@
 
         const filtered = allRecords.filter(r => {
             const combinedText = [
-                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.tat, r.RMA,
+                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.work_completion_date, r.tat, r.RMA,
                 r.productName, r.SN, r.endUser,
                 r.endUser_depart, r.endUser_contactPerson,
                 r.endUser_address1, r.endUser_address2,

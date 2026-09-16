@@ -64,13 +64,11 @@ class LoanerMasterController extends Controller
             $query->orderBy("{$table}.{$sort}", $direction);
         }
 
-        $masters = $query
+        $collection = $query
             ->orderBy("{$table}.loanerID")
             ->orderByDesc("{$table}.id")
-            ->paginate(100)
-            ->withQueryString();
+            ->get();
 
-        $collection = $masters->getCollection();
         $associatedById = $scope === 'lending'
             ? $this->loadAssociatedRecords($collection)
             : collect();
@@ -81,24 +79,25 @@ class LoanerMasterController extends Controller
             ? $this->loadLoanerOrderIdsByParentAndLoaner($collection)
             : collect();
 
-        $masters->setCollection(
-            $collection->map(
-                fn (LoanerMaster $row) => $this->serializeRow(
-                    $row,
-                    $columns,
-                    $statusColumn,
-                    $statusLabels,
-                    $associatedById,
-                    $parentById,
-                    $scope === 'lending',
-                    $loanerOrderByKey,
-                )
+        $serialized = $collection->map(
+            fn (LoanerMaster $row) => $this->serializeRow(
+                $row,
+                $columns,
+                $statusColumn,
+                $statusLabels,
+                $associatedById,
+                $parentById,
+                $scope === 'lending',
+                $loanerOrderByKey,
             )
         );
 
         return Inertia::render('LoanerMasterList', [
             'columns' => $columns,
-            'masters' => $masters,
+            'masters' => [
+                'data' => $serialized->values(),
+                'total' => $serialized->count(),
+            ],
             'statusColumn' => $statusColumn,
             'statusOptions' => $this->statusOptions($statusLabels),
             'sort' => $sort,
