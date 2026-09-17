@@ -534,7 +534,7 @@ const adjustmentAmount = computed(() => priceCard.value.adjustmentAmount)
 const subtotal = computed(() => priceCard.value.subtotal)
 const grandTotal = computed(() => priceCard.value.grandTotal)
 
-watch(workPrice, (value) => {
+watch(grandTotal, (value) => {
     if (!props.draftRecord) return
     if (isLoanerRecord.value) return
     props.draftRecord.price = value

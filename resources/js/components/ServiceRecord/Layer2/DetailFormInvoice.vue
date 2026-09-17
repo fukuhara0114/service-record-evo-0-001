@@ -583,8 +583,8 @@ const adjustmentAmount = computed(() => priceCard.value.adjustmentAmount)
 const subtotal = computed(() => priceCard.value.subtotal)
 const grandTotal = computed(() => priceCard.value.grandTotal)
 
-/** service の作業内容価格を draft.price へ同期（計ではなく作業内容）。loaner は潰さない。 */
-watch(workPrice, (value) => {
+/** service は表示「計」（作業内容 + A2LA + parts + 調整）を draft.price へ同期。loaner は潰さない。 */
+watch(grandTotal, (value) => {
     if (!props.draftRecord) return
     if (isLoanerRecord.value) return
     props.draftRecord.price = value

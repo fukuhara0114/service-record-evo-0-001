@@ -1566,13 +1566,13 @@ const displayAdjustmentAmount = computed(() => {
     return props.draftRecord?.discount_service ?? props.record?.discount_service ?? ''
 })
 
-/** service は表示「価格」（作業内容 + A2LA + attachedparts）を draft.price へ同期。loaner は潰さない。 */
+/** service は表示「計」（作業内容 + A2LA + attachedparts + 調整）を draft.price へ同期。loaner は潰さない。 */
 watch(
-    [() => priceCard.value.subtotal, () => props.draftRecord],
+    [() => priceCard.value.grandTotal, () => props.draftRecord],
     () => {
         if (!props.draftRecord) return
         if (isLoanerOrderType.value) return
-        props.draftRecord.price = priceCard.value.subtotal
+        props.draftRecord.price = priceCard.value.grandTotal
     },
     { immediate: true },
 )
@@ -1823,11 +1823,11 @@ async function confirmPriceAdjust() {
             throw new Error(validationMessage || data.message || `Notes の追加に失敗しました。（HTTP ${response.status}）`)
         }
 
-        // 調整額のみ更新。表示「価格」（subtotal）は別 watch で draft.price へ同期。
+        // 調整額を更新し、合算した「計」を draft.price へ載せる。
         props.draftRecord.discount_service = amount
         sessionAdjustmentAmount.value = amount
         if (!isLoanerOrderType.value) {
-            props.draftRecord.price = basePrice.value
+            props.draftRecord.price = displayPrice.value
         }
         showPriceAdjustDialog.value = false
         emit('save')
@@ -1859,7 +1859,7 @@ function updateDraftDateValue(field, value) {
     if (field === 'orderDate') {
         applyLinePricesForAsOf()
         if (!isLoanerOrderType.value) {
-            props.draftRecord.price = basePrice.value
+            props.draftRecord.price = displayPrice.value
         }
     }
 }

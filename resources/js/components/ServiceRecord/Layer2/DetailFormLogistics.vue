@@ -573,7 +573,7 @@ const loanerLabel = computed(() => {
 /** 紐づく貸出機は価格カードに計上しない（loaner は作業内容=受注日版マスタ） */
 const loanerPrice = computed(() => 0)
 
-watch(workPrice, (value) => {
+watch(grandTotal, (value) => {
     if (!props.draftRecord) return
     if (isLoanerRecord.value) return
     props.draftRecord.price = value
