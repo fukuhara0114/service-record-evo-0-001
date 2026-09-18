@@ -1502,7 +1502,7 @@ import { loanerStatusLabel } from '@/utils/loanerStatusLabel'
 import { apiFetch } from '@/utils/apiFetch'
 import { ensureXsrvAuth, isXsrvAuthDenied } from '@/utils/xsrvAuth'
 import { confirmOrderTypeOriginalMismatchForRecord } from '@/utils/confirmOrderTypeOriginalMismatch'
-import { loanerDetailUrl } from '@/utils/serviceRecordPath'
+import { loanerDetailUrl, serviceRecordUrl } from '@/utils/serviceRecordPath'
 import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 import { findServiceMaster, normalizePriceAsOfDate, resolveDisplayPriceAsOfDate, parentOrderDateFromRecord, resolvePriceCardTotals } from '@/utils/resolveServiceWorkPrice'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
@@ -2388,8 +2388,25 @@ async function copySmQuoteFromRecord(record) {
     }, 2000)
 }
 
+function openDetailFormAInNewTab(record) {
+    if (!record?.orderID) return
+    const url = new URL(serviceRecordUrl('administrator'))
+    url.searchParams.set('openOrderID', String(record.orderID))
+    url.searchParams.set('orderType', 'service')
+    url.searchParams.set('arrival', 'all')
+    window.open(url.href, '_blank', 'noopener,noreferrer')
+}
+
 function onListRowDblClick(record) {
     if (engineerDailyReportMode.value) return
+    if (engineerQuoteCoMode.value) {
+        if (isAbroadSelected(record.orderID)) {
+            openDetailFormAInNewTab(record)
+        } else {
+            openSecondLayer(record)
+        }
+        return
+    }
     if (engineerSmSubmitMode.value) {
         if (isAbroadSelected(record.orderID)) {
             openEngineerSmSubmitDialog(record)
