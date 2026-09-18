@@ -1981,11 +1981,11 @@ function symptomsNumForRecord(record) {
 /** 旧システムと同様: servicerecord.returnCode → SM 連携用 returnCode 文字列 */
 function smReturnCodeValue(returnCode) {
     const code = Number(returnCode)
-    if ([1, 5].includes(code)) return 'CERTIFICATION'
+    if ([1, 5, 9].includes(code)) return 'CERTIFICATION'
     if ([2, 4, 7].includes(code)) return 'FLAT RATE REPAIR'
     if (code === 3) return 'WARRANTY REPAIR'
     if (code === 12) return 'FIELD SERVICE REGIONAL'
-    return ''
+    return 'CERTIFICATION'
 }
 
 function smReturnCodeLabel(returnCode) {
