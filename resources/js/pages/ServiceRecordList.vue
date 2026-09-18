@@ -2009,13 +2009,6 @@ function quoteCoQuoteValue(record) {
     return '-1'
 }
 
-function matchesEngineerQuoteCoSmQuote(record) {
-    const smQuoteRaw = record?.sm_quote
-    if (smQuoteRaw === null || smQuoteRaw === undefined) return true
-    const smQuote = Number(smQuoteRaw)
-    return Number.isFinite(smQuote) && smQuote < 100000
-}
-
 function matchesEngineerListStatus(record) {
     const orderType = record?.order_type ?? 'service'
     const status = Number(record?.status)
@@ -3019,7 +3012,6 @@ const filteredRecords = computed(() => {
                 const status = Number(r?.status)
                 return (orderType === 'service' || orderType === '' || orderType == null)
                     && status === 180
-                    && matchesEngineerQuoteCoSmQuote(r)
             })
         } else {
             records = records.filter((r) => matchesEngineerListStatus(r))
