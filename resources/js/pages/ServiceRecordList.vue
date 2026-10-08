@@ -1079,7 +1079,17 @@
                             </td>
                             <td>{{ smReturnCodeLabel(r.returnCode) || r.return_code_master?.description || '' }}</td>
                             <td>{{ r.incident }}</td>
-                            <td style="text-align: center;">{{ symptomsNumForRecord(r) }}</td>
+                            <td style="text-align: center;" @click.stop @dblclick.stop>
+                                <input
+                                    v-if="orderTypeFilter === 'rma'"
+                                    type="text"
+                                    class="symptoms-num-input"
+                                    inputmode="numeric"
+                                    :value="symptomsNumFieldValue(r)"
+                                    @input="onSymptomsNumInput(r, $event)"
+                                >
+                                <template v-else>{{ symptomsNumForRecord(r) }}</template>
+                            </td>
                             <td>{{ r.symptoms }}</td>
                         </template>
                         <template v-else-if="orderTypeFilter === 'loaner'">
@@ -1887,6 +1897,7 @@ const shippingExcelCopyBusy = ref(false)
 const shippingExcelCopyMessage = ref('')
 const entityIdSavingOrderId = ref(null)
 const entityIdEditOriginal = new Map()
+const symptomsNumEdits = ref({})
 const smListAutoUpdate = ref(false)
 const smListAutoRefreshTimer = ref(null)
 const smListAutoRefreshing = ref(false)
@@ -1973,9 +1984,34 @@ const ABROAD_RMA_HEADER_INDEX = 3
 const ABROAD_PRETEST_HEADER_INDEX = 6
 const ABROAD_POSTTEST_HEADER_INDEX = 7
 
-/** symptomsNum: returnCode が 1 のとき 3、それ以外は 0 */
+/** symptomsNum: returnCode が 1, 5, 9 のとき 3、それ以外は 0 */
 function symptomsNumForRecord(record) {
-    return Number(record?.returnCode) === 1 ? 3 : 0
+    return [1, 5, 9].includes(Number(record?.returnCode)) ? 3 : 0
+}
+
+function symptomsNumFieldValue(record) {
+    const key = String(record?.orderID ?? '')
+    if (key && Object.prototype.hasOwnProperty.call(symptomsNumEdits.value, key)) {
+        return symptomsNumEdits.value[key]
+    }
+    return String(symptomsNumForRecord(record))
+}
+
+function onSymptomsNumInput(record, event) {
+    const key = String(record?.orderID ?? '')
+    if (!key) return
+    symptomsNumEdits.value = {
+        ...symptomsNumEdits.value,
+        [key]: event.target.value,
+    }
+}
+
+/** Sync SM 用: 編集値（なければ既定値）を数値として返す。数値以外は null */
+function parseSymptomsNumField(record) {
+    const raw = String(symptomsNumFieldValue(record) ?? '').trim()
+    if (raw === '' || !/^[+-]?\d+(?:\.\d+)?$/.test(raw)) return null
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
 }
 
 /** 旧システムと同様: servicerecord.returnCode → SM 連携用 returnCode 文字列 */
@@ -2122,10 +2158,15 @@ async function exportIncidentParamJson(theUserNameKanji, smMode = 'rma_wo') {
         const sn = String(r.SN ?? '').trim()
         const symptoms = String(r.symptoms ?? '').trim()
         const poNum = String(r.poNum ?? r.RMA ?? '').trim()
-        const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
+        const symptomNum = parseSymptomsNumField(r)
         const returnCode = smReturnCodeValue(r.returnCode)
 
-        if (!entityID || !symptoms || !symptomNum || !returnCode || !incident) {
+        if (symptomNum === null) {
+            alert(`選択された行（OrderID: ${orderID || '不明'}）の symptomsNum が数値ではありません。`)
+            return
+        }
+
+        if (!entityID || !symptoms || !returnCode || !incident) {
             alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
             return
         }
@@ -2181,10 +2222,15 @@ async function exportUpdatePoParamJson(theUserNameKanji, smMode = 'update_po') {
         const WO = String(r.sm_workorder ?? '').trim()
         const symptoms = String(r.symptoms ?? '').trim()
         const poNum = String(r.poNum ?? '').trim()
-        const symptomNum = String(symptomsNumForRecord(r) ?? '').trim()
+        const symptomNum = parseSymptomsNumField(r)
         const returnCode = smReturnCodeValue(r.returnCode)
 
-        if (!entityID || !symptoms || !symptomNum || !returnCode || !RMA || !WO || !poNum) {
+        if (symptomNum === null) {
+            alert(`選択された行（OrderID: ${orderID || '不明'}）の symptomsNum が数値ではありません。`)
+            return
+        }
+
+        if (!entityID || !symptoms || !returnCode || !RMA || !WO || !poNum) {
             alert(`選択された行（OrderID: ${orderID || '不明'}）に入力漏れの項目があります。すべての項目を入力してください。`)
             console.log('symptoms : ' + symptoms)
             console.log('symptomNum : ' + symptomNum)
@@ -2945,7 +2991,7 @@ function recordColumnSortValue(record, key) {
             return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
         }
         case 'symptomsNum': {
-            const n = Number(symptomsNumForRecord(record))
+            const n = Number(String(symptomsNumFieldValue(record) ?? '').trim())
             return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY
         }
         case 'promotion_ready':
@@ -3096,7 +3142,7 @@ const filteredRecords = computed(() => {
                     r.sm_quote,
                     listEntityId(r),
                     r.incident,
-                    String(symptomsNumForRecord(r)),
+                    String(symptomsNumFieldValue(r)),
                     r.RMA,
                     r.promotion_ready_at,
                     r.promotion_source_orderID?.toString(),
@@ -4810,6 +4856,25 @@ async function saveRecord() {
 .entity-id-input:disabled {
     opacity: 0.65;
     cursor: wait;
+}
+
+.symptoms-num-input {
+    width: 72px;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    background: #fff;
+    color: #111827;
+}
+
+.symptoms-num-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 .daily-report-input {
