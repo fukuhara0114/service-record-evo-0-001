@@ -25,7 +25,28 @@
                         コピー
                     </button>
                 </div>
-                <p v-if="copyMessage" class="copy-message">{{ copyMessage }}</p>
+                <p v-if="copyTarget === 'workorder' && copyMessage" class="copy-message">{{ copyMessage }}</p>
+            </div>
+
+            <div class="field-block">
+                <span class="field-label">quote</span>
+                <div class="quote-row">
+                    <input
+                        v-model="quoteInput"
+                        type="text"
+                        class="quote-input"
+                        :disabled="saving"
+                    >
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        :disabled="saving"
+                        @click="copyQuote"
+                    >
+                        コピー
+                    </button>
+                </div>
+                <p v-if="copyTarget === 'quote' && copyMessage" class="copy-message">{{ copyMessage }}</p>
             </div>
 
             <button
@@ -96,8 +117,10 @@ const page = usePage()
 const saving = ref(false)
 const errorMessage = ref('')
 const copyMessage = ref('')
+const copyTarget = ref('')
 let copyMessageTimer = null
 const workorderInput = ref(String(props.record?.sm_workorder ?? ''))
+const quoteInput = ref(String(props.record?.sm_quote ?? ''))
 const stockedParts = ref([])
 const partsLoading = ref(false)
 const partsError = ref('')
@@ -154,11 +177,12 @@ async function writeTextToClipboard(text) {
     if (!ok) throw new Error('クリップボードへのコピーに失敗しました。')
 }
 
-async function copyWorkOrder() {
-    const text = String(workorderInput.value ?? '').trim()
+async function copyField(raw, emptyLabel, target) {
+    const text = String(raw ?? '').trim()
     if (copyMessageTimer) clearTimeout(copyMessageTimer)
+    copyTarget.value = target
     if (!text) {
-        copyMessage.value = 'WorkOrder が空です'
+        copyMessage.value = `${emptyLabel} が空です`
         copyMessageTimer = setTimeout(() => {
             copyMessage.value = ''
         }, 2000)
@@ -173,6 +197,14 @@ async function copyWorkOrder() {
     copyMessageTimer = setTimeout(() => {
         copyMessage.value = ''
     }, 2000)
+}
+
+function copyWorkOrder() {
+    return copyField(workorderInput.value, 'WorkOrder', 'workorder')
+}
+
+function copyQuote() {
+    return copyField(quoteInput.value, 'quote', 'quote')
 }
 
 async function loadStockedParts() {
@@ -221,6 +253,7 @@ async function onComplete() {
         const payload = {
             status: nextStatus,
             sm_workorder: String(workorderInput.value ?? '').trim(),
+            sm_quote: String(quoteInput.value ?? '').trim(),
         }
         const result = await apiFetch(recordApiUrl(), {
             method: 'POST',
