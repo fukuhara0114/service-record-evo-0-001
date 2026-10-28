@@ -92,6 +92,17 @@
                             クリア
                         </button>
                     </div>
+                    <div class="excel-export-slot">
+                        <button
+                            type="button"
+                            class="btn btn-excel"
+                            :disabled="searching || excelExporting"
+                            @click="downloadExcel"
+                        >
+                            {{ excelExporting ? '出力中...' : 'Excel出力' }}
+                        </button>
+                        <p v-if="excelMessage" class="excel-message">{{ excelMessage }}</p>
+                    </div>
                 </div>
             </form>
 
@@ -111,11 +122,14 @@
                             <th>status</th>
                             <th>amount</th>
                             <th>RefNumber</th>
+                            <th>案内日</th>
+                            <th>更新受注日</th>
+                            <th>description</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="rows.length === 0">
-                            <td colspan="12" class="empty">該当する契約はありません。</td>
+                            <td colspan="15" class="empty">該当する契約はありません。</td>
                         </tr>
                         <tr
                             v-for="row in rows"
@@ -137,6 +151,9 @@
                             <td>{{ row.status || '—' }}</td>
                             <td class="num">{{ formatAmount(row.amount) }}</td>
                             <td>{{ row.RefNumber || '—' }}</td>
+                            <td class="nowrap">{{ row.informedDate || '—' }}</td>
+                            <td class="nowrap">{{ row.renewedDate || '—' }}</td>
+                            <td class="desc">{{ row.description || '—' }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -148,8 +165,10 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { router, usePage } from '@inertiajs/vue3'
+import ExcelJS from 'exceljs'
 import CloseToHomeButton from '@/components/CloseToHomeButton.vue'
 import DateInputWithToday from '@/components/DateInputWithToday.vue'
+import { applySensitivityLabel } from '@/utils/applySensitivityLabel'
 
 const props = defineProps({
     contracts: {
@@ -181,6 +200,26 @@ const page = usePage()
 const searching = ref(false)
 const selectedId = ref(null)
 const quickFilter = ref('')
+const excelExporting = ref(false)
+const excelMessage = ref('')
+
+const EXCEL_COLUMNS = [
+    { header: 'ID', key: 'id', width: 12 },
+    { header: '契約種別', key: 'contractTypeName', width: 22 },
+    { header: 'dealer', key: 'dealer', width: 28 },
+    { header: 'endUser', key: 'endUser', width: 28 },
+    { header: 'instrumentName', key: 'instrumentName', width: 22 },
+    { header: 'SN', key: 'SN', width: 18 },
+    { header: '開始', key: 'startDate', width: 14 },
+    { header: '契約終了', key: 'expireDate', width: 14 },
+    { header: '認証期限', key: 'certificationExpireDate', width: 14 },
+    { header: 'status', key: 'status', width: 12 },
+    { header: 'amount', key: 'amount', width: 14 },
+    { header: 'RefNumber', key: 'RefNumber', width: 16 },
+    { header: '案内日', key: 'informedDate', width: 14 },
+    { header: '更新受注日', key: 'renewedDate', width: 14 },
+    { header: 'description', key: 'description', width: 40 },
+]
 const homeUrl = computed(() => page.props.homeUrl ?? `${page.props.appBaseUrl}/home`)
 const listUrl = computed(() => `${page.props.appBaseUrl}/servicerecord/maintenance-contracts`)
 
@@ -303,6 +342,7 @@ function rowSearchText(row) {
         row?.status,
         row?.amount,
         row?.RefNumber,
+        row?.description,
     ]
         .map((value) => (value == null || value === '' ? '' : String(value)))
         .join(' ')
@@ -373,6 +413,113 @@ function formatAmount(value) {
     const num = Number(value)
     if (!Number.isFinite(num)) return String(value)
     return num.toLocaleString('ja-JP')
+}
+
+function excelCellValue(row, key) {
+    if (key === 'amount') {
+        if (row?.amount == null || row.amount === '') return null
+        const num = Number(row.amount)
+        return Number.isFinite(num) ? num : String(row.amount)
+    }
+    const value = row?.[key]
+    if (value == null) return ''
+    return String(value)
+}
+
+function excelFileName() {
+    const ymd = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date()).replace(/-/g, '')
+    return `MaintenanceContract_${ymd}.xlsx`
+}
+
+async function downloadExcel() {
+    const exportRows = rows.value
+    excelMessage.value = ''
+    if (!exportRows.length) {
+        excelMessage.value = '出力する行がありません。'
+        return
+    }
+
+    excelExporting.value = true
+    try {
+        const workbook = new ExcelJS.Workbook()
+        workbook.creator = 'ServiceRecord'
+        workbook.created = new Date()
+
+        const sheet = workbook.addWorksheet('Maintenance Contract', {
+            views: [{ state: 'frozen', ySplit: 1 }],
+        })
+        sheet.columns = EXCEL_COLUMNS.map((column) => ({
+            header: column.header,
+            key: column.key,
+            width: column.width,
+        }))
+
+        exportRows.forEach((row) => {
+            const values = {}
+            EXCEL_COLUMNS.forEach((column) => {
+                values[column.key] = excelCellValue(row, column.key)
+            })
+            sheet.addRow(values)
+        })
+
+        const headerRow = sheet.getRow(1)
+        headerRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+        headerRow.height = 22
+        EXCEL_COLUMNS.forEach((_, index) => {
+            const cell = headerRow.getCell(index + 1)
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF2F63CC' },
+            }
+        })
+
+        const amountColumn = EXCEL_COLUMNS.findIndex((column) => column.key === 'amount') + 1
+        for (let rowIndex = 2; rowIndex <= sheet.rowCount; rowIndex += 1) {
+            const cell = sheet.getRow(rowIndex).getCell(amountColumn)
+            if (typeof cell.value === 'number') {
+                cell.numFmt = '#,##0.##'
+                cell.alignment = { horizontal: 'right' }
+            }
+            sheet.getRow(rowIndex).getCell(EXCEL_COLUMNS.length).alignment = { wrapText: true, vertical: 'top' }
+        }
+
+        let xlsxBuffer = await workbook.xlsx.writeBuffer()
+        const msip = page.props.msip || {}
+        const labelId = String(msip.publicLabelId || '').trim()
+        const siteId = String(msip.siteId || '').trim()
+        if (labelId && siteId) {
+            xlsxBuffer = await applySensitivityLabel(xlsxBuffer, {
+                labelId,
+                siteId,
+                method: 'Privileged',
+                contentBits: 0,
+            })
+        }
+
+        const blob = new Blob(
+            [xlsxBuffer],
+            { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+        )
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = excelFileName()
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(url)
+    } catch (e) {
+        excelMessage.value = e.message || 'Excel出力に失敗しました。'
+    } finally {
+        excelExporting.value = false
+    }
 }
 </script>
 
@@ -546,6 +693,26 @@ function formatAmount(value) {
     max-width: none;
 }
 
+.excel-export-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    margin-left: auto;
+    align-self: flex-end;
+}
+
+.btn-excel {
+    background: #107c41;
+    white-space: nowrap;
+}
+
+.excel-message {
+    margin: 0;
+    font-size: 12px;
+    color: #b91c1c;
+}
+
 .btn {
     min-height: 34px;
     padding: 6px 14px;
@@ -660,5 +827,12 @@ td {
 .num {
     text-align: right;
     white-space: nowrap;
+}
+
+.desc {
+    white-space: normal;
+    min-width: 160px;
+    max-width: 280px;
+    word-break: break-word;
 }
 </style>

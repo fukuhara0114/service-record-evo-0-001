@@ -715,6 +715,15 @@ function toDateInputValue(value) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+function tokyoTodayYmd() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
+}
+
 function updateDraftValue(field, value) {
     if (!props.draftRecord) return
     props.draftRecord[field] = value
@@ -1062,6 +1071,10 @@ async function updateRecordFields(payload) {
             if (props.draftRecord) props.draftRecord.shippingOut_requiredDate = payload.shippingOut_requiredDate
             if (props.record) props.record.shippingOut_requiredDate = payload.shippingOut_requiredDate
         }
+        if (payload.sentOut != null) {
+            if (props.draftRecord) props.draftRecord.sentOut = payload.sentOut
+            if (props.record) props.record.sentOut = payload.sentOut
+        }
     }
 
     return result.data
@@ -1145,6 +1158,7 @@ async function confirmComplete(openDetail = false) {
             coNum: props.draftRecord.coNum,
             price: props.draftRecord.price,
             discount_service: props.draftRecord.discount_service,
+            sentOut: tokyoTodayYmd(),
         })
         showCompleteConfirmDialog.value = false
         pendingCompleteStatus.value = null

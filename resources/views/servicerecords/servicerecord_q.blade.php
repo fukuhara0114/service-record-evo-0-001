@@ -592,6 +592,7 @@
                     <th class="sortable-th" data-sort-key="orderDate" style="width:  80px;">受注日</th>
                     <th class="sortable-th" data-sort-key="status" style="width: 120px;">Status</th>
                     <th class="sortable-th" data-sort-key="work_completion_date" style="width: 90px;">作業完了日</th>
+                    <th class="sortable-th" data-sort-key="sentOut" style="width: 90px;">出荷日</th>
                     <th class="sortable-th" data-sort-key="tat" style="width:  60px;">TAT</th>
                     <th class="sortable-th" data-sort-key="RMA" style="width:  80px;">RMA</th>
                     <th class="sortable-th" data-sort-key="productName" style="width: 150px;">製品名</th>
@@ -690,9 +691,22 @@
             case 'endUser_email':
             case 'endUser_phone':
                 return record?.[key] ?? '';
+            case 'sentOut':
+                return formatSentOut(record?.sentOut);
             default:
                 return record?.[key] ?? '';
         }
+    }
+
+    function formatSentOut(value) {
+        if (value == null) return '';
+        const text = String(value).trim();
+        if (!text || text.startsWith('0000-00-00')) return '';
+        const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (!match) return '';
+        const year = Number(match[1].slice(0, 4));
+        if (!Number.isFinite(year) || year < 1901) return '';
+        return match[1];
     }
 
     function sortRecordsByColumn(records, key, dir) {
@@ -758,6 +772,7 @@
                 <td style="text-align: center;" >${r.orderDate || ''}</td>
                 <td                             >${statusLabel(r)}</td>
                 <td style="text-align: center;" >${(r.work_completion_date || '').toString().slice(0, 10)}</td>
+                <td style="text-align: center;" >${formatSentOut(r.sentOut)}</td>
                 <td style="text-align: center;" >${r.tat ?? ''}</td>
                 <td style="text-align: center;" >${r.RMA || ''}</td>
                 <td                             >${r.productName || ''}</td>
@@ -811,7 +826,7 @@
 
         const filtered = allRecords.filter(r => {
             const combinedText = [
-                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.work_completion_date, r.tat, r.RMA,
+                r.orderID, r.receivedDate, r.orderDate, statusLabel(r), r.work_completion_date, formatSentOut(r.sentOut), r.tat, r.RMA,
                 r.productName, r.SN, r.endUser,
                 r.endUser_depart, r.endUser_contactPerson,
                 r.endUser_address1, r.endUser_address2,

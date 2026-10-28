@@ -750,6 +750,7 @@ class MaintenanceContractController extends Controller
             'status' => $row->status,
             'amount' => $row->amount,
             'RefNumber' => $row->RefNumber,
+            'description' => $row->description,
         ];
     }
 

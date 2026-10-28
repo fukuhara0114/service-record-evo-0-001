@@ -102,6 +102,7 @@ class ServiceRecordController extends Controller
                 'receivedDate',
                 'orderDate',
                 'work_completion_date',
+                'sentOut',
                 'tat',
                 'productName',
                 'SN',
